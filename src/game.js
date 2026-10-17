@@ -199,6 +199,9 @@ export function createGame({ input, audio, ui, storage, save }) {
       g.player.kx = g.player.ky = 0;
       g.player.falling = 0;
       resetPlayerCombat(g.player);
+      // между кадрами: немного здоровья и полный браслет
+      g.player.hp = Math.min(g.player.maxHp, g.player.hp + Math.round(g.player.maxHp * 0.3));
+      g.player.charges.n = g.player.charges.max;
     }
     if (def.facing != null) g.player.aim = def.facing;
     for (const ex of def.exits || []) {

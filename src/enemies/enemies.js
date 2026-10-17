@@ -101,6 +101,8 @@ export function killEnemy(g, e) {
   const ash = e.def.ash ?? 0;
   for (let i = 0; i < ash; i++) g.spawnPickup('ash', e.x + (Math.random() - 0.5) * 10, e.y + (Math.random() - 0.5) * 6);
   for (let i = 0; i < (e.def.shards ?? 0); i++) g.spawnPickup('shard', e.x + (Math.random() - 0.5) * 14, e.y);
+  // крошки хлеба Мары — редкое лечение
+  if (!e.def.elite && e.kind !== 'echo' && Math.random() < 0.12) g.spawnPickup('heal', e.x, e.y, { amount: 15 });
   e.onDeath?.(g, e);
 }
 
