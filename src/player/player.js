@@ -77,7 +77,8 @@ export function pickShiftTarget(g, p) {
     if (d > range) return;
     const a = Math.atan2(y - (p.y - 6), x - p.x);
     const off = Math.abs(angleDiff(p.aim, a));
-    const score = d + off * 26 + (type === 'prop' ? 6 : 0);
+    // объект, у которого стоишь вплотную, важнее врага поодаль
+    const score = d + off * 26 + (type === 'prop' ? (d < 24 ? -24 : 6) : 0);
     if (score < bestScore) {
       bestScore = score;
       best = { obj, type, x, y };
