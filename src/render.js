@@ -3,7 +3,7 @@ import { W, H } from './core/renderer.js';
 import { P, PHASE_COLOR } from './art/palette.js';
 import { TILE, T } from './art/tiles.js';
 import { tileAt } from './world/room.js';
-import { px, line, disc, ring, drawHero, drawHollow, drawFramer, drawRinger, drawShadow, whiteK } from './art/sprites.js';
+import { px, line, disc, ring, drawHero, drawHollow, drawFramer, drawRinger, drawShadow, drawEater, whiteK } from './art/sprites.js';
 import { propSortY, propCenter } from './world/props.js';
 import { isPhased } from './enemies/enemies.js';
 import { isShifted, isFading, PAST, channelProgress } from './timeline/timeline.js';
@@ -23,7 +23,7 @@ function ensureLight() {
   lightCtx = lightCanvas.getContext('2d');
 }
 
-const ENEMY_DRAW = { hollow: drawHollow, framer: drawFramer, ringer: drawRinger, shadow: drawShadow };
+const ENEMY_DRAW = { hollow: drawHollow, framer: drawFramer, ringer: drawRinger, shadow: drawShadow, eater: drawEater };
 
 // Двойной контур фазы: силуэт цвета фазы со сдвигом на пиксель.
 function withOutline(ctx, color, fn) {
@@ -163,6 +163,7 @@ function drawTelegraphs(g, ctx, e) {
     ctx.globalAlpha = 1;
   }
   if (e.kind === 'framer' && e.state === 'windup' && !isPhased(g, e)) px(ctx, e.x - 1, e.y - 18, 2, 3, P.crimsonHi);
+  if (e.kind === 'eater' && e.state === 'windup') ring(ctx, e.x, e.y - 2, 22, Math.floor(g.time * 12) % 2 ? P.crimsonHi : P.crimson, 0.6, 2);
   if (e.kind === 'ringer' && e.state === 'charge') {
     const k = 1 - e.st / 1.3;
     ring(ctx, e.x, e.y - 4, 4 + k * 16, `rgba(200,40,74,${0.3 + k * 0.5})`, 0.6, 2);

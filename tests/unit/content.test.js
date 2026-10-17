@@ -115,3 +115,13 @@ describe('Способности школ', () => {
     expect(canUse(st, flags, 0)).toBe(true);
   });
 });
+
+describe('Пожиратель Сцен', () => {
+  it('в Шраме крепкий, в Отпечатке мягкий', () => {
+    const e = createEnemy('eater', 0, 0);
+    expect(enemyMods({}, e).dmgMul).toBeLessThan(1);
+    shiftTimeline(e.tl);
+    expect(enemyMods({}, e).dmgMul).toBeGreaterThan(1);
+    expect(ENEMY_DEFS.eater.elite).toBe(true);
+  });
+});

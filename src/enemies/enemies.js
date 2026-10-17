@@ -51,6 +51,17 @@ export const ENEMY_DEFS = {
     },
     colors: [P.ink, P.milk, P.brass, P.crimson],
   },
+  eater: {
+    name: 'Пожиратель Сцен',
+    hp: 160, r: 9, ash: 12, shards: 1, elite: true, hitY: 12,
+    timeline: { hold: 6, cost: 1, switchTime: 0.7 },
+    stats: {
+      // Шрам: откусывает куски арены и плохо пробивается; Отпечаток: возвращает всё и мягок
+      past: { speed: 12, dmgMul: 1.5, comboMul: 1 },
+      present: { speed: 30, dmgMul: 0.6, comboMul: 1 },
+    },
+    colors: [P.slate, P.crimson, P.void, P.amber],
+  },
   echo: {
     name: 'Эхо',
     hp: 1, r: 4, ash: 0,
@@ -103,6 +114,7 @@ export function killEnemy(g, e) {
   for (let i = 0; i < (e.def.shards ?? 0); i++) g.spawnPickup('shard', e.x + (Math.random() - 0.5) * 14, e.y);
   // крошки хлеба Мары — редкое лечение
   if (!e.def.elite && e.kind !== 'echo' && Math.random() < 0.12) g.spawnPickup('heal', e.x, e.y, { amount: 15 });
+  if (e.bites) for (const z of e.bites) z.t = 0;
   e.onDeath?.(g, e);
 }
 
@@ -360,7 +372,50 @@ function aiEcho(g, e, dt) {
   if (e.life <= 0) killEnemy(g, e);
 }
 
-const AI = { hollow: aiHollow, framer: aiFramer, ringer: aiRinger, shadow: aiShadow, echo: aiEcho };
+// Пожиратель Сцен: в Шраме откусывает арену, в Отпечатке возвращает откушенное.
+function aiEater(g, e, dt) {
+  const s = stats(e);
+  const { dx, dy, d } = toHero(g, e);
+  const [nx, ny] = norm(dx, dy);
+  e.st -= dt;
+  e.cd -= dt;
+  e.face = Math.atan2(dy, dx);
+  if (e.tl.phase === PAST && e.bites?.length) {
+    for (const z of e.bites) {
+      burst(g, z.x, z.y, [P.amber, P.amberHi, P.stone2], 10, 40);
+      z.t = 0;
+    }
+    e.bites = [];
+    g.toast('Пожиратель вернул откушенное');
+  }
+  if (e.state === 'idle' || e.state === 'move') {
+    e.state = 'move';
+    move(g, e, nx * s.speed, ny * s.speed, dt);
+    if (d < 20 && e.cd <= 0) {
+      e.state = 'windup';
+      e.st = 0.6;
+    } else if (e.tl.phase === PRESENT && (e.biteCd = (e.biteCd ?? 2) - dt) <= 0 && (e.bites?.length ?? 0) < 6) {
+      e.biteCd = 3.4;
+      const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 2.4;
+      const r = 30 + Math.random() * 30;
+      const z = { x: g.player.x + Math.cos(a) * r, y: g.player.y + Math.sin(a) * r * 0.7, r: 17, warn: 1.1, t: Infinity, active: false, owner: e };
+      g.voidZones.push(z);
+      (e.bites ||= []).push(z);
+      g.audio.sfx.charge();
+      if (!g.flags._eaterHint) {
+        g.flags._eaterHint = true;
+        g.hint('Пожиратель Сцен откусывает арену. Верни его в прошлое — он отдаст всё назад и станет мягким.', 7);
+      }
+    }
+  } else if (e.state === 'windup' && e.st <= 0) {
+    if (d < 24) g.hurtPlayer(14, e.x, e.y, 'melee');
+    burst(g, e.x + nx * 10, e.y + ny * 6, [P.crimson, P.void], 8, 50);
+    e.state = 'move';
+    e.cd = 1.4;
+  }
+}
+
+const AI = { hollow: aiHollow, framer: aiFramer, ringer: aiRinger, shadow: aiShadow, echo: aiEcho, eater: aiEater };
 
 export function updateEnemies(g, dt) {
   for (const e of g.enemies) {

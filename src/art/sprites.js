@@ -325,6 +325,46 @@ export function drawShadow(ctx, x, y, o) {
   if (shield) ring(ctx, x, y - 18, 15, 'rgba(230,192,106,0.35)', 0.45, 2);
 }
 
+// ── Пожиратель Сцен: сгорбленная пасть-кадр ──────────────────────────
+export function drawEater(ctx, x, y, o) {
+  const k = o.k || ident;
+  const past = o.phase === 'past';
+  const t = o.t || 0;
+  x = Math.round(x);
+  y = Math.round(y);
+  shadow(ctx, x, y, 22, 0.5);
+  const body = past ? P.amber1 : P.slate;
+  const hi = past ? P.amberHi : P.ash2;
+  const chew = o.windup ? 4 : Math.round((Math.sin(t * 5) + 1) * 1.5);
+  // лапы
+  for (const s of [-1, 1]) {
+    px(ctx, x + s * 8 - 1, y - 6, 3, 6, k(P.ink));
+    px(ctx, x + s * 4 - 1, y - 5, 2, 5, k(P.ink));
+  }
+  // горб
+  for (let i = 0; i < 12; i++) {
+    const half = 6 + Math.round(Math.sin((i / 12) * Math.PI) * 5);
+    px(ctx, x - half, y - 20 + i, half * 2, 1, k(i < 2 ? hi : body));
+  }
+  // пасть-кадр с перфорацией
+  px(ctx, x - 7, y - 14, 14, 8 + chew, k(P.ink));
+  px(ctx, x - 6, y - 13, 12, 6 + chew, k(past ? P.amber0 : P.void));
+  if (!past) {
+    for (let i = 0; i < 5; i++) {
+      px(ctx, x - 5 + i * 2.4, y - 13, 1, 2, k(P.milk));
+      px(ctx, x - 5 + i * 2.4, y - 8 + chew, 1, 2, k(P.milk));
+    }
+    px(ctx, x - 2, y - 11 + Math.round(chew / 2), 4, 2, k(P.crimson));
+  }
+  for (let i = 0; i < 4; i++) {
+    px(ctx, x - 9, y - 18 + i * 3, 1, 1, k(P.milk));
+    px(ctx, x + 8, y - 18 + i * 3, 1, 1, k(P.milk));
+  }
+  // глаза
+  px(ctx, x - 4, y - 18, 2, 2, k(past ? P.ink : P.crimsonHi));
+  px(ctx, x + 2, y - 18, 2, 2, k(past ? P.ink : P.crimsonHi));
+}
+
 // ── Брат Мел — звонарь без башни ───────────────────────────────────────
 export function drawMel(ctx, x, y, o) {
   const k = o.k || ident;

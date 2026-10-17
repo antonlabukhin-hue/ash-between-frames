@@ -337,7 +337,7 @@ const WAVE_POOL = [
   [['hollow', 2], ['ringer', 1]],
   [['framer', 2], ['hollow', 1]],
   [['ringer', 2], ['framer', 1], ['hollow', 1]],
-  [['hollow', 3], ['framer', 2], ['ringer', 1]],
+  [['hollow', 2], ['framer', 1], ['ringer', 1], ['eater', 1]],
 ];
 
 export const ruins = {
