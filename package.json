@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "shots": "node scripts/shots.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
