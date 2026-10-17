@@ -287,7 +287,7 @@ export function createUI(root, { audio }) {
     if (ny) moveFocus(ny);
     // мышью кликают сами кнопки (они вне холста); клавиатура и геймпад — подтверждение
     if (ok && menuItems[menuFocus]) menuItems[menuFocus].click();
-    if ((input.pressed('pause') || input.pressed('dodge')) && menuBack) {
+    if ((input.pressed('pause') || input.pressed('dodge') || input.pressed('map')) && menuBack) {
       audio.sfx.ui();
       menuBack();
     }

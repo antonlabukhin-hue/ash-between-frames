@@ -99,3 +99,19 @@ describe('Объекты окружения', () => {
     expect(propWalkRect(s)).toBe(s);
   });
 });
+
+import { ABILITIES, createAbilityState, tickAbilities, canUse, markUsed, isUnlocked } from '../../src/player/abilities.js';
+describe('Способности школ', () => {
+  it('открываются флагом и уходят на откат', () => {
+    const st = createAbilityState();
+    const flags = {};
+    expect(canUse(st, flags, 0)).toBe(false);
+    flags[ABILITIES[0].flag] = true;
+    expect(isUnlocked(flags, 0)).toBe(true);
+    expect(canUse(st, flags, 0)).toBe(true);
+    markUsed(st, 0);
+    expect(canUse(st, flags, 0)).toBe(false);
+    tickAbilities(st, ABILITIES[0].cd + 0.01);
+    expect(canUse(st, flags, 0)).toBe(true);
+  });
+});
