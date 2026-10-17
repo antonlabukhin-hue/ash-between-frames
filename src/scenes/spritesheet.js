@@ -1,7 +1,7 @@
 // Отладочный лист спрайтов (?sprites): персонажи крупно, обе фазы, кадры ходьбы и удара.
 import { W, H } from '../core/renderer.js';
 import { P } from '../art/palette.js';
-import { drawHero, drawHollow, drawFramer, drawRinger, drawShadow, drawMel, drawTik, drawMara, drawDog, drawGhost, drawBrassBoy, drawGreatBell } from '../art/sprites.js';
+import { drawHero, drawHollow, drawFramer, drawRinger, drawShadow, drawMel, drawTik, drawMara, drawDog, drawGhost, drawBrassBoy, drawGreatBell, drawEater } from '../art/sprites.js';
 
 let buf = null;
 function cell(ctx, x, y, w, h, scale, fn) {
@@ -36,6 +36,8 @@ export function drawSpriteSheet(ctx, t) {
   cell(ctx, 196, 60, 40, 40, 1.5, (b) => drawShadow(b, 20, 38, { phase: 'present', t, shield: true }));
   cell(ctx, 254, 56, 40, 40, 1.5, (b) => drawShadow(b, 20, 38, { phase: 'past', t }));
   cell(ctx, 310, 2, 70, 74, 1, (b) => drawMel(b, 35, 72, { t }));
+  cell(ctx, 330, 160, 30, 26, 1.5, (b) => drawEater(b, 15, 24, { phase: 'present', t }));
+  cell(ctx, 290, 176, 30, 26, 1.3, (b) => drawEater(b, 15, 24, { phase: 'past', t }));
   cell(ctx, 4, 128, 20, 40, 2, (b) => drawTik(b, 10, 30, { t }));
   cell(ctx, 44, 128, 20, 40, 2, (b) => drawMara(b, 10, 34, { t }));
   cell(ctx, 84, 128, 24, 40, 2, (b) => drawDog(b, 12, 34, { t }));
