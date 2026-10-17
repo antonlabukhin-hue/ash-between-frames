@@ -3,6 +3,7 @@ import { P } from '../art/palette.js';
 import { px, disc, ring } from '../art/sprites.js';
 import { regenProgress } from '../timeline/charges.js';
 import { FRAGMENTS } from '../items/fragments.js';
+import { W } from '../core/renderer.js';
 
 // Цифры 3×5.
 const DIGITS = {
@@ -97,14 +98,14 @@ export function drawHud(g, ctx) {
   // зола и осколки — справа сверху
   const ash = String(g.save.ash);
   const aw = digitsWidth(ash);
-  let x = 384 - 8 - aw;
+  let x = W - 8 - aw;
   drawDigits(ctx, x, 7, ash, P.amberHi);
   px(ctx, x - 7, 8, 4, 3, P.ash3);
   px(ctx, x - 6, 7, 2, 1, P.amber);
   px(ctx, x - 6, 11, 2, 1, P.ash2);
   if (g.save.shards > 0) {
     const sh = String(g.save.shards);
-    x = 384 - 8 - digitsWidth(sh);
+    x = W - 8 - digitsWidth(sh);
     drawDigits(ctx, x, 16, sh, P.tealHi);
     px(ctx, x - 6, 16, 1, 5, P.teal);
     px(ctx, x - 7, 17, 3, 3, P.teal);
@@ -115,7 +116,7 @@ export function drawHud(g, ctx) {
   const b = g.bossBar;
   if (b) {
     const w = 200;
-    const bx = (384 - w) / 2;
+    const bx = (W - w) / 2;
     const by = 206;
     bar(ctx, bx, by, w, 4, b.hp / b.max, P.ash4, P.ink, P.ash1);
     px(ctx, bx, by, Math.round((w * b.hp) / b.max), 1, P.milk);

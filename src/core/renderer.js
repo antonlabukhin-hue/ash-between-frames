@@ -1,6 +1,9 @@
 // Холст 384×216 с nearest-neighbor. Масштаб целый, если экран позволяет (≥2),
 // иначе дробный, чтобы на телефоне картинка занимала весь экран.
-export const W = 384;
+// Ширина кадра подстраивается под соотношение сторон (16:9 … 19.5:9), высота постоянна.
+export let W = 384;
+export const MIN_W = 384;
+export const MAX_W = 468;
 export const H = 216;
 
 export function createRenderer(canvas, stage) {
@@ -11,6 +14,13 @@ export function createRenderer(canvas, stage) {
   function resize() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const aspect = vw / vh;
+    const want = Math.max(MIN_W, Math.min(MAX_W, Math.round((H * aspect) / 2) * 2));
+    if (want !== W) {
+      W = want;
+      canvas.width = W;
+      ctx.imageSmoothingEnabled = false;
+    }
     let s = Math.min(vw / W, vh / H);
     if (r.integer && s >= 2) s = Math.floor(s);
     r.scale = s;
