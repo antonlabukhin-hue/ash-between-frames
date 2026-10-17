@@ -16,7 +16,7 @@ let lightCanvas = null;
 let lightCtx = null;
 
 function ensureLight() {
-  if (lightCanvas) return;
+  if (lightCanvas && lightCanvas.width === W / 2) return;
   lightCanvas = document.createElement('canvas');
   lightCanvas.width = W / 2;
   lightCanvas.height = H / 2;

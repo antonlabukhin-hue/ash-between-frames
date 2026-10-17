@@ -194,8 +194,9 @@ body {
 }
 .menu .logo p {
   margin: calc(var(--px) * 2) 0 0;
-  color: var(--ash-hi);
+  color: var(--milk);
   font-size: max(11px, calc(var(--px) * 5.5));
+  text-shadow: 0 0 calc(var(--px) * 2) var(--void), 0 calc(var(--px) * 1) 0 var(--void);
 }
 .menu .foot {
   position: absolute;
@@ -228,7 +229,7 @@ body {
 /* ── подсказки ── */
 .banner {
   position: absolute;
-  top: calc(var(--px) * 22);
+  top: calc(var(--px) * 64);
   left: 0;
   right: 0;
   text-align: center;
@@ -243,7 +244,7 @@ body {
 .hint {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--px) * 22);
+  top: calc(var(--px) * 30);
   transform: translateX(-50%);
   max-width: 80%;
   padding: calc(var(--px) * 3) calc(var(--px) * 6);
@@ -273,7 +274,7 @@ body {
 
 .toast {
   position: absolute;
-  top: calc(var(--px) * 8);
+  top: calc(var(--px) * 14);
   left: 50%;
   transform: translateX(-50%);
   font-size: max(12px, calc(var(--px) * 5.5));
@@ -345,7 +346,7 @@ body {
 .pausebtn {
   position: absolute;
   top: calc(var(--px) * 3);
-  right: calc(var(--px) * 3);
+  right: calc(var(--px) * 44);
   width: max(36px, calc(var(--px) * 16));
   height: max(36px, calc(var(--px) * 16));
   background: rgba(5, 6, 12, 0.5);

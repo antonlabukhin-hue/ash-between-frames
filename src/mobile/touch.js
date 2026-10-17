@@ -2,6 +2,14 @@
 // смена состояния (часы), разлом и контекстное «взаимодействие».
 // Свайп по правой части — уклонение в сторону свайпа, тап — удар в точку.
 
+const capture = (el, id) => {
+  try {
+    el.setPointerCapture(id);
+  } catch {
+    /* указатель уже отпущен */
+  }
+};
+
 export function createTouch(root, input, renderer) {
   const st = { enabled: false, visible: true, g: null };
   const zone = document.createElement('div');
@@ -21,7 +29,7 @@ export function createTouch(root, input, renderer) {
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      b.setPointerCapture?.(e.pointerId);
+      capture(b, e.pointerId);
       b.classList.add('down');
       input.inject(action, true);
     });
@@ -49,7 +57,7 @@ export function createTouch(root, input, renderer) {
   zone.addEventListener('pointerdown', (e) => {
     if (stickId !== null) return;
     stickId = e.pointerId;
-    zone.setPointerCapture?.(e.pointerId);
+    capture(zone, e.pointerId);
     const rect = root.getBoundingClientRect();
     ox = e.clientX - rect.left;
     oy = e.clientY - rect.top;

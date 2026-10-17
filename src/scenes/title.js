@@ -254,6 +254,8 @@ function foreground(ctx, rnd) {
   for (let i = 0; i < 40; i++) px(ctx, rnd() * 110, 175 + rnd() * 40, 2, 2, rnd() > 0.5 ? '#d89a34' : '#7a4a18');
 }
 
+const OX = () => Math.round((W - 384) / 2);
+
 function buildBackground() {
   bg = document.createElement('canvas');
   bg.width = W;
@@ -261,6 +263,17 @@ function buildBackground() {
   const ctx = bg.getContext('2d');
   const rnd = mulberry32(42);
   sky(ctx);
+  // боковые поля широких экранов: скала слева, руины справа
+  const ox = OX();
+  if (ox > 0) {
+    ctx.fillStyle = '#6e4a2a';
+    ctx.fillRect(0, 100, ox + 1, H - 100);
+    ctx.fillStyle = '#1a0610';
+    ctx.fillRect(W - ox - 1, 96, ox + 1, H - 96);
+    ctx.fillStyle = '#1d1f2a';
+    ctx.fillRect(0, 160, W, H - 160);
+  }
+  ctx.translate(ox, 0);
   clouds(ctx, rnd);
   moon(ctx);
   eclipse(ctx);
@@ -284,8 +297,10 @@ function banner(ctx, x, y, t) {
 
 let heroBuf = null;
 export function drawTitle(ctx, t) {
-  if (!bg) buildBackground();
+  if (!bg || bg.width !== W) buildBackground();
   ctx.drawImage(bg, 0, 0);
+  ctx.save();
+  ctx.translate(OX(), 0);
   floatingIslands(ctx, t);
   centerTower(ctx, t);
   // пиксели, отрывающиеся от правой половины
@@ -310,6 +325,7 @@ export function drawTitle(ctx, t) {
   drawHero(hc, 20, 36, { dir: 'up', t, sway: Math.sin(t * 1.2) * 2.5, charges: 3, moving: false, aim: Math.PI / 2 + 0.6 });
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(heroBuf, 0, 0, 40, 40, 192 - 40, 132, 80, 80);
+  ctx.restore();
   // пепел
   for (let i = 0; i < 40; i++) {
     const r = hash2(i, 1, 4);
