@@ -371,6 +371,7 @@ function squareMap() {
 export const square = {
   id: 'square',
   title: 'Площадь без центра',
+  walls: 'city',
   subtitle: 'Город Колокольных Ворот',
   music: 'city',
   dark: 0.6,
@@ -619,6 +620,7 @@ function ascentMap() {
 export const ascent = {
   id: 'ascent',
   title: 'Подъём к колокольне',
+  walls: 'city',
   music: 'city',
   dark: 0.5,
   floor: '+',

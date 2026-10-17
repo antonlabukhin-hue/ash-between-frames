@@ -102,20 +102,42 @@ function stair(ctx, x, y) {
 }
 
 function plaza(ctx, x, y, tx, ty, s) {
-  const big = ((tx >> 1) + (ty >> 1)) & 1;
-  rect(ctx, x, y, 16, 16, big ? P.stone1 : P.stone2);
-  if ((tx & 1) === 0) rect(ctx, x, y, 1, 16, P.stone0);
-  if ((ty & 1) === 0) rect(ctx, x, y, 16, 1, P.stone0);
-  if ((tx & 1) === 0 && (ty & 1) === 0) rect(ctx, x + 1, y + 1, 14, 1, P.stone3);
-  if (hash2(tx, ty, s) > 0.8) rect(ctx, x + 4, y + 9, 6, 1, P.ink); // трещина
+  // плиты 8×8 со сдвигом рядов, трещины, мох в стыках
+  rect(ctx, x, y, 16, 16, P.stone0);
+  for (let j = 0; j < 2; j++) {
+    const off = ((ty * 2 + j) & 1) * 4;
+    for (let i = -1; i < 2; i++) {
+      const sx = i * 8 + off;
+      const cx = Math.max(0, sx);
+      const cw = Math.min(16, sx + 7) - cx;
+      if (cw <= 0) continue;
+      const r = hash2(tx * 4 + i, ty * 4 + j, s);
+      const c = r > 0.8 ? P.stone2 : r > 0.25 ? P.stone1 : '#262838';
+      rect(ctx, x + cx, y + j * 8, cw, 7, c);
+      rect(ctx, x + cx, y + j * 8, cw, 1, r > 0.5 ? P.stone2 : P.stone1);
+      if (r > 0.93) rect(ctx, x + cx + 1, y + j * 8 + 3, 3, 1, P.ink);
+      if (r < 0.05) rect(ctx, x + cx, y + j * 8 + 6, 2, 1, P.moss);
+    }
+  }
+  if (hash2(tx, ty, s + 7) > 0.9) {
+    rect(ctx, x + 6, y + 4, 4, 1, P.slate);
+    rect(ctx, x + 7, y + 5, 3, 1, P.amber0);
+  }
 }
 
-function wood(ctx, x, y, tx, ty) {
+function wood(ctx, x, y, tx, ty, s) {
+  // доски вдоль, стыки вразбежку, оттенок у каждой доски свой
   for (let i = 0; i < 4; i++) {
-    const c = (i + tx) & 1 ? P.wood : P.woodHi;
-    rect(ctx, x, y + i * 4, 16, 4, c);
-    rect(ctx, x, y + i * 4 + 3, 16, 1, P.ink);
-    rect(ctx, x + ((tx * 5 + i * 7 + ty) % 16), y + i * 4, 1, 3, P.ink);
+    const row = ty * 4 + i;
+    const seam = Math.floor(hash2(row, 3, s) * 32);
+    const lx = (tx * 16) % 32;
+    const plank = Math.floor((lx + 32 - seam) / 32) + tx;
+    const r = hash2(plank, row, s);
+    rect(ctx, x, y + i * 4, 16, 4, r > 0.66 ? P.woodHi : r > 0.33 ? '#5a3f2c' : P.wood);
+    rect(ctx, x, y + i * 4 + 3, 16, 1, '#2e2018');
+    const sx = (seam - lx + 32) % 32;
+    if (sx < 16) rect(ctx, x + sx, y + i * 4, 1, 3, '#2e2018');
+    if (hash2(tx + i, ty, s + 2) > 0.85) rect(ctx, x + 5, y + i * 4 + 1, 2, 1, '#2e2018');
   }
 }
 
@@ -144,6 +166,34 @@ function wallFace(ctx, x, y, tx, ty, s) {
   rect(ctx, x, y + 15, 16, 1, P.ink);
 }
 
+// Фасад городского дома: штукатурка, окна (редкие светятся), карниз.
+function facade(ctx, x, y, tx, ty, s) {
+  rect(ctx, x, y, 16, 16, '#30293a');
+  rect(ctx, x, y, 16, 2, P.stone3);
+  rect(ctx, x, y + 2, 16, 1, P.ink);
+  if (tx % 2 === 0) {
+    const lit = hash2(tx, ty, s + 4) > 0.75;
+    rect(ctx, x + 4, y + 5, 8, 8, P.ink);
+    rect(ctx, x + 5, y + 6, 6, 6, lit ? P.amber1 : P.night);
+    if (lit) rect(ctx, x + 5, y + 6, 2, 2, P.amberHi);
+    rect(ctx, x + 7, y + 6, 1, 6, P.ink);
+    rect(ctx, x + 5, y + 8, 6, 1, P.ink);
+    rect(ctx, x + 3, y + 13, 10, 1, P.stone3);
+  } else if (hash2(tx, ty, s) > 0.6) {
+    rect(ctx, x + 6, y + 4, 1, 10, P.moss);
+  }
+  rect(ctx, x, y + 15, 16, 1, P.ink);
+}
+
+// Крыши: черепица рядами.
+function roof(ctx, x, y, tx, ty, s) {
+  rect(ctx, x, y, 16, 16, '#1e1a28');
+  for (let j = 0; j < 4; j++) {
+    const off = (j & 1) * 2;
+    for (let i = off; i < 16; i += 4) rect(ctx, x + i, y + j * 4 + 2, 3, 2, hash2(tx * 8 + i, ty * 8 + j, s) > 0.85 ? P.crimson0 : '#2c2638');
+  }
+}
+
 // Обрыв: передняя стенка пола над пустотой.
 function cliff(ctx, x, y, tx, ty, s) {
   rect(ctx, x, y, 16, 6, P.stone0);
@@ -167,8 +217,9 @@ export function drawTile(ctx, room, tx, ty) {
   const s = room.seed;
   if (t === T.WALL) {
     const below = ty + 1 < room.h ? room.tiles[(ty + 1) * room.w + tx] : T.WALL;
-    if (below !== T.WALL) wallFace(ctx, x, y, tx, ty, s);
-    else wallTop(ctx, x, y, tx, ty, s);
+    const city = room.def?.walls === 'city';
+    if (below !== T.WALL) (city ? facade : wallFace)(ctx, x, y, tx, ty, s);
+    else (city ? roof : wallTop)(ctx, x, y, tx, ty, s);
     return;
   }
   if (t === T.VOID) {
@@ -178,6 +229,23 @@ export function drawTile(ctx, room, tx, ty) {
     return;
   }
   (DRAW[t] || cobble)(ctx, x, y, tx, ty, s);
+  // мягкий край травы: зубцы чужого тайла заходят на траву
+  if (t === T.GRASS) {
+    const at = (dx, dy) => (tx + dx < 0 || ty + dy < 0 || tx + dx >= room.w || ty + dy >= room.h ? T.GRASS : room.tiles[(ty + dy) * room.w + tx + dx]);
+    const edge = (dx, dy, other) => {
+      if (other === T.GRASS || other === T.WALL || other === T.VOID) return;
+      const col = other === T.ROAD ? P.ash1 : P.ash0;
+      for (let i = 0; i < 16; i++) {
+        const d = Math.floor(hash2(tx * 16 + i, ty * 16 + dx * 3 + dy * 7, s) * 4);
+        if (dx) rect(ctx, dx < 0 ? x : x + 16 - d, y + i, d, 1, col);
+        else rect(ctx, x + i, dy < 0 ? y : y + 16 - d, 1, d, col);
+      }
+    };
+    edge(-1, 0, at(-1, 0));
+    edge(1, 0, at(1, 0));
+    edge(0, -1, at(0, -1));
+    edge(0, 1, at(0, 1));
+  }
   // тень от стены сверху
   const above = ty > 0 ? room.tiles[(ty - 1) * room.w + tx] : T.FLOOR;
   if (above === T.WALL) {
@@ -187,11 +255,11 @@ export function drawTile(ctx, room, tx, ty) {
     ctx.fillRect(x, y + 4, 16, 3);
   }
   if (t === T.FLICKER) {
-    // разметка стирающейся плиты — пунктир по краю
-    ctx.fillStyle = P.crimson0;
-    for (let i = 0; i < 16; i += 4) {
-      ctx.fillRect(x + i, y, 2, 1);
-      ctx.fillRect(x + i + 2, y + 15, 2, 1);
+    // стирающаяся плита: редкие малиновые трещины
+    const r = hash2(tx, ty, s + 13);
+    if (r > 0.55) {
+      rect(ctx, x + 3 + Math.floor(r * 6), y + 5, 1, 4, P.crimson0);
+      rect(ctx, x + 4 + Math.floor(r * 6), y + 8, 3, 1, P.crimson0);
     }
   }
 }

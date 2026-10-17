@@ -182,6 +182,8 @@ export function createGame({ input, audio, ui, storage, save }) {
     g.drawables = [];
     g.exits = [];
     g.onPerfectDodge = null;
+    g.camFocus = null;
+    g.forceMusicPhase = null;
     g.glitch = def.glitch ?? 0.015;
     const room = parseRoom(def);
     g.room = room;
