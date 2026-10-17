@@ -11,7 +11,7 @@ import { loadSave, hasProgress } from './save/save.js';
 import { renderWorld } from './render.js';
 import { drawTitle } from './scenes/title.js';
 import { createTouch } from './mobile/touch.js';
-import { ROOMS } from './scenes/rooms.js';
+import { ROOMS, CHAPTER1 } from './scenes/rooms.js';
 import { drawSpriteSheet } from './scenes/spritesheet.js';
 
 const stage = document.getElementById('stage');
@@ -187,6 +187,31 @@ function pauseMenu() {
     back: resume,
   });
 }
+// Карта главы (Tab): пройденные места и текущее.
+function mapMenu() {
+  if (ui.mode) return;
+  game.paused = true;
+  const box = document.createElement('div');
+  box.className = 'keys';
+  const visited = save.flags.visited || {};
+  for (const id of CHAPTER1) {
+    const def = ROOMS[id];
+    const here = game.room?.id === id;
+    const b = document.createElement('b');
+    b.textContent = here ? '◆' : visited[id] ? '◇' : '·';
+    const sp = document.createElement('span');
+    sp.textContent = visited[id] || here ? def.title : '???';
+    if (here) sp.style.color = 'var(--amber-hi)';
+    box.append(b, sp);
+  }
+  const close = () => {
+    ui.closeMenu();
+    game.paused = false;
+    input.clear();
+  };
+  ui.menu({ title: 'Глава 1 · Колокол, который не помнит удара', extra: box, items: [{ text: 'Закрыть', on: close }], back: close });
+}
+
 function pauseMenu2() {
   ui.closeMenu();
   pauseMenu();
@@ -231,6 +256,7 @@ function frame(now) {
   input.update();
   const consumed = ui.handleInput(input);
   if (!consumed && input.pressed('pause') && game.scene === 'play') pauseMenu();
+  if (!consumed && input.pressed('map') && game.scene === 'play' && !game.cinematic) mapMenu();
   if (game.scene === 'sprites') {
     game.time += dt;
     drawSpriteSheet(renderer.ctx, game.time);

@@ -1,7 +1,7 @@
 // Состояние игры, загрузка комнат, обновление мира и сценарные помощники.
 import { parseRoom } from './world/room.js';
 import { buildRoomCanvas, TILE } from './art/tiles.js';
-import { createPlayer, updatePlayer, hurtPlayer, resetPlayerCombat } from './player/player.js';
+import { createPlayer, updatePlayer, hurtPlayer, resetPlayerCombat, applyShift } from './player/player.js';
 import { updateEnemies, damageEnemy, createEnemy } from './enemies/enemies.js';
 import { updateProjectiles } from './combat/projectiles.js';
 import { createProp, propFoot, propCenter } from './world/props.js';
@@ -31,6 +31,7 @@ export function createGame({ input, audio, ui, storage, save }) {
   g.damageEnemy = (e, amount, o) => damageEnemy(g, e, amount, o);
   g.hurtPlayer = (amount, sx, sy, kind) => hurtPlayer(g, amount, sx, sy, kind);
   g.hasFragment = (id) => hasFragment(save, id);
+  g.applyShiftFree = (e) => applyShift(g, { obj: e, x: e.x, y: e.y - 8, type: 'enemy' }, { free: true });
   g.toast = (t, d) => ui.toast(t, d);
   g.hint = (t, d) => ui.hint(t, d);
   g.shake = (a, t) => {
@@ -210,6 +211,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     }
     g.holdFade = !!def.holdFade?.(g);
     def.setup?.(g, room);
+    (save.flags.visited ||= {})[id] = true;
     if (def.checkpoint !== false) {
       save.room = id;
       save.started = true;
@@ -374,6 +376,7 @@ export function createGame({ input, audio, ui, storage, save }) {
       }
       pr.update?.(g, pr, dt);
     }
+    if (g.props.some((pr) => pr.removed)) g.props = g.props.filter((pr) => !pr.removed);
   }
 
   function updateVoidZones(dt) {

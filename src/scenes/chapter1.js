@@ -8,6 +8,7 @@ import { burst, ringFx, addText } from '../world/fx.js';
 import { isPit } from '../world/world.js';
 import { killEnemy } from '../enemies/enemies.js';
 import { dist } from '../core/math.js';
+import { unlockAbility } from '../player/abilities.js';
 import { line, px } from '../art/sprites.js';
 
 const REN = (text) => ({ who: 'Рен', text, portrait: 'ren', style: 'white' });
@@ -248,6 +249,7 @@ export const tornRoad = {
     g.room.flickerStart = null;
     g.spawnPickup('fragment', T(16), T(11), { id: 'backHeat', vx: 0, vy: 0 });
     g.toast('Что-то осталось на дороге');
+    unlockAbility(g, 0);
     g.openExits(true);
     for (const ex of g.exits) if (ex.gate) ex.gate.closed = false;
   },
@@ -450,6 +452,7 @@ export const square = {
     }
     g.ui.clearHint();
     g.flags.squareDone = true;
+    unlockAbility(g, 1);
     g.persist();
     await g.wait(0.5);
     await boyTalk(g);
@@ -600,6 +603,7 @@ export const shadowArena = {
     await g.wait(1.2);
     g.save.upgrades.quickSeam = true;
     g.flags.shadowDone = true;
+    unlockAbility(g, 2);
     g.persist();
     g.ui.card('Постоянное улучшение', 'Быстрый шов', 'Импульс сдвига короче на четверть, а идеальное уклонение возвращает заряд браслета.', 4.5);
     g.audio.sfx.shard();

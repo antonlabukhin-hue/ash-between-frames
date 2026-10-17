@@ -11,6 +11,7 @@ import { burst, ringFx, slashFx, addText, boltFx } from '../world/fx.js';
 import { dist, norm, angleDiff, clamp } from '../core/math.js';
 import { propCenter } from '../world/props.js';
 import { P } from '../art/palette.js';
+import { ABILITIES, createAbilityState, tickAbilities, canUse, markUsed, castAbility, updateSpark, isUnlocked } from './abilities.js';
 
 const SPEED = 74;
 const DODGE_TIME = 0.2;
@@ -28,7 +29,7 @@ export function createPlayer(x, y, save) {
     dodge: 0, dodgeCd: 0, dodgeDir: [0, 1], dodgeFresh: false,
     channel: null, echo: 0, rift: 0, critNext: false,
     shiftTarget: null, lastSafe: { x, y }, falling: 0, kx: 0, ky: 0,
-    history: [], hurtFlash: 0, doubleOutline: 0, quietFrame: 0,
+    history: [], hurtFlash: 0, doubleOutline: 0, quietFrame: 0, abilities: createAbilityState(), spark: null,
   };
 }
 
@@ -394,6 +395,22 @@ export function updatePlayer(g, p, dt) {
         applyShift(g, ch.target);
       }
     }
+  }
+
+  // ── способности школ ──
+  tickAbilities(p.abilities, dt);
+  updateSpark(g, p, dt);
+  if (!locked && p.dodge <= 0) {
+    ABILITIES.forEach((a, i) => {
+      if (!inp.pressed(a.key)) return;
+      if (!isUnlocked(g.flags, i)) return;
+      if (!canUse(p.abilities, g.flags, i)) {
+        addText(g, p.x, p.y - 28, 'не готово', P.ash4, { life: 0.5 });
+        return;
+      }
+      markUsed(p.abilities, i);
+      castAbility(g, p, i);
+    });
   }
 
   // ── разлом ──

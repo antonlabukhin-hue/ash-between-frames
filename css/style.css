@@ -401,6 +401,11 @@ body {
 .tbtn.rift.ready { border-color: var(--milk); box-shadow: 0 0 10px rgba(236, 228, 207, 0.6); }
 .tbtn.interact { width: calc(54px * var(--bs, 1)); height: calc(54px * var(--bs, 1)); right: calc(5% + 160px * var(--bs, 1)); bottom: calc(6% + 40px * var(--bs, 1)); font-size: calc(12px * var(--bs, 1)); border-color: var(--amber); }
 
+.tbtn.ab { width: calc(40px * var(--bs, 1)); height: calc(40px * var(--bs, 1)); font-size: calc(14px * var(--bs, 1)); bottom: calc(10% + 180px * var(--bs, 1)); border-color: rgba(58, 208, 192, 0.7); }
+.tbtn.ab1 { right: calc(5% + 60px * var(--bs, 1)); }
+.tbtn.ab2 { right: calc(5% + 108px * var(--bs, 1)); bottom: calc(10% + 150px * var(--bs, 1)); }
+.tbtn.ab3 { right: calc(5% + 150px * var(--bs, 1)); bottom: calc(10% + 110px * var(--bs, 1)); }
+
 #rotate {
   display: none;
   position: fixed;

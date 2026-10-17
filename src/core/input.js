@@ -11,7 +11,7 @@ const KEYMAP = {
 };
 
 // Стандартная раскладка геймпада.
-const PADMAP = { 0: 'dodge', 1: 'interact', 2: 'attack', 3: 'shift', 5: 'rift', 7: 'attack', 6: 'dodge', 4: 'ab1', 9: 'pause', 8: 'map', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
+const PADMAP = { 0: 'dodge', 1: 'interact', 2: 'attack', 3: 'shift', 5: 'rift', 4: 'ab1', 6: 'ab2', 7: 'ab3', 9: 'pause', 8: 'map', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 
 export function createInput(renderer) {
   const down = new Set();

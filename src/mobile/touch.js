@@ -48,6 +48,9 @@ export function createTouch(root, input, renderer) {
     shift: mk('shift', '⧗', 'shift'),
     rift: mk('rift', '✦', 'rift'),
     interact: mk('interact', '✋', 'interact'),
+    ab1: mk('ab ab1', '1', 'ab1'),
+    ab2: mk('ab ab2', '2', 'ab2'),
+    ab3: mk('ab ab3', '3', 'ab3'),
   };
 
   let stickId = null;
@@ -150,6 +153,7 @@ export function createTouch(root, input, renderer) {
     }
     if (!on || !g.player) return;
     btn.interact.classList.toggle('hidden', !g.interactTarget);
+    ['ab1', 'ab2', 'ab3'].forEach((k, i) => btn[k].classList.toggle('hidden', !g.flags?.[['abSpark', 'abSeam', 'abShade'][i]]));
     btn.rift.classList.toggle('ready', g.player.rift >= 1);
     btn.shift.style.opacity = g.player.shiftTarget ? '1' : '0.55';
   };

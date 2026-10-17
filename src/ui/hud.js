@@ -4,6 +4,7 @@ import { px, disc, ring } from '../art/sprites.js';
 import { regenProgress } from '../timeline/charges.js';
 import { FRAGMENTS } from '../items/fragments.js';
 import { W } from '../core/renderer.js';
+import { ABILITIES, isUnlocked, cooldownLeft } from '../player/abilities.js';
 
 // Цифры 3×5.
 const DIGITS = {
@@ -68,6 +69,18 @@ export function drawHud(g, ctx) {
     ring(ctx, cx, cy, 3.5, P.ash1);
   }
 
+  // способности школ: значки с откатом
+  ABILITIES.forEach((a, i) => {
+    if (!isUnlocked(g.flags, i)) return;
+    const ax = 44 + i * 11;
+    const ay = 15;
+    const cdv = cooldownLeft(p.abilities, i);
+    px(ctx, ax, ay, 9, 9, P.ink);
+    px(ctx, ax + 1, ay + 1, 7, 7, cdv > 0 ? P.ash1 : a.color);
+    if (cdv > 0) px(ctx, ax + 1, ay + 1, 7, Math.ceil(7 * cdv), P.ink);
+    drawDigits(ctx, ax + 3, ay + 2, i + 1, cdv > 0 ? P.ash3 : P.ink);
+  });
+
   // разлом
   const rx = 8;
   const ry = 28;
@@ -80,8 +93,8 @@ export function drawHud(g, ctx) {
 
   // Окно Эха
   if (p.echo > 0) {
-    ring(ctx, 64, 20, 4 + Math.sin(t * 20), P.tealHi);
-    px(ctx, 63, 19, 3, 3, P.tealHi);
+    ring(ctx, 48, 29, 3 + Math.sin(t * 20), P.tealHi);
+    px(ctx, 47, 28, 3, 3, P.tealHi);
   }
 
   // фрагменты вылазки
