@@ -249,7 +249,25 @@ titleMenu();
 requestAnimationFrame(frame);
 
 if (__DEBUG__) {
-  window.__abf = { game, save, ui, input, rooms: ROOMS, startGame };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Поставить комнату для осмотра: без диалогов, с подготовкой сцены.
+  const shot = async (id, setup) => {
+    game.flags.introSeen = true;
+    await startGame(id);
+    await sleep(1800);
+    ui.closeAll();
+    game.cinematic = false;
+    setup?.(game);
+    await sleep(500);
+    return id;
+  };
+  const skip = async () => {
+    for (let i = 0; i < 20 && ui.mode === 'dialogue'; i++) {
+      input.tap('confirm');
+      await sleep(120);
+    }
+  };
+  window.__abf = { game, save, ui, input, rooms: ROOMS, startGame, shot, skip, sleep };
   const q = new URLSearchParams(location.search);
   if (q.get('room')) startGame(q.get('room'));
 }

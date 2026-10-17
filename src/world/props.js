@@ -275,6 +275,9 @@ function drawCampfire(ctx, p, g) {
     px(ctx, x - 1, y - 9, 2, 4, P.milk);
   } else {
     px(ctx, x - 3, y - 4, 6, 2, P.ash2);
+    const ember = Math.floor(g.time * 3) % 4;
+    px(ctx, x - 2 + ember, y - 4, 1, 1, P.amber1);
+    px(ctx, x + 1, y - 3, 1, 1, ember % 2 ? P.amber0 : P.amber1);
     if (Math.floor(g.time * 2) % 3 === 0) px(ctx, x, y - 8 - ((g.time * 10) % 6), 1, 1, P.ash3);
   }
 }

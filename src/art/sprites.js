@@ -457,25 +457,48 @@ export function drawDog(ctx, x, y, o = {}) {
   px(ctx, x - 8, y - 9 + wag, 2, 2, k(c));
 }
 
-// Силуэт-воспоминание (Арно, Сена, жители).
+// Силуэт-воспоминание (Арно, Сена, жители): голова, плечи, сканлайны, низ растворяется.
 export function drawGhost(ctx, x, y, o = {}) {
   const k = o.k || ident;
   const c = o.color || P.amber;
+  const lo = o.color === P.milk ? P.ash3 : o.color === P.amberHi ? P.amber : P.amber1;
   const a = o.alpha ?? 0.75;
+  const t = o.t || 0;
   x = Math.round(x);
   y = Math.round(y);
+  shadow(ctx, x, y, 10, 0.25);
   ctx.globalAlpha = a;
+  // тело: от плеч к подолу
   for (let i = 0; i < 14; i++) {
-    const half = o.dress ? 3 + Math.floor(i / 3) : 3 + (i > 8 ? 1 : 0);
-    px(ctx, x - half, y - 15 + i, half * 2, 1, k(c));
+    const half = o.dress ? 3 + Math.floor(i / 3) : i < 2 ? 3 : 4;
+    const yy = y - 15 + i;
+    if (i > 10 && (i + Math.floor(t * 8)) % 2) continue; // растворяется
+    const line_ = (i + Math.floor(t * 6)) % 4 === 0;
+    ctx.globalAlpha = a * (line_ ? 0.45 : 1);
+    px(ctx, x - half, yy, half * 2, 1, k(c));
+    px(ctx, x - half, yy, 1, 1, k(lo));
+    px(ctx, x + half - 1, yy, 1, 1, k(lo));
   }
-  px(ctx, x - 3, y - 21, 6, 6, k(c));
-  if (o.hat) px(ctx, x - 4, y - 22, 8, 2, k(c));
+  ctx.globalAlpha = a;
+  // руки
+  px(ctx, x - 5, y - 13, 1, 6, k(lo));
+  px(ctx, x + 4, y - 13, 1, 6, k(lo));
+  // голова
+  px(ctx, x - 2, y - 21, 4, 1, k(c));
+  px(ctx, x - 3, y - 20, 6, 4, k(c));
+  px(ctx, x - 2, y - 16, 4, 1, k(c));
+  px(ctx, x - 1, y - 15, 2, 1, k(lo));
+  if (o.hat) {
+    px(ctx, x - 4, y - 22, 8, 1, k(lo));
+    px(ctx, x - 2, y - 24, 4, 2, k(lo));
+  }
+  if (o.dress) px(ctx, x - 3, y - 21, 1, 6, k(lo)); // волосы
   px(ctx, x - 2, y - 19, 1, 1, k(P.void));
   px(ctx, x + 1, y - 19, 1, 1, k(P.void));
   ctx.globalAlpha = 1;
-  const f = Math.floor((o.t || 0) * 10) % 7;
-  if (f === 0) px(ctx, x - 5 + ((o.t * 37) % 10), y - 10, 2, 1, P.milk);
+  // искры памяти
+  const f = Math.floor(t * 10) % 9;
+  if (f < 2) px(ctx, x - 5 + ((t * 37) % 10), y - 6 - f * 3, 1, 1, P.milk);
 }
 
 // Латунный Мальчик: статуя / автоматон / ребёнок.

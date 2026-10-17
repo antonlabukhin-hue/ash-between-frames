@@ -120,7 +120,7 @@ function partAi(g, boss, part, dt) {
     if (part.state === 'idle') {
       // парит у колокола, держит дистанцию
       const tx = boss.bell.x + Math.sin(part.t * 0.5) * 60;
-      const ty = boss.bell.y + 40 + Math.cos(part.t * 0.4) * 10;
+      const ty = boss.bell.y + 78 + Math.cos(part.t * 0.4) * 10;
       const [mx, my] = norm(tx - part.x, ty - part.y);
       movePart(g, part, mx * 30 * slow, my * 30 * slow, dt);
       if (part.cd <= 0) {
@@ -215,11 +215,11 @@ export function setupMel(g, cx, cy) {
     volley: 0, volleyT: 0, exposed: 0, dead: false, cinematic: false, marks: PHASE_MARKS, parts: [],
   };
   const bell = {
-    x: cx, y: cy - 54, r: 18, hitY: 16, dead: false, cracks: 0, ringing: 0,
+    x: cx, y: cy - 92, r: 18, hitY: 16, dead: false, cracks: 0, ringing: 0,
     tl: createTimeline({ hold: 6, cost: 1, switchTime: 0.5 }),
   };
   bell.onReflect = (gg, pr) => {
-    const dmg = pr.kind === 'note' ? 30 : 50;
+    const dmg = pr.kind === 'note' ? 12 : 50;
     boss.hp = Math.max(0, boss.hp - dmg);
     bell.cracks++;
     bell.ringing = 1;
@@ -346,6 +346,9 @@ async function finishBoss(g, boss) {
 
 function updateBoss(g, boss, dt) {
   const bell = boss.bell;
+  // камера держит в кадре и героя, и босса
+  const focus = boss.parts[0] || bell;
+  g.camFocus = { x: g.player.x * 0.6 + focus.x * 0.4, y: g.player.y * 0.55 + (focus.y - 60) * 0.45 };
   tickTimeline(bell.tl, dt);
   bell.ringing = Math.max(0, bell.ringing - dt);
   if (boss.dead) {
