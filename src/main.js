@@ -12,6 +12,7 @@ import { renderWorld } from './render.js';
 import { drawTitle } from './scenes/title.js';
 import { createTouch } from './mobile/touch.js';
 import { ROOMS } from './scenes/rooms.js';
+import { drawSpriteSheet } from './scenes/spritesheet.js';
 
 const stage = document.getElementById('stage');
 const canvas = document.getElementById('screen');
@@ -230,7 +231,10 @@ function frame(now) {
   input.update();
   const consumed = ui.handleInput(input);
   if (!consumed && input.pressed('pause') && game.scene === 'play') pauseMenu();
-  if (game.scene === 'title') {
+  if (game.scene === 'sprites') {
+    game.time += dt;
+    drawSpriteSheet(renderer.ctx, game.time);
+  } else if (game.scene === 'title') {
     ui.typewriter(dt);
     game.time += dt;
     drawTitle(renderer.ctx, game.time);
@@ -270,4 +274,8 @@ if (__DEBUG__) {
   window.__abf = { game, save, ui, input, rooms: ROOMS, startGame, shot, skip, sleep };
   const q = new URLSearchParams(location.search);
   if (q.get('room')) startGame(q.get('room'));
+  if (q.has('sprites')) {
+    ui.closeAll();
+    game.scene = 'sprites';
+  }
 }
