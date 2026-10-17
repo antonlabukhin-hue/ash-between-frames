@@ -96,12 +96,13 @@ test('глава 1 проходится от пролога до убежища'
     seen.push(g.room.id);
     await shift(g.statue);
     await until(() => g.squareWaves, 15000, 'пробуждения статуи');
-    for (const l of g.lanterns.slice(0, 2)) await shift(l);
     for (let i = 0; i < 2; i++) {
       await until(() => g.enemies.length > 0 && g.enemies.every((e) => e.spawn <= 0), 15000, `волны ${i + 1}`);
       killAll();
       await A.sleep(1500);
     }
+    // волны отбиты — теперь импульс никто не сбивает
+    for (const l of g.lanterns.slice(0, 2)) await shift(l);
     await until(() => g.flags.squareDone, 20000, 'окончания площади');
     await exitTo('stairs');
 
