@@ -1,0 +1,318 @@
+// HTML-слой поверх холста: диалоги, выборы, меню, подсказки.
+// Текст рисуется пиксельным шрифтом с кириллицей в разрешении экрана — читаемо на телефоне.
+import { drawHero, drawTik, drawMara, drawGhost, drawBrassBoy, drawMel, drawDog, drawHollow } from '../art/sprites.js';
+import { P } from '../art/palette.js';
+
+const PORTRAITS = {
+  ren: (c) => drawHero(c, 16, 38, { dir: 'down', charges: 3, t: 0 }),
+  tik: (c) => drawTik(c, 16, 30, {}),
+  mara: (c) => drawMara(c, 16, 34, {}),
+  arno: (c) => drawGhost(c, 16, 34, { hat: true, alpha: 1 }),
+  sena: (c) => drawGhost(c, 16, 34, { dress: true, alpha: 1, color: P.amberHi }),
+  boy: (c) => drawBrassBoy(c, 16, 46, { phase: 'past' }),
+  mel: (c) => drawMel(c, 16, 84, {}),
+  dog: (c) => drawDog(c, 14, 28, {}),
+  hollow: (c) => drawHollow(c, 16, 38, { phase: 'past' }),
+  villager: (c) => drawGhost(c, 16, 34, { alpha: 1, color: P.milk }),
+};
+
+function el(tag, cls, parent, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html != null) e.innerHTML = html;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+export const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+export function createUI(root, { audio }) {
+  const ui = { mode: null };
+  const banner = el('div', 'banner passive', root);
+  const hint = el('div', 'hint passive off', root);
+  const toast = el('div', 'toast passive off', root);
+  const prompt = el('div', 'prompt passive hidden', root);
+  const caption = el('div', 'caption passive', root);
+  const bossname = el('div', 'bossname passive hidden', root);
+  const card = el('div', 'card passive hidden', root);
+  const fade = el('div', 'fade passive', root);
+  let menuEl = null;
+  let menuItems = [];
+  let menuFocus = 0;
+  let menuBack = null;
+  let dlg = null; // {el, lines, i, shown, full, resolve}
+  let choice = null;
+  const timers = {};
+
+  const later = (key, ms, fn) => {
+    clearTimeout(timers[key]);
+    timers[key] = setTimeout(fn, ms);
+  };
+
+  ui.banner = (t, s = '', dur = 3.2) => {
+    banner.innerHTML = `<div class="t">${esc(t)}</div>${s ? `<div class="s">${esc(s)}</div>` : ''}`;
+    banner.classList.add('show');
+    later('banner', dur * 1000, () => banner.classList.remove('show'));
+  };
+
+  let hintText = '';
+  ui.hint = (html, dur = 4) => {
+    if (hintText !== html) {
+      hint.innerHTML = html;
+      hintText = html;
+    }
+    hint.classList.remove('off');
+    later('hint', dur * 1000, () => {
+      hint.classList.add('off');
+      hintText = '';
+    });
+  };
+  ui.clearHint = () => {
+    hint.classList.add('off');
+    hintText = '';
+  };
+
+  ui.toast = (text, dur = 2.2) => {
+    toast.textContent = text;
+    toast.classList.remove('off');
+    later('toast', dur * 1000, () => toast.classList.add('off'));
+  };
+
+  let promptText = null;
+  ui.setPrompt = (text) => {
+    if (text === promptText) return;
+    promptText = text;
+    prompt.classList.toggle('hidden', !text);
+    if (text) prompt.textContent = text;
+  };
+
+  ui.caption = (text) => {
+    if (text) caption.innerHTML = esc(text).replace(/\n/g, '<br>');
+    caption.classList.toggle('show', !!text);
+  };
+
+  ui.setBoss = (name, sub = '') => {
+    bossname.classList.toggle('hidden', !name);
+    if (name) bossname.innerHTML = `${esc(name)}${sub ? `<small>${esc(sub)}</small>` : ''}`;
+  };
+
+  ui.card = (kind, name, desc, dur = 3.2) => {
+    card.innerHTML = `<div class="k">${esc(kind)}</div><div class="n">${esc(name)}</div><div class="d">${esc(desc)}</div>`;
+    card.classList.remove('hidden');
+    later('card', dur * 1000, () => card.classList.add('hidden'));
+  };
+
+  ui.fade = (on) =>
+    new Promise((res) => {
+      fade.classList.toggle('on', on);
+      setTimeout(res, 380);
+    });
+
+  // ── диалог ────────────────────────────────────────────────────────
+  // lines: [{who, text, portrait, style}] или строки
+  ui.dialogue = (lines) =>
+    new Promise((resolve) => {
+      closeDialogue();
+      const box = el('div', 'dialogue', root);
+      const pc = el('canvas', 'portrait', box);
+      pc.width = 32;
+      pc.height = 32;
+      const body = el('div', 'body', box);
+      const name = el('div', 'name', body);
+      const text = el('div', 'text', body);
+      el('div', 'next', box, '▼');
+      dlg = { box, pc, name, text, lines: lines.map((l) => (typeof l === 'string' ? { text: l } : l)), i: -1, shown: 0, resolve };
+      box.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        advance();
+      });
+      ui.mode = 'dialogue';
+      nextLine();
+    });
+
+  function nextLine() {
+    dlg.i++;
+    if (dlg.i >= dlg.lines.length) {
+      const r = dlg.resolve;
+      closeDialogue();
+      r();
+      return;
+    }
+    const l = dlg.lines[dlg.i];
+    dlg.name.textContent = l.who || '';
+    dlg.name.className = `name ${l.style || ''}`;
+    dlg.shown = 0;
+    dlg.full = l.text;
+    dlg.text.textContent = '';
+    const draw = PORTRAITS[l.portrait];
+    dlg.pc.classList.toggle('hidden', !draw);
+    if (draw) {
+      const c = dlg.pc.getContext('2d');
+      c.fillStyle = '#121628';
+      c.fillRect(0, 0, 32, 32);
+      draw(c);
+    }
+  }
+
+  function advance() {
+    if (!dlg) return;
+    if (dlg.shown < dlg.full.length) {
+      dlg.shown = dlg.full.length;
+      dlg.text.textContent = dlg.full;
+    } else {
+      audio.sfx.ui();
+      nextLine();
+    }
+  }
+
+  function closeDialogue() {
+    if (dlg) dlg.box.remove();
+    dlg = null;
+    if (ui.mode === 'dialogue') ui.mode = null;
+  }
+
+  // ── выбор ─────────────────────────────────────────────────────────
+  ui.choice = (promptText_, options) =>
+    new Promise((resolve) => {
+      closeChoice();
+      const box = el('div', 'choices', root);
+      el('div', 'prompt', box, esc(promptText_));
+      const items = options.map((o, i) => {
+        const b = el('button', 'btn', box, `${esc(o.text)}${o.sub ? `<span class="sub">${esc(o.sub)}</span>` : ''}`);
+        b.disabled = !!o.disabled;
+        b.addEventListener('click', () => {
+          if (b.disabled) return;
+          audio.sfx.uiOk();
+          closeChoice();
+          resolve(i);
+        });
+        return b;
+      });
+      choice = { box, items };
+      menuItems = items;
+      menuFocus = items.findIndex((b) => !b.disabled);
+      menuBack = null;
+      focusMenu();
+      ui.mode = 'choice';
+    });
+
+  function closeChoice() {
+    if (choice) choice.box.remove();
+    choice = null;
+    if (ui.mode === 'choice') ui.mode = menuEl ? 'menu' : null;
+  }
+
+  // ── меню ──────────────────────────────────────────────────────────
+  // items: [{text, sub, on, disabled}] или DOM-узлы (настройки)
+  ui.menu = ({ title, items = [], cls = '', dim = true, extra = null, back = null, logo = null, foot = null }) => {
+    ui.closeMenu();
+    menuEl = el('div', `menu ${cls} ${dim ? 'dim' : ''}`, root);
+    if (logo) el('div', 'logo', menuEl, logo);
+    if (foot) el('div', 'foot', menuEl, foot);
+    const panel = el('div', 'panel', menuEl);
+    if (title) el('h2', '', panel, esc(title));
+    if (extra) panel.appendChild(extra);
+    menuItems = items.map((it) => {
+      const b = el('button', 'btn', panel, `${esc(it.text)}${it.sub ? `<span class="sub">${esc(it.sub)}</span>` : ''}`);
+      b.disabled = !!it.disabled;
+      b.addEventListener('click', () => {
+        if (b.disabled) return;
+        audio.unlock();
+        audio.sfx.uiOk();
+        it.on();
+      });
+      b.addEventListener('pointerenter', () => {
+        menuFocus = menuItems.indexOf(b);
+        focusMenu();
+      });
+      return b;
+    });
+    menuFocus = Math.max(0, menuItems.findIndex((b) => !b.disabled));
+    menuBack = back;
+    focusMenu();
+    ui.mode = 'menu';
+    return menuEl;
+  };
+
+  ui.closeMenu = () => {
+    if (menuEl) menuEl.remove();
+    menuEl = null;
+    menuItems = [];
+    if (ui.mode === 'menu') ui.mode = null;
+  };
+
+  function focusMenu() {
+    menuItems.forEach((b, i) => b.classList.toggle('focus', i === menuFocus));
+  }
+
+  function moveFocus(d) {
+    if (!menuItems.length) return;
+    let i = menuFocus;
+    for (let n = 0; n < menuItems.length; n++) {
+      i = (i + d + menuItems.length) % menuItems.length;
+      if (!menuItems[i].disabled) break;
+    }
+    menuFocus = i;
+    audio.sfx.ui();
+    focusMenu();
+  }
+
+  ui.closeAll = () => {
+    closeDialogue();
+    closeChoice();
+    ui.closeMenu();
+    ui.setPrompt(null);
+    ui.caption(null);
+  };
+
+  let navLatch = 0;
+  // Возвращает true, если интерфейс забрал ввод.
+  ui.handleInput = (input) => {
+    if (!ui.mode) return false;
+    const ok = input.anyPressed('confirm', 'attack', 'interact');
+    if (ui.mode === 'dialogue') {
+      if (ok || input.pressed('dodge')) advance();
+      return true;
+    }
+    // навигация стиком/стрелками
+    let ny = 0;
+    if (input.pressed('up')) ny = -1;
+    if (input.pressed('down')) ny = 1;
+    const sy = input.move.y;
+    if (!ny && Math.abs(sy) > 0.6 && navLatch === 0) {
+      ny = Math.sign(sy);
+      navLatch = 1;
+    }
+    if (Math.abs(sy) < 0.3) navLatch = 0;
+    if (ny) moveFocus(ny);
+    // мышью кликают сами кнопки (они вне холста); клавиатура и геймпад — подтверждение
+    if (ok && menuItems[menuFocus]) menuItems[menuFocus].click();
+    if ((input.pressed('pause') || input.pressed('dodge')) && menuBack) {
+      audio.sfx.ui();
+      menuBack();
+    }
+    return true;
+  };
+
+  ui.typewriter = (dt) => {
+    if (!dlg || dlg.shown >= dlg.full.length) return;
+    const before = Math.floor(dlg.shown);
+    dlg.shown = Math.min(dlg.full.length, dlg.shown + dt * 48);
+    const n = Math.floor(dlg.shown);
+    if (n !== before) {
+      dlg.text.textContent = dlg.full.slice(0, n);
+      if (n % 3 === 0) audio.sfx.text();
+    }
+  };
+
+  ui.pauseButton = (onClick) => {
+    const b = el('button', 'pausebtn hidden', root, 'II');
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    return b;
+  };
+
+  return ui;
+}

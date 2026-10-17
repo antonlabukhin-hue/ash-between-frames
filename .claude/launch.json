@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "abf-dev", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--port", "5310", "--strictPort"], "port": 5310 },
+    { "name": "abf-build", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "preview", "--port", "5311", "--strictPort"], "port": 5311 }
+  ]
+}
