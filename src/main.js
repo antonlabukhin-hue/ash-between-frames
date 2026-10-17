@@ -7,7 +7,7 @@ import { createInput } from './core/input.js';
 import { createAudio } from './core/audio.js';
 import { createUI } from './ui/overlay.js';
 import { createGame } from './game.js';
-import { loadSave, hasProgress } from './save/save.js';
+import { loadSave, hasProgress, parseSave } from './save/save.js';
 import { renderWorld } from './render.js';
 import { drawTitle } from './scenes/title.js';
 import { createTouch } from './mobile/touch.js';
@@ -165,7 +165,57 @@ function settingsMenu(back) {
   row('Целочисленный масштаб', toggle('integerScale'));
   row('Размер кнопок', slider('buttonScale', 0.7, 1.5, 0.05));
   row('Прозрачность стика', slider('stickOpacity', 0.15, 1, 0.05));
-  ui.menu({ title: 'Настройки', extra: box, items: [{ text: 'Готово', on: back }], back });
+  const items = [];
+  if (document.fullscreenEnabled) {
+    items.push({
+      text: document.fullscreenElement ? 'Выйти из полноэкранного' : 'Полный экран',
+      on: async () => {
+        try {
+          if (document.fullscreenElement) await document.exitFullscreen();
+          else await document.documentElement.requestFullscreen();
+          screen.orientation?.lock?.('landscape').catch(() => {});
+        } catch {
+          /* браузер не дал */
+        }
+        settingsMenu(back);
+      },
+    });
+  }
+  if (game.scene === 'title') {
+    items.push({ text: 'Сохранить прогресс в файл', on: exportSave });
+    items.push({ text: 'Загрузить прогресс из файла', on: importSave });
+  }
+  items.push({ text: 'Готово', on: back });
+  ui.menu({ title: 'Настройки', extra: box, items, back });
+}
+
+function exportSave() {
+  const blob = new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pepel-mezhdu-kadrami.save.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  ui.toast('Файл сохранения скачан');
+}
+
+function importSave() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.json,application/json';
+  inp.onchange = async () => {
+    const f = inp.files?.[0];
+    if (!f) return;
+    const loaded = parseSave(await f.text());
+    Object.keys(save).forEach((k) => delete save[k]);
+    Object.assign(save, loaded);
+    game.flags = save.flags;
+    game.persist();
+    applySettings();
+    ui.toast(hasProgress(save) ? 'Прогресс загружен' : 'В файле нет прогресса');
+    titleMenu();
+  };
+  inp.click();
 }
 
 function pauseMenu() {
