@@ -158,17 +158,20 @@ export function drawHero(ctx, x, y, o) {
 
 function drawSword(ctx, x, y, o, k) {
   const a = o.aim ?? Math.PI / 2;
-  const hand = [x + Math.cos(a) * 5, y - 9 + Math.sin(a) * 3];
+  let hand = [x + Math.cos(a) * 5, y - 9 + Math.sin(a) * 3];
   let ang = a;
   if (o.swing != null) {
     // взмах: от -70° до +70° относительно прицела, третий удар — полный оборот
     const span = o.swingStep === 3 ? Math.PI * 1.6 : 2.4;
     const dirS = o.swingStep === 2 ? -1 : 1;
     ang = a + dirS * (-span / 2 + span * Math.min(1, o.swing / 0.16));
-  } else if (!o.moving) {
-    ang = a + 0.9; // опущен
+  } else {
+    // в покое меч опущен у бедра, остриём вниз и чуть наружу
+    const side = o.dir === 'side' ? (o.flip ? -1 : 1) : o.dir === 'up' ? -1 : 1;
+    hand = [x + side * 6, y - 8];
+    ang = Math.PI / 2 - side * (o.moving ? 0.9 : 0.55);
   }
-  const len = 11;
+  const len = o.swing != null ? 11 : 9;
   const ex = hand[0] + Math.cos(ang) * len;
   const ey = hand[1] + Math.sin(ang) * len * 0.8;
   const blade = o.glow ? P.amberHi : P.ash4;
@@ -473,8 +476,8 @@ export function drawGhost(ctx, x, y, o = {}) {
     const half = o.dress ? 3 + Math.floor(i / 3) : i < 2 ? 3 : 4;
     const yy = y - 15 + i;
     if (i > 10 && (i + Math.floor(t * 8)) % 2) continue; // растворяется
-    const line_ = (i + Math.floor(t * 6)) % 4 === 0;
-    ctx.globalAlpha = a * (line_ ? 0.45 : 1);
+    const line_ = (i + Math.floor(t * 6)) % 7 === 0;
+    ctx.globalAlpha = a * (line_ ? 0.6 : 1);
     px(ctx, x - half, yy, half * 2, 1, k(c));
     px(ctx, x - half, yy, 1, 1, k(lo));
     px(ctx, x + half - 1, yy, 1, 1, k(lo));
@@ -523,14 +526,33 @@ export function drawBrassBoy(ctx, x, y, o = {}) {
     return;
   }
   const b = Math.round(Math.sin((o.t || 0) * 2));
+  const dark = P.amber0;
+  // ноги в гольфах и ботинки
   px(ctx, x - 3, y - 16, 2, 8, k(lo));
   px(ctx, x + 1, y - 16, 2, 8, k(lo));
-  px(ctx, x - 4, y - 26 + b, 8, 10, k(c));
-  px(ctx, x - 6, y - 25 + b, 2, 7, k(lo));
-  px(ctx, x + 4, y - 25 + b, 2, 7, k(lo));
-  px(ctx, x - 3, y - 33 + b, 6, 7, k(c));
-  px(ctx, x - 2, y - 30 + b, 1, 1, k(P.void));
-  px(ctx, x + 1, y - 30 + b, 1, 1, k(P.void));
-  px(ctx, x - 4, y - 34 + b, 8, 2, k(lo)); // кепка
-  px(ctx, x - 1, y - 21 + b, 2, 2, k(P.void)); // замочная скважина завода
+  px(ctx, x - 4, y - 9, 3, 1, k(dark));
+  px(ctx, x + 1, y - 9, 3, 1, k(dark));
+  // шорты и курточка с пуговицами
+  px(ctx, x - 4, y - 19 + b, 8, 4, k(dark));
+  px(ctx, x - 4, y - 27 + b, 8, 8, k(c));
+  px(ctx, x - 1, y - 27 + b, 1, 8, k(lo));
+  px(ctx, x + 1, y - 25 + b, 1, 1, k(P.brassHi));
+  px(ctx, x + 1, y - 22 + b, 1, 1, k(P.brassHi));
+  px(ctx, x - 4, y - 27 + b, 8, 1, k(P.milk)); // воротник
+  // руки-шарниры
+  px(ctx, x - 6, y - 26 + b, 2, 7, k(lo));
+  px(ctx, x + 4, y - 26 + b, 2, 7, k(lo));
+  px(ctx, x - 6, y - 23 + b, 2, 1, k(dark));
+  px(ctx, x + 4, y - 23 + b, 2, 1, k(dark));
+  // голова с кепкой
+  px(ctx, x - 3, y - 34 + b, 6, 7, k(c));
+  px(ctx, x - 3, y - 34 + b, 1, 7, k(lo));
+  px(ctx, x - 2, y - 31 + b, 1, 1, k(P.void));
+  px(ctx, x + 1, y - 31 + b, 1, 1, k(P.void));
+  px(ctx, x - 1, y - 29 + b, 2, 1, k(dark));
+  px(ctx, x - 4, y - 36 + b, 8, 3, k(dark));
+  px(ctx, x + 2, y - 34 + b, 4, 1, k(dark)); // козырёк
+  // ключ завода за спиной
+  px(ctx, x + 4, y - 30 + b, 3, 1, k(P.brassHi));
+  px(ctx, x + 6, y - 32 + b, 1, 5, k(P.brassHi));
 }
