@@ -125,7 +125,7 @@ export const road = {
     for (const r of [10, 13, 16]) g.addProp('roadLamp', 296, TOP(r), { erased: true, lightColor: 'crimson' });
     // знамёна: синие с золотым солнцем слева, багровые рваные справа у ворот
     for (const r of [29, 35, 13]) g.addProp('banner', 166, TOP(r));
-    for (const r of [12, 16]) g.addProp('banner', 300, TOP(r), { erased: true });
+    for (const r of [12, 16]) g.addProp('banner', 316, TOP(r), { erased: true });
     // башни ворот, между ними на цепи — колокол
     g.gateTowers = [g.addProp('gateTower', 166, TOP(8), { warm: true }), g.addProp('gateTower', 314, TOP(8))];
 
@@ -177,7 +177,7 @@ export const road = {
       await ui.fade(false);
     }
     g.hint(`${key(g, 'move')} — идти по дороге к воротам`, 5);
-    await g.waitUntil(() => p.y < TOP(38));
+    await g.waitUntil(() => p.y < TOP(38) || g.flags.signRead);
     if (!g.flags.signRead) {
       g.hint(`Подойди к указателю — он засветится, ${key(g, 'interact')} осмотреть`, 8);
       await g.waitUntil(() => g.flags.signRead);

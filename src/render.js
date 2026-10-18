@@ -16,6 +16,7 @@ import { atlas, hd, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js
 import { blit } from './art/atlas.js';
 import { softMask, glow } from './art/glow.js';
 import { drawWet, drawFog, drawRain, drawLeaves, drawVignette } from './art/atmo.js';
+import { drawArtOver } from './art/roomart.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 
 const OUTLINE = '#05060c';
@@ -999,6 +1000,7 @@ export function renderWorld(g, ctx) {
   ctx.globalAlpha = 1;
   sec('снаряды+частицы');
   for (const f of g.fx) drawFxItem(ctx, f);
+  drawArtOver(g, ctx, cx, cy, W, H);
   room.def.drawOver?.(g, ctx, q);
   ctx.restore();
   sec('эффекты');

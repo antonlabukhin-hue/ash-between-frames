@@ -127,8 +127,9 @@ export function paintRoadHd(ctx, room) {
   }
   ctx.restore();
   // бордюры вдоль дороги
-  curbV(ctx, G.road.x0 - 1.5, H, G, rnd);
-  curbV(ctx, G.road.x1 - 1.5, H, G, rnd);
+  const y0 = (room.def.skyRows ?? 1) * TILE;
+  curbV(ctx, G.road.x0 - 1.5, y0, H, G, rnd);
+  curbV(ctx, G.road.x1 - 1.5, y0, H, G, rnd);
 
   // 3. стены: балюстрада сверху (сквозь неё небо), ограды по бокам, парапет снизу
   walls(ctx, room, rnd, G);
@@ -137,8 +138,8 @@ export function paintRoadHd(ctx, room) {
   ctx.restore();
 }
 
-function curbV(ctx, x, H, G, rnd) {
-  let y = TILE;
+function curbV(ctx, x, y0, H, G, rnd) {
+  let y = y0;
   while (y < H - TILE) {
     const h = 10 + rnd() * 8;
     if (y + h > G.gap.y0 && y < G.gap.y1) {
