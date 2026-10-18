@@ -242,7 +242,8 @@ export function drawProp(g, ctx, p) {
   }
   const tl = p.tl;
   const e = propEntry(g, p, tl.phase);
-  if (p.kind === 'npc' || p.kind === 'ghostNpc') figureEdge(ctx, g, (dx, dy, c) => blit(ctx, atlas.tinted(e.key, e, c), p.x + dx, p.y + dy));
+  // контур — только у живых: призраки полупрозрачны, кромка просвечивала бы сквозь них
+  if (p.kind === 'npc') figureEdge(ctx, g, (dx, dy, c) => blit(ctx, atlas.tinted(e.key, e, c), p.x + dx, p.y + dy));
   if (tl.flash > 0 && tl.switchable) {
     transition(g, ctx, e, propEntry(g, p, otherPhase(tl.phase)), p.x, p.y, tl, `p${p.id}`);
     return;
