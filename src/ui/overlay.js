@@ -31,7 +31,11 @@ export function createUI(root, { audio }) {
   const banner = el('div', 'banner passive', root);
   const hint = el('div', 'hint passive off', root);
   const toast = el('div', 'toast passive off', root);
+  // строка подсказки — для экранного диктора; видимая информация — таблички над объектами
   const prompt = el('div', 'prompt passive hidden', root);
+  prompt.setAttribute('aria-live', 'polite');
+  const plateEls = [el('div', 'plate passive hidden', root), el('div', 'plate passive hidden', root)];
+  const plateKeys = ['', ''];
   const caption = el('div', 'caption passive', root);
   const bossname = el('div', 'bossname passive hidden', root);
   const card = el('div', 'card passive hidden', root);
@@ -58,6 +62,7 @@ export function createUI(root, { audio }) {
     ui.clearHint();
     ui.hideBanner();
     ui.setPrompt(null);
+    ui.setPlates([]);
     if (all) {
       ui.caption(null);
       toast.classList.add('off');
@@ -99,6 +104,32 @@ export function createUI(root, { audio }) {
     promptText = text;
     prompt.classList.toggle('hidden', !text);
     if (text) prompt.textContent = text; // переносы строк — white-space: pre-line
+  };
+
+  // Таблички над объектами (как подписи в Diablo): имя, действие с клавишей, цена сдвига.
+  // list: [{ x, y — доли кадра, name, lines: [{key, text, cost}], tone, dim, progress }]
+  ui.setPlates = (list) => {
+    for (let i = 0; i < plateEls.length; i++) {
+      const pl = list[i];
+      const elp = plateEls[i];
+      if (!pl) {
+        if (plateKeys[i]) elp.classList.add('hidden');
+        plateKeys[i] = '';
+        continue;
+      }
+      const key = JSON.stringify([pl.name, pl.lines, pl.tone, pl.dim, pl.progress != null ? Math.round(pl.progress * 20) : -1]);
+      if (key !== plateKeys[i]) {
+        plateKeys[i] = key;
+        const lines = pl.lines
+          .map((l) => `<div class="ln">${l.key ? `<b class="key">${esc(l.key)}</b>` : ''}<span>${esc(l.text)}</span>${l.cost ? `<i class="cost">${'◆'.repeat(l.cost)}</i>` : ''}</div>`)
+          .join('');
+        const bar = pl.progress != null ? `<div class="bar"><i style="width:${Math.round(pl.progress * 100)}%"></i></div>` : '';
+        elp.innerHTML = `${pl.name ? `<div class="nm">${esc(pl.name)}</div>` : ''}${lines}${bar}`;
+        elp.className = `plate passive tone-${pl.tone}${pl.dim ? ' dim' : ''}`;
+      }
+      elp.style.left = `${(pl.x * 100).toFixed(2)}%`;
+      elp.style.top = `${(pl.y * 100).toFixed(2)}%`;
+    }
   };
 
   ui.caption = (text, o = {}) => {

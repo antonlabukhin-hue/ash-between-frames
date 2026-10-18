@@ -28,6 +28,8 @@ const SHOTS = {
   tornRoad: ['tornRoad', ''],
   camp: ['camp', "const f=g.props.find(p=>p.kind==='campfire'); if(f){f.tl.phase='past'; f.tl.left=99;}"],
   kitchen: ['kitchen', ''],
+  'sign-target': ['road', "g.player.x=152; g.player.y=112; g.player.aim=-Math.PI/2; g.ui.dialogue && 0;"],
+  'bridge-target': ['road', "g.player.x=500; g.player.y=120; g.player.aim=0;"],
   shadowArena: ['shadowArena', "if(!g.enemies.some(e=>e.kind==='shadow')) g.spawnEnemy('shadow', g.player.x, g.player.y-60, {spawn:0});"],
   'square-past': ['square', "g.player.x=240; g.player.y=262; const keep=(o)=>{o.tl.phase='past'; o.tl.left=Infinity;}; keep(g.statue); g.statue.onShift?.(g, g.statue, 'past'); (g.squareGhosts||[]).forEach(v=>v.hidden=false);"],
   ruins: ['ruins', "g.spawnWave([{kind:'eater',x:g.player.x+60,y:g.player.y},{kind:'hollow',x:g.player.x-50,y:g.player.y+10}]); for(let i=0;i<4;i++) g.spawnPickup(['ash','shard','heal','fragment'][i], g.player.x+20+i*12, g.player.y+20, {vx:0,vy:0});"],

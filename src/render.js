@@ -532,6 +532,126 @@ function paintSlash(ctx, x, y, angle, span, radius, c) {
   }
 }
 
+// ── подсветка выбранного (Diablo-подход) ───────────────────────────────
+// Контур силуэта в 4 стороны на полпикселя мира и сам кадр поверх света — объект
+// «загорается». Цвет: тёплый молочный — взаимодействие, янтарь/малиновый — во что
+// превратит сдвиг. Сдвинутые объекты держат тонкий контур своей фазы, мигающий перед возвратом.
+const WARM = '#ffe9b0';
+const nextPhaseOf = (tl) => (isShifted(tl) ? tl.base : tl.phase === PAST ? 'present' : 'past');
+
+function outlineEntry(ctx, e, x, y, color, a) {
+  const tint = atlas.tinted(e.key, e, color);
+  ctx.globalAlpha = a;
+  for (const [dx, dy] of [[-0.5, 0], [0.5, 0], [0, -0.5], [0, 0.5]]) blit(ctx, tint, x + dx, y + dy);
+  ctx.globalAlpha = 1;
+}
+
+function lightUpProp(g, ctx, o, color, a, relit = true) {
+  if (o.def.flat) {
+    // плоское (мост, пролёт): светящаяся рамка по краю площадки
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = a;
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([3, 2]);
+    ctx.lineDashOffset = -g.time * 8;
+    ctx.strokeRect(o.x + 0.25, o.y + 0.25, o.w - 0.5, o.h - 0.5);
+    ctx.restore();
+    return;
+  }
+  if (!o.def.cache || o.nocache) return;
+  const e = propEntry(g, o, o.tl.phase);
+  outlineEntry(ctx, e, o.x, o.y, color, a);
+  if (relit) {
+    ctx.globalAlpha = 0.8;
+    blit(ctx, e, o.x, o.y);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function lightUpEnemy(g, ctx, e, color) {
+  const o = enemyOpts(e);
+  ctx.globalAlpha = 0.95;
+  for (const [dx, dy] of [[-0.5, 0], [0.5, 0], [0, -0.5], [0, 0.5]]) drawEnemyC(ctx, e.kind, e.x + dx, e.y + dy, o, color);
+  ctx.globalAlpha = 0.75;
+  drawEnemyC(ctx, e.kind, e.x, e.y, o);
+  ctx.globalAlpha = 1;
+}
+
+function drawHighlights(g, ctx, p) {
+  const pulse = 0.75 + 0.25 * Math.sin(g.time * 5);
+  // сдвинутые объекты: тонкий контур своей фазы, мигает перед возвратом
+  for (const o of g.props) {
+    if (o.hidden || !o.tl.switchable || !isShifted(o.tl) || o === p.shiftTarget?.obj) continue;
+    if (!visible(o.x, o.y, 64)) continue;
+    if (isFading(o.tl) && Math.floor(g.time * 10) % 2 === 0) continue;
+    lightUpProp(g, ctx, o, PHASE_COLOR[o.tl.phase], 0.55, false);
+  }
+  const it = g.interactTarget;
+  const t = p.shiftTarget;
+  if (it && it !== t?.obj) lightUpProp(g, ctx, it, WARM, pulse);
+  else if (!it && g.interactNear && g.interactNear !== t?.obj) lightUpProp(g, ctx, g.interactNear, WARM, 0.35, false);
+  let lit = null;
+  if (it && it !== t?.obj) lit = it;
+  if (t) {
+    const c = PHASE_COLOR[nextPhaseOf(t.obj.tl)];
+    if (t.type === 'enemy') lightUpEnemy(g, ctx, t.obj, c);
+    else if (t.type === 'projectile') ring(ctx, t.x, t.y, 6 + Math.floor(g.time * 4) % 2, c, 1);
+    else lightUpProp(g, ctx, t.obj, c, pulse);
+    if (t.type !== 'projectile') lit = lit && lit.y > t.obj.y ? lit : t.obj;
+  }
+  // подсвеченное рисуется поверх сцены — если герой стоит перед ним, вернуть героя вперёд
+  if (lit && !lit.def?.flat && p.y > lit.y && !(p.invuln > 0 && p.dodge <= 0)) {
+    const half = (lit.def?.cache?.w ?? 20) / 2 + 8;
+    const up = lit.def?.cache?.ay ?? 30;
+    if (Math.abs(p.x - lit.x) < half && p.y - 26 < lit.y && p.y > lit.y - up) drawHeroC(ctx, p.x, p.y, heroOpts(g, p));
+  }
+}
+
+// Таблички над объектами: имя, действие с клавишей, цена сдвига и заполнение канала.
+const ENEMY_TOP = (e) => e.y - (e.hitY ?? 9) - 20;
+function propTop(o) {
+  if (o.def.flat) return o.y + o.h / 2 - 6;
+  const my = typeof o.markY === 'function' ? o.markY(o) : o.markY;
+  return o.y - (my ?? o.def.cache?.ay ?? 30) - 2;
+}
+
+function plates(g, p, cx, cy) {
+  const dev = g.input.device;
+  const keyE = dev === 'pad' ? 'B' : dev === 'touch' ? '✋' : 'E';
+  const keyQ = dev === 'pad' ? 'Y' : dev === 'touch' ? '⧗' : 'Q';
+  const out = [];
+  const at = (o, x, y) => {
+    let pl = out.find((q) => q.obj === o);
+    if (!pl) {
+      pl = { obj: o, id: o.id ?? o.kind, x: (x - cx) / W, y: (y - cy) / H, name: '', lines: [], tone: 'warm' };
+      out.push(pl);
+    }
+    return pl;
+  };
+  const it = g.interactTarget || g.interactNear;
+  if (it) {
+    const [mx] = propCenter(it);
+    const pl = at(it, mx, propTop(it));
+    pl.dim = !g.interactTarget;
+    pl.lines.push(g.interactTarget ? { key: keyE, text: it.prompt || 'Осмотреть' } : { key: '', text: 'Подойди ближе' });
+  }
+  const t = p.shiftTarget;
+  if (t && t.type !== 'projectile') {
+    const o = t.obj;
+    const enemy = t.type === 'enemy';
+    const pl = enemy ? at(o, o.x, ENEMY_TOP(o)) : at(o, propCenter(o)[0], propTop(o));
+    const next = nextPhaseOf(o.tl);
+    pl.name = enemy ? o.def?.name || '' : o.name || o.def?.name || '';
+    pl.tone = next === 'past' ? 'past' : 'present';
+    const cost = isShifted(o.tl) || p.echo > 0 || g.freeShift ? 0 : o.tl.cost;
+    pl.lines.push({ key: keyQ, text: next === 'past' ? 'в прошлое' : 'в настоящее', cost });
+    if (p.channel && p.channel.target.obj === o) pl.progress = channelProgress(p.channel);
+  }
+  if (out.length === 2 && Math.abs(out[0].x - out[1].x) < 0.12 && Math.abs(out[0].y - out[1].y) < 0.1) out[1].y = out[0].y - 0.09;
+  return out;
+}
+
 // Цель сдвига: ступенчатый эллипс под ногами и песочные часы цвета будущей фазы.
 function drawTargetMarker(g, ctx, tgt, p) {
   const o = tgt.obj;
@@ -854,11 +974,6 @@ export function renderWorld(g, ctx) {
       if (cover) ctx.globalAlpha = 0.45;
       drawProp(g, ctx, p);
       if (cover) ctx.globalAlpha = 1;
-      if (isShifted(p.tl) && p.tl.switchable && !p.def.flat) {
-        const [mx] = propCenter(p);
-        const fading = isFading(p.tl) && Math.floor(g.time * 10) % 2 === 0;
-        if (!fading) ring(ctx, mx, p.y - 1, 9, PHASE_COLOR[p.tl.phase], 0.4, 2);
-      }
     } else if (it.kind === 'enemy') drawEnemy(g, ctx, it.o);
     else if (it.kind === 'hero') drawHeroSprite(g, ctx, it.o);
     else if (it.draw) it.draw(ctx, g);
@@ -909,16 +1024,10 @@ export function renderWorld(g, ctx) {
     }
   }
   const p = g.player;
-  if (p && !p.dead && !g.cinematic) {
-    if (p.shiftTarget) drawTargetMarker(g, ctx, p.shiftTarget, p);
-    if (g.interactTarget) drawInteractMarker(g, ctx, g.interactTarget);
-    else if (g.interactNear) {
-      // рядом, но ещё вне радиуса — тот же значок, приглушённый
-      ctx.globalAlpha = 0.45;
-      drawInteractMarker(g, ctx, g.interactNear);
-      ctx.globalAlpha = 1;
-    }
-  }
+  // как в Diablo: на земле под объектом маркеров нет — светится сам объект,
+  // а имя и действие пишутся табличкой над ним (HTML-слой, src/ui/overlay.js)
+  if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
+  g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
   for (const t of g.texts) {
     const k = Math.min(1, (t.life / t.max) * 2);
     ctx.globalAlpha = k;
@@ -928,7 +1037,7 @@ export function renderWorld(g, ctx) {
       drawDigits(ctx, Math.round(t.x - w / 2) + 1, Math.round(t.y) + 1, t.text, P.ink, s);
       drawDigits(ctx, Math.round(t.x - w / 2), Math.round(t.y), t.text, t.c, s);
     } else {
-      ctx.font = `${t.big ? 10 : 8}px "Pixelify Sans", monospace`;
+      ctx.font = `700 ${t.big ? 10 : 8}px "Alegreya Sans", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillStyle = P.ink;
