@@ -6,6 +6,7 @@ import { hash2, mulberry32 } from '../core/math.js';
 import { px, line, ring, disc } from './sprites.js';
 import { PAST } from '../timeline/timeline.js';
 import { PROP_KINDS } from '../world/props.js';
+import { inIslands } from '../world/memory.js';
 
 // ── палитра локации ─────────────────────────────────────────────────────
 export const L = {
@@ -515,6 +516,7 @@ export function drawSquareParallax(g, ctx, cx, cy, q) {
 // ── «свет возвращает прошлое» ────────────────────────────────────────────
 // Декор в радиусе зажжённого фонаря или ожившей статуи показывает прошлую форму.
 export function pastAt(g, x, y) {
+  if (g.memIslands) return inIslands(g.memIslands, x, y);
   for (const pr of g.props) {
     if (pr.tl.phase !== PAST) continue;
     if (pr.kind === 'lantern16' && Math.hypot(pr.x - x, (pr.y - y) * 1.2) < 84) return true;
@@ -571,6 +573,13 @@ export function drawFountain(ctx, p, g) {
     }
   }
   if (!past) {
+    // чаша расколота пустотой посередине
+    for (let yy = cy - ry - 1; yy <= cy + ry + 8; yy++) {
+      const w = 2 + ((yy * 7) % 3 === 0 ? 1 : 0);
+      px(ctx, x - w + 1, yy, w * 2, 1, '#05060c');
+      px(ctx, x - w, yy, 1, 1, L.sc3);
+      px(ctx, x + w + 1, yy, 1, 1, yy % 2 ? L.sc2 : L.sc3);
+    }
     // трещины по дну и дрожащий обломок бортика над провалом
     line(ctx, x - 6, cy, x + 4, cy + 4, L.sc2);
     line(ctx, x + 4, cy + 4, x + 10, cy + 2, L.sc2);
@@ -663,22 +672,18 @@ export function drawStatue16(ctx, p, g) {
     px(ctx, x - 9, top - 18, 4, 1, hi);
     px(ctx, x - 9, top - 20, 1, 5, hi);
   } else {
-    // в Шраме — неподвижная кукла с пустым лицом, обмякла
-    const c = '#6a6070';
-    const lo = '#4a4252';
-    px(ctx, x - 3, top - 8, 2, 8, lo);
-    px(ctx, x + 1, top - 8, 2, 8, lo);
-    px(ctx, x - 5, top - 19, 10, 11, c);
-    px(ctx, x - 1, top - 19, 1, 11, lo);
-    for (let i = 0; i < 5; i++) px(ctx, x - 4 + ((i * 3) % 8), top - 17 + i * 2, 1, 1, L.ink); // выпавшие пиксели
-    line(ctx, x - 4, top - 16, x + 3, top - 10, L.sc2);
-    px(ctx, x - 7, top - 18, 2, 10, lo);
-    px(ctx, x + 5, top - 18, 2, 10, lo);
-    // голова свесилась набок, лицо пустое
-    const tw = f === 3 ? 1 : 0; // редкий рывок
-    px(ctx, x - 1 + tw, top - 28, 8, 9, c);
-    px(ctx, x + tw, top - 26, 6, 6, '#8a8094');
-    px(ctx, x + 6 + tw, top - 25, 1, 3, L.ink);
+    // в Шраме постамент пуст: на камне — малиновый контур того, кто здесь стоял
+    const on = f !== 2;
+    const pts = [
+      [-3, -1], [-3, -5], [-3, -9], [2, -1], [2, -5], [2, -9], [-5, -12], [-5, -16], [-5, -20], [4, -12], [4, -16], [4, -20],
+      [-7, -14], [-7, -18], [6, -24], [6, -20], [-4, -24], [-4, -28], [3, -28], [-1, -32], [2, -32], [-5, -34], [4, -34],
+    ];
+    for (const [dx, dy] of pts) px(ctx, x + dx, top + dy, 1, 1, on ? L.sc3 : L.sc2);
+    if (on) px(ctx, x - 1, top - 20, 2, 2, L.sc4);
+    // обломки на постаменте
+    px(ctx, x - 9, top - 2, 4, 2, L.bronze1);
+    px(ctx, x + 6, top - 2, 3, 2, L.bronze0);
+    px(ctx, x - 2, top - 1, 3, 1, L.wall3);
   }
 }
 

@@ -15,6 +15,7 @@ import { hash2 } from './core/math.js';
 import { atlas, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js';
 import { blit } from './art/atlas.js';
 import { lightMask } from './art/lightmask.js';
+import { islandRows, islandScale } from './world/memory.js';
 
 const OUTLINE = '#05060c';
 let lightCanvas = null;
@@ -106,6 +107,37 @@ function drawVoidField(g, ctx, cx, cy) {
   ctx.fillStyle = f.pattern;
   ctx.fillRect(cx, cy, W, H);
   ctx.restore();
+}
+
+// Острова памяти: Отпечаток комнаты сквозь ступенчатую маску, янтарный ободок по краю.
+function drawMemoryIslands(g, ctx) {
+  const pc = g.room.pastCanvas;
+  for (const isl of g.memIslands) {
+    const rows = islandRows(isl, 2);
+    if (!rows.length) continue;
+    let bx0 = Infinity;
+    let by0 = Infinity;
+    let bx1 = -Infinity;
+    let by1 = -Infinity;
+    ctx.save();
+    ctx.beginPath();
+    for (const [x, y, w, h] of rows) {
+      ctx.rect(x, y, w, h);
+      bx0 = Math.min(bx0, x);
+      by0 = Math.min(by0, y);
+      bx1 = Math.max(bx1, x + w);
+      by1 = Math.max(by1, y + h);
+    }
+    ctx.clip();
+    bx0 = Math.max(0, bx0);
+    by0 = Math.max(0, by0);
+    bx1 = Math.min(pc.width, bx1);
+    by1 = Math.min(pc.height, by1);
+    if (bx1 > bx0 && by1 > by0) ctx.drawImage(pc, bx0, by0, bx1 - bx0, by1 - by0, bx0, by0, bx1 - bx0, by1 - by0);
+    ctx.restore();
+    const s = islandScale(isl.k);
+    ring(ctx, isl.x, isl.y, isl.rx * s, isl.k < 1 ? 'rgba(255,210,122,0.9)' : 'rgba(224,160,64,0.45)', isl.ry / isl.rx, 2);
+  }
 }
 
 // ── объекты через атлас ─────────────────────────────────────────────────
@@ -458,7 +490,7 @@ export function renderWorld(g, ctx) {
   // параллакс неба (экранные координаты) — под прозрачной полосой холста комнаты
   room.def.drawParallax?.(g, ctx, cx, cy, q);
   // поле Стирания под дырами пустоты — один fillRect узором
-  if (!room.def.paint) drawVoidField(g, ctx, cx, cy);
+  if (!room.def.paint || room.def.voidField) drawVoidField(g, ctx, cx, cy);
 
   ctx.save();
   ctx.translate(-cx, -cy);
@@ -471,6 +503,7 @@ export function renderWorld(g, ctx) {
   const x0 = Math.max(0, Math.floor(cx / TILE));
   const y0 = Math.max(0, Math.floor(cy / TILE));
   drawVoidLayer(g, ctx, x0, y0, x0 + Math.ceil(W / TILE) + 1, y0 + Math.ceil(H / TILE) + 1);
+  if (room.pastCanvas && g.memIslands?.length) drawMemoryIslands(g, ctx);
 
   // зоны стирания
   for (const z of g.voidZones) {

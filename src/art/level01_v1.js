@@ -6,7 +6,6 @@ import { createPainter } from './painter.js';
 import { hash2, mulberry32 } from '../core/math.js';
 import { px, line, ring, disc } from './sprites.js';
 import { PAST } from '../timeline/timeline.js';
-import { PROP_KINDS } from '../world/props.js';
 
 // ── палитра локации ─────────────────────────────────────────────────────
 export const L = {
@@ -860,41 +859,5 @@ export function drawGarland(ctx, x0, x1, y, past, f) {
     }
   }
 }
-
-// ── регистрация объектов локации ─────────────────────────────────────────
-const C = (w, h, ax, ay, fps = 0, frames = 1, extra = {}) => ({ w, h, ax, ay, fps, frames, ...extra });
-Object.assign(PROP_KINDS, {
-  fountain: {
-    name: 'Фонтан',
-    timeline: { hold: 12, cost: 1, switchTime: 0.6 },
-    foot: { w: 44, h: 12 },
-    solid: { past: true, present: true },
-    light: { past: 34, present: 0 },
-    draw: drawFountain,
-    cache: C(52, 46, 26, 42, 8, 4),
-  },
-  statue16: {
-    name: 'Латунный Мальчик',
-    timeline: { hold: Infinity, cost: 0, switchTime: 0.6 },
-    foot: { w: 28, h: 8 },
-    solid: { past: true, present: true },
-    light: { past: 40, present: 0 },
-    draw: drawStatue16,
-    cache: C(36, 62, 18, 59, 2, 4),
-  },
-  lantern16: {
-    name: 'Фонарь',
-    timeline: { hold: Infinity, cost: 1, switchTime: 0.6 },
-    foot: { w: 6, h: 4 },
-    solid: { past: true, present: true },
-    light: { past: 72, present: 14 },
-    reveal: { past: 72, present: 0 },
-    pulse: { past: 0, present: 38 },
-    draw: drawLantern16,
-    cache: C(16, 60, 8, 57, 10, 4),
-  },
-  carpet: { flat: true, draw: drawCarpet, cache: C(34, 20, 1, 2, 0, 1, { state: (p, g) => pastAt(g, p.x + p.w / 2, p.y + p.h / 2), inst: (p) => `${p.w}x${p.h}|${p.id % 5}` }) },
-  shopSign: { draw: drawShopSign, cache: C(20, 22, 2, 5, 0, 1, { state: (p, g) => pastAt(g, p.x, p.y + 40) }) },
-});
 
 export { ring, disc };

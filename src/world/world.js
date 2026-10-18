@@ -23,7 +23,7 @@ export function isPit(g, x, y) {
   const tx = Math.floor(x / TILE);
   const ty = Math.floor(y / TILE);
   const t = tileAt(g.room, tx, ty);
-  let pit = t === T.VOID || (t === T.FLICKER && flickerVoid(g, tx, ty));
+  let pit = t === T.VOID || (t === T.FLICKER && (g.room.pitAt ? g.room.pitAt(g, x, y) : flickerVoid(g, tx, ty)));
   for (const z of g.voidZones) if (z.active && dist2(x, y, z.x, z.y) < z.r * z.r) pit = true;
   if (!pit) return false;
   for (const p of g.props) {
