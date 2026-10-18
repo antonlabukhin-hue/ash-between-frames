@@ -6,6 +6,8 @@ import { px, line, disc, ring, drawBrassBoy, drawGhost, shadow } from '../art/sp
 import { createTimeline, PAST, PRESENT } from '../timeline/timeline.js';
 import { hash2 } from '../core/math.js';
 import { drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
+import { drawTik32, drawMara32, drawDog32, drawGhost32, drawBrassBoy32, drawVillager32, drawStillOne32 } from '../art/npcs32.js';
+import { drawTik, drawMara, drawDog } from '../art/sprites.js';
 import { drawLampHd, drawBannerHd, drawTreeHd, drawDeadTreeHd, drawGraveHd, drawGateTowerHd } from '../art/road32.js';
 
 // flat — рисуется под персонажами; rect — x,y,w,h в пикселях (левый верх).
@@ -539,3 +541,12 @@ const HD = {
   table: drawTableHd, window: drawWindowHd, portraits: drawPortraitsHd, shelf: drawShelfHd, box: drawBoxHd,
 };
 for (const k of Object.keys(HD)) PROP_KINDS[k].drawHd = HD[k];
+
+// NPC и фигуры-воспоминания: 16-битный маляр → 32-битный
+const FIGURE_HD = new Map([[drawTik, drawTik32], [drawMara, drawMara32], [drawDog, drawDog32], [drawGhost, drawGhost32], [drawBrassBoy, drawBrassBoy32]]);
+export const registerFigureHd = (fn, hdFn) => FIGURE_HD.set(fn, hdFn);
+const figureHd = (ctx, p, g) => (FIGURE_HD.get(p.drawFn) || p.drawFn)(ctx, p.x, p.y, { t: g.time + (p.id % 7), ...(p.drawOpts || {}) });
+PROP_KINDS.npc.drawHd = figureHd;
+PROP_KINDS.ghostNpc.drawHd = figureHd;
+PROP_KINDS.ghostNpc.crisp = { keepAlpha: true };
+PROP_KINDS.statue.drawHd = (ctx, p, g) => drawBrassBoy32(ctx, p.x, p.y, { phase: p.tl.phase, t: g.time });

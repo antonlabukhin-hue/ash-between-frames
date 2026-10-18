@@ -3,7 +3,7 @@
 // и поблёскивает (добыча), обломки — низкая груда серых камней, колонна — каннелюры и
 // капитель, фонарь — кованый столб с огнём. Подписи сигнатур: (ctx, p, g), g = { time }.
 import { poly, oval, path, rect, lin, rad, inside } from './hd.js';
-import { drawGhost } from './sprites.js';
+import { drawGhost32 } from './npcs32.js';
 
 const PAST = 'past';
 const ph = (p) => p.tl?.phase;
@@ -98,8 +98,8 @@ export function drawSignHd(ctx, p, g) {
   for (let i = 0; i < n; i++) rect(ctx, x - 10.5 + i * 2.5, y - 21.4 + (i % 2) * 0.6, 1.6, 2.4, past ? '#ffd27a' : '#aeb0bc');
   if (!past) rect(ctx, x + 2 + ((t * 23) % 8), y - 21.6, 1.8, 3, '#c8284a');
   if (past) {
-    drawGhost(ctx, x - 26, y + 4, { t, hat: true, alpha: 0.55 });
-    drawGhost(ctx, x + 30, y + 10, { t: t + 1, dress: true, alpha: 0.5 });
+    drawGhost32(ctx, x - 26, y + 4, { t, hat: true, alpha: 0.55 });
+    drawGhost32(ctx, x + 30, y + 10, { t: t + 1, dress: true, alpha: 0.5 });
   }
 }
 

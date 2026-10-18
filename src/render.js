@@ -164,7 +164,7 @@ function propEntry(g, p, phase) {
   return atlas.sprite(hdDraw ? `hd|${key}` : key, c.w, c.h, c.ax, c.ay, (bctx, ax, ay) => {
     const tl = { ...p.tl, phase };
     (hdDraw || p.def.draw)(bctx, { ...p, x: ax, y: ay, tl, state }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
-  }, hdDraw ? { hd: true, crisp: true } : undefined);
+  }, hdDraw ? { hd: true, crisp: p.def.crisp ?? true } : undefined);
 }
 
 export function drawProp(g, ctx, p) {
@@ -631,8 +631,94 @@ function drawInteractMarker(g, ctx, obj) {
   const bob = Math.floor(g.time * 3) % 2;
   const label = g.input.device === 'pad' ? 'B' : g.input.device === 'touch' ? '' : 'E';
   const icon = iconFor(obj);
-  const e = atlas.sprite(`ia|${icon}|${label}`, 13, 20, 6, 0, (bc, ax) => paintBubble(bc, ax, icon, label));
-  blit(ctx, e, cx, top - 14 - bob);
+  const e = atlas.sprite(`ia32|${icon}|${label}`, 18, 22, 9, 0, (bc, ax) => paintBubbleHd(bc, ax, icon, label), { hd: true, crisp: true, outline: OUTLINE });
+  blit(ctx, e, cx, top - 16 - bob);
+}
+
+// Пузырь взаимодействия в 32-битной сетке: тёмная подложка с янтарной каймой, крупная
+// пиктограмма действия и клавиша (E / B) отдельной «кнопкой» под хвостиком.
+function paintBubbleHd(c, x, icon, label) {
+  const amber = '#ffd27a';
+  c.fillStyle = '#16131e';
+  c.beginPath();
+  c.roundRect(x - 8, 0.5, 16, 11.5, 2.5);
+  c.fill();
+  c.strokeStyle = '#e0a040';
+  c.lineWidth = 0.6;
+  c.stroke();
+  c.beginPath();
+  c.moveTo(x - 2, 12);
+  c.lineTo(x, 14.4);
+  c.lineTo(x + 2, 12);
+  c.fillStyle = '#e0a040';
+  c.fill();
+  const cy = 6.2;
+  c.fillStyle = amber;
+  c.strokeStyle = amber;
+  c.lineWidth = 0.7;
+  c.lineCap = 'round';
+  c.beginPath();
+  if (icon === 'eye') {
+    c.ellipse(x, cy, 4.6, 2.6, 0, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.arc(x, cy, 1.4, 0, Math.PI * 2);
+    c.fill();
+  } else if (icon === 'talk') {
+    c.roundRect(x - 4.6, cy - 3, 9.2, 5.4, 1.6);
+    c.stroke();
+    for (const dx of [-2.2, 0, 2.2]) c.fillRect(x + dx - 0.5, cy - 0.8, 1, 1);
+    c.beginPath();
+    c.moveTo(x - 2, cy + 2.4);
+    c.lineTo(x - 3, cy + 4);
+    c.lineTo(x, cy + 2.4);
+    c.fill();
+  } else if (icon === 'hand') {
+    c.roundRect(x - 2.6, cy - 0.6, 5.6, 4, 1.4);
+    c.fill();
+    for (let i = 0; i < 4; i++) c.fillRect(x - 2.4 + i * 1.4, cy - 3.6 + (i === 0 || i === 3 ? 1 : 0), 1, 3.4);
+    c.fillRect(x + 3, cy - 0.4, 1.6, 1);
+  } else if (icon === 'drop') {
+    c.moveTo(x, cy - 4);
+    c.quadraticCurveTo(x + 3.4, cy + 0.6, x, cy + 3.6);
+    c.quadraticCurveTo(x - 3.4, cy + 0.6, x, cy - 4);
+    c.fill();
+  } else if (icon === 'fire') {
+    c.moveTo(x - 3, cy + 3.4);
+    c.quadraticCurveTo(x - 3.6, cy - 1, x - 0.6, cy - 4);
+    c.quadraticCurveTo(x, cy - 1, x + 1.4, cy - 2);
+    c.quadraticCurveTo(x + 3.6, cy + 0.6, x + 3, cy + 3.4);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#fff4d0';
+    c.beginPath();
+    c.ellipse(x, cy + 1.6, 1, 1.6, 0, 0, Math.PI * 2);
+    c.fill();
+  } else {
+    c.rect(x - 4.4, cy - 3, 8.8, 6);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(x - 1.4, cy - 3);
+    c.lineTo(x - 1.4, cy + 3);
+    c.moveTo(x + 1.4, cy - 3);
+    c.lineTo(x + 1.4, cy + 3);
+    c.stroke();
+  }
+  if (label) {
+    c.fillStyle = '#05060c';
+    c.beginPath();
+    c.roundRect(x - 3.6, 15, 7.2, 6.6, 1.2);
+    c.fill();
+    c.fillStyle = '#3a3b47';
+    c.beginPath();
+    c.roundRect(x - 3, 15.4, 6, 5.4, 1);
+    c.fill();
+    c.fillStyle = '#ece4cf';
+    c.font = 'bold 6px "Pixelify Sans", monospace';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(label, x, 18.3);
+  }
 }
 
 function paintBubble(ctx, x, icon, label) {

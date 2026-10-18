@@ -16,7 +16,12 @@ import { updateIslands, inIslands } from '../world/memory.js';
 import { atlas } from '../art/spritecache.js';
 import { blit } from '../art/atlas.js';
 import { line, px } from '../art/sprites.js';
+import { registerFigureHd } from '../world/props.js';
+import { drawVillager32, drawStillOne32 } from '../art/npcs32.js';
 import { paintRoadBase, paintRoadHd, drawRoadParallax, drawRoadOver } from '../art/road32.js';
+
+registerFigureHd(drawVillager, drawVillager32);
+registerFigureHd(drawStillOne, drawStillOne32);
 
 const REN = (text) => ({ who: 'Рен', text, portrait: 'ren', style: 'white' });
 const TIK = (text) => ({ who: 'Тик', text, portrait: 'tik' });

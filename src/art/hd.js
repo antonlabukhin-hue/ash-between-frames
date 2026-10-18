@@ -61,13 +61,19 @@ const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
 // Альфа: порог (полутона края → 0 или 255). Цвет: 5 бит на канал с дизерингом Байера 4×4.
 // keepSoft — альфа ниже порога, но выше soft, сохраняется (дымка, свечение), иначе обрезается.
-export function crispenData(d, w, h, { cut = 110, bits = 5, soft = 0 } = {}) {
+// keepAlpha — полупрозрачные кадры (призраки): альфа не трогается, только самый край гаснет.
+export function crispenData(d, w, h, { cut = 110, bits = 5, soft = 0, keepAlpha = false } = {}) {
   const step = 256 >> bits;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const o = (y * w + x) * 4;
       const a = d[o + 3];
-      if (a < cut) {
+      if (keepAlpha) {
+        if (a < 24) {
+          d[o + 3] = 0;
+          continue;
+        }
+      } else if (a < cut) {
         if (!soft || a < soft) {
           d[o + 3] = 0;
           continue;

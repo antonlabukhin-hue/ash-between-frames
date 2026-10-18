@@ -6,6 +6,7 @@ import { createOverrides, heroOverrideKey, enemyOverrideKey } from './overrides.
 import { RS } from '../core/frame.js';
 import { drawHero32 } from './hero32.js';
 import { drawHollow32, drawFramer32, drawRinger32, drawEater32 } from './enemies32.js';
+import { drawShadow32, drawMel32 } from './npcs32.js';
 
 import { hd } from './hdflag.js';
 
@@ -89,13 +90,17 @@ function drawShadowC(ctx, x, y, o, variant) {
   const f = Math.floor(((o.t || 0) * speed) / (TAU / n)) % n;
   const t = (f * (TAU / n)) / speed;
   const key = `shadow|${o.phase}|${f}|${o.shield ? 1 : 0}|${o.layer || ''}`;
-  put(ctx, key, 44, 46, 22, 42, (c, ax, ay) => drawShadow(c, ax, ay, { phase: o.phase, t, shield: o.shield, layer: o.layer, noShadow: true }), x, y, variant, !o.layer, enemyOverrideKey('shadow', o.phase, `f${f}${o.layer ? 'front' : ''}`));
+  const args = { phase: o.phase, t, shield: o.shield, layer: o.layer, noShadow: true };
+  put(ctx, key, 44, 46, 22, 42, (c, ax, ay) => drawShadow(c, ax, ay, args), x, y, variant, !o.layer, enemyOverrideKey('shadow', o.phase, `f${f}${o.layer ? 'front' : ''}`),
+    false, (c, ax, ay) => drawShadow32(c, ax, ay, args));
 }
 
 export function drawMelC(ctx, x, y, o, variant = null) {
   const f = Math.floor((o.t || 0) * 4) % 16;
   const key = `mel|${o.version || 'w'}|${f}|${o.windup ? 1 : 0}`;
-  put(ctx, key, 76, 84, 38, 80, (c, ax, ay) => drawMel(c, ax, ay, { t: f / 4, version: o.version, windup: o.windup, noShadow: true }), x, y, variant, true, `mel/${o.version || 'w'}/f${f - (f % 4)}`);
+  const args = { t: f / 4, version: o.version, windup: o.windup, noShadow: true };
+  put(ctx, key, 76, 84, 38, 80, (c, ax, ay) => drawMel(c, ax, ay, args), x, y, variant, true, `mel/${o.version || 'w'}/f${f - (f % 4)}`,
+    false, (c, ax, ay) => drawMel32(c, ax, ay, args));
 }
 
 export const atlasStats = () => ({ frames: atlas.count(), pages: atlas.pages.length, bytes: atlas.memory(), baked: atlas.stats.baked });
