@@ -1,6 +1,6 @@
 # Пепел между кадрами (ash-between-frames)
 
-Пиксельная action-RPG на Canvas 2D + Vite, без движка, в 32-битном стиле. Дизайн-документ — `docs/DESIGN.md`, арт — `docs/ART_TECH_SPEC.md`.
+Пиксельная action-RPG на Canvas 2D + Vite, без движка, в 32-битном стиле. Дизайн-документ — `docs/DESIGN.md`, механика времени, зоны и квесты — `docs/TIME_DESIGN.md` (главнее DESIGN.md там, где расходятся), арт — `docs/ART_TECH_SPEC.md`.
 Сайт — GitHub Pages (`antonlabukhin-hue/ash-between-frames`), деплой — `.github/workflows/deploy.yml` на push в main.
 Общение и коммиты — на русском.
 
