@@ -25,12 +25,10 @@
 2. **Задание.** Текст запроса — `art/prompts/<имя>.md` (пример: `road-floor.md`): вид сверху 3/4
    без перспективы, пропорции комнаты, что рисовать и чего не рисовать, стиль и палитра.
 3. **Генерация.** `node scripts/art-gen.mjs all art/prompts/road-floor.md --n 2 --ref art/templates/road/reference.png`
-   → `art/inbox/road-floor/gemini-1.png`, `grok-1.png`… Ключи — в `.env.local` (в git не попадает):
-   ```
-   GEMINI_API_KEY=...
-   XAI_API_KEY=...
-   ```
-   Модели меняются переменными `GEMINI_IMAGE_MODEL`, `XAI_IMAGE_MODEL`.
+   → `art/inbox/road-floor/gemini-1.png`, `grok-1.png`, `openai-1.png`… Ключи — в `.env.local`
+   (образец — `.env.local.example`, в git не попадает). Проверка ключей без трат:
+   `node scripts/art-gen.mjs check`. Модели меняются переменными `GEMINI_IMAGE_MODEL`,
+   `XAI_IMAGE_MODEL`, `OPENAI_IMAGE_MODEL`. Для переднего плана у OpenAI есть `--transparent`.
 4. **Согласование.** Claude показывает варианты, вы выбираете, просите правки (новый запуск
    с уточнённым заданием) или отклоняете. Без вашего «да» ничего не попадает в игру.
 5. **В игру.** `node scripts/art-approve.mjs art/inbox/road-floor/gemini-1.png road floor present`:
@@ -46,9 +44,10 @@
 |---|---|---|
 | Gemini (Google) | да — модели «Nano Banana» / Gemini Image | aistudio.google.com → API key |
 | Grok (xAI) | да — Grok Imagine | console.x.ai → API key |
+| OpenAI (GPT Image) | да — генерация и правка по картинке-основе, прозрачный фон | platform.openai.com → API keys |
 | DeepSeek | нет (официальный API — только текст) | можно для текста заданий, не для рисунков |
 
-Подписка в приложении (Gemini, SuperGrok) не даёт доступа к API — ключ и оплата API отдельные.
+Подписка в приложении (Gemini, SuperGrok, ChatGPT Plus) не даёт доступа к API — ключ и оплата API отдельные.
 
 ## Ограничения генераторов
 
