@@ -53,19 +53,57 @@ function drawVoidLayer(g, ctx, x0, y0, x1, y1) {
       const y = ty * TILE;
       if (tile === T.FLICKER && room.flickerState) {
         const st = room.flickerState(g, tx, ty);
-        if (st === 'warn') {
-          if (Math.floor(t * 10) % 2) {
-            ctx.fillStyle = 'rgba(200,40,74,0.35)';
-            ctx.fillRect(x, y, TILE, TILE);
-          }
-        } else if (st === 'void') {
-          ctx.fillStyle = P.void;
+        if (st === 'warn') warnTile(ctx, x, y, tx, ty, t);
+        else if (st === 'void') {
+          // провал: почти чёрная глубина, а у края целого пола — «толщина» земли и светлая кромка
+          ctx.fillStyle = '#030308';
           ctx.fillRect(x, y, TILE, TILE);
           voidSquares(ctx, x, y, tx, ty, t, per);
+          const solidAt = (ax, ay) => {
+            const tt = tileAt(room, ax, ay);
+            if (tt === T.VOID || tt === T.WALL || tt == null) return false;
+            return tt !== T.FLICKER || room.flickerState(g, ax, ay) !== 'void';
+          };
+          if (solidAt(tx, ty - 1)) {
+            ctx.fillStyle = '#2a2434';
+            ctx.fillRect(x, y, TILE, 4);
+            ctx.fillStyle = '#16121c';
+            ctx.fillRect(x, y + 4, TILE, 2);
+            ctx.fillStyle = '#8a8296';
+            ctx.fillRect(x, y, TILE, 1);
+          }
+          ctx.fillStyle = '#8a8296';
+          if (solidAt(tx - 1, ty)) ctx.fillRect(x, y, 1, TILE);
+          if (solidAt(tx + 1, ty)) ctx.fillRect(x + TILE - 1, y, 1, TILE);
+          if (solidAt(tx, ty + 1)) ctx.fillRect(x, y + TILE - 1, TILE, 1);
         }
         continue;
       }
     }
+  }
+}
+
+// Плита вот-вот сотрётся: дрожит, трескается малиновым и сыплет крошкой (как в Celeste).
+function warnTile(ctx, x, y, tx, ty, t) {
+  const j = Math.floor(t * 24) % 2 ? 1 : 0;
+  ctx.fillStyle = 'rgba(5,4,10,0.35)';
+  ctx.fillRect(x, y, TILE, TILE);
+  ctx.fillStyle = Math.floor(t * 10) % 2 ? '#ff5a7a' : '#c8284a';
+  const r = hash2(tx, ty, 5);
+  // ломаная трещина через плиту
+  let cx = x + 2 + Math.floor(r * 6) + j;
+  let cy = y + 2;
+  for (let i = 0; i < 6; i++) {
+    ctx.fillRect(cx, cy, 1, 2);
+    cx += hash2(tx + i, ty, 7) > 0.5 ? 1 : -1;
+    cy += 2;
+  }
+  ctx.fillRect(x + 9 - j, y + 6, 4, 1);
+  // крошка падает вниз
+  for (let i = 0; i < 2; i++) {
+    const k = (t * 1.6 + hash2(tx, ty + i, 9)) % 1;
+    ctx.fillStyle = '#5a5266';
+    ctx.fillRect(x + 3 + Math.floor(hash2(tx + i, ty, 13) * 10), y + Math.floor(k * TILE), 1, 1);
   }
 }
 
@@ -1240,7 +1278,23 @@ function reflectFigures(g) {
   if (g.quality.reflect < 2) return null;
   const out = [];
   const p = g.player;
-  if (p && !p.dead && !(p.falling > 0)) out.push({ y: p.y, draw: (c) => drawHeroC(c, p.x, p.y, heroOpts(g, p)) });
+  if (p && !p.dead && !(p.falling > 0)) {
+    if (p.rewind) {
+      // перемотка: бирюзовый след пути назад и полупрозрачный герой
+      const r = p.rewind;
+      out.push({
+        y: p.y,
+        draw: (c) => {
+          c.fillStyle = P.teal;
+          const from = Math.floor((r.t / r.dur) * (r.path.length - 1));
+          for (let i = from; i < r.path.length; i += 3) c.fillRect(Math.round(r.path[i].x), Math.round(r.path[i].y) - 1, 1, 1);
+          c.globalAlpha = 0.55;
+          drawHeroC(c, p.x, p.y, heroOpts(g, p), P.teal);
+          c.globalAlpha = 1;
+        },
+      });
+    } else out.push({ y: p.y, draw: (c) => drawHeroC(c, p.x, p.y, heroOpts(g, p)) });
+  }
   // Эхо: полупрозрачная бирюзовая тень героя
   const sh = g.echoShade;
   if (sh && !sh.done) {

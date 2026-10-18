@@ -430,6 +430,7 @@ export function createGame({ input, audio, ui, storage, save }) {
       g.player.history = [];
       g.player.kx = g.player.ky = 0;
       g.player.falling = 0;
+      g.player.rewind = null;
       resetPlayerCombat(g.player);
       // между кадрами: немного здоровья и полный браслет
       g.player.hp = Math.min(g.player.maxHp, g.player.hp + Math.round(g.player.maxHp * 0.3));
