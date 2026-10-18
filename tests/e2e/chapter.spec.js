@@ -104,6 +104,8 @@ test('глава 1 проходится от пролога до убежища'
     // волны отбиты — теперь импульс никто не сбивает
     for (const l of g.lanterns.slice(0, 2)) await shift(l);
     await until(() => g.flags.squareDone, 20000, 'окончания площади');
+    // ворота открывает привратник в свете своего фонаря (карта 4.4)
+    g.flags.keeperOpened = true;
     await exitTo('stairs');
 
     seen.push(g.room.id);

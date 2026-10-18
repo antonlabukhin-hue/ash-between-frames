@@ -593,11 +593,25 @@ export const square = {
     g.stillOne = g.addProp('ghostNpc', 404, 252, { drawFn: drawStillOne });
     // переносной свет (П2): фонарь привратника у входа; в его ореоле — привратник и стёртая надпись
     g.addProp('handLantern', 212, 330);
-    const keeper = g.addProp('ghostNpc', 272, 104, { drawFn: drawGhost, drawOpts: { hat: true }, inAura: true, hidden: true, prompt: 'Окликнуть привратника', markY: 28 });
+    const keeper = g.addProp('ghostNpc', 272, 104, { drawFn: drawGhost, drawOpts: { hat: true }, inAura: 'handLantern', hidden: true, prompt: 'Окликнуть привратника', markY: 28 });
     keeper.onInteract = async () => {
       const KEEP = (t) => ({ who: 'Привратник Ведан', text: t });
-      if (g.flags.keeperMet) {
+      if (g.flags.keeperOpened) {
         await g.say([KEEP('Колокол молчит — ворота стоят. Ищи, кто звонил последним.')]);
+        return;
+      }
+      if (g.flags.keeperMet) {
+        if (!g.flags.squareDone) {
+          await g.say([KEEP('Пока по площади бродят стёртые, засов не сдвинуть. Уйми их, Смотритель.')]);
+          return;
+        }
+        await g.say([
+          KEEP('Звона нет. Но свет — есть, и ты его принёс.'),
+          KEEP('Ради света открою. Последний раз.'),
+        ]);
+        g.flags.keeperOpened = true;
+        g.persist();
+        g.audio.sfx.chest();
         return;
       }
       await g.say([
@@ -605,7 +619,12 @@ export const square = {
         KEEP('Я открывал ворота по звону. Звон — ворота. Тишина — засов.'),
         KEEP('В последний вечер звонил Мел. Звонил и звонил, пока площадь не опустела.'),
         KEEP('Мальчишка в латунной кепке пробежал мимо меня наверх. Я его не остановил.'),
+        ...(g.flags.squareDone ? [KEEP('Свет есть — открою ворота. Звона нет, но для Смотрителя можно.')] : [KEEP('Уйми тех, кто бродит по площади, — и я открою ворота.')]),
       ]);
+      if (g.flags.squareDone) {
+        g.flags.keeperOpened = true;
+        g.audio.sfx.chest();
+      }
       g.flags.keeperMet = true;
       g.persist();
     };
@@ -613,6 +632,18 @@ export const square = {
     carved.onInteract = async () => {
       await g.say([NOTE('Строки проступают в свете: «Звонарь — Мел. Привратник — Ведан. Хлеб — у Мары. Мальчик в кепке — …». Имя сколото.')]);
       g.flags.carvedRead = true;
+    };
+    const vault = g.addProp('hatch', 230, 160, { w: 20, h: 14, prompt: 'Поднять плиту тайника' });
+    vault.tl.switchable = false;
+    g.squareVault = vault;
+    vault.canInteract = () => !g.flags.vaultTaken && vault.tl.phase === PAST;
+    vault.onInteract = async () => {
+      g.flags.vaultTaken = true;
+      g.audio.sfx.chest();
+      for (let i = 0; i < 6; i++) g.spawnPickup('ash', vault.x + 10, vault.y + 8);
+      g.spawnPickup('shard', vault.x + 10, vault.y + 10);
+      await g.say([NOTE('Под плитой — жестяная коробка: латунная кепка, детская, и записка «Не забудь, где спрятал. М.»')]);
+      g.persist();
     };
     g.addProp('candles', cx - 22, cy + 16);
     g.addProp('candles', cx + 22, cy + 16);
@@ -648,6 +679,12 @@ export const square = {
   },
   memorySources: (g) => (artVariant === 'current' ? [] : memorySources(g)),
   update(g, dt) {
+    // плита тайника проступает, только когда её накрывают ореолы двух фонарей
+    const v = g.squareVault;
+    if (v) {
+      const n = g.memIslands.filter((i) => g.lanterns?.some((l) => l.id === i.id) && inIslands([i], v.x + 10, v.y + 7)).length;
+      v.tl.phase = n >= 2 && !g.flags.vaultTaken ? PAST : PRESENT;
+    }
     if (g.squareWaves && g.lanterns) g.squareLit = g.lanterns.filter((l) => l.tl.phase === PAST).length;
   },
   async script(g) {
@@ -655,7 +692,8 @@ export const square = {
       g.statue.tl.phase = PAST;
       g.statue.onShift(g, g.statue, PAST);
       g.lanterns.forEach((l) => (l.tl.phase = PAST));
-      g.openExits(true);
+      if (g.flags.keeperOpened) g.openExits(true);
+      else await keeperGate(g);
       return;
     }
     g.hint(`${key(g, 'interact')} — осмотреть пустой постамент`, 6);
@@ -696,18 +734,9 @@ export const square = {
     g.flags.squareDone = true;
     unlockAbility(g, 1);
     g.persist();
-    // тайник за лавкой
-    const cache = g.addProp('chest', 52, 130, { prompt: 'Открыть тайник', icon: 'hand' });
-    cache.onInteract = () => {
-      cache.open = true;
-      cache.onInteract = null;
-      g.audio.sfx.chest();
-      for (let i = 0; i < 5; i++) g.spawnPickup('ash', cache.x, cache.y + 4);
-      g.spawnPickup('shard', cache.x, cache.y + 6);
-    };
     await g.wait(0.5);
     await boyTalk(g);
-    g.openExits();
+    await keeperGate(g);
   },
 };
 
@@ -732,6 +761,15 @@ function drawStump(ctx, x, y, flip) {
   ctx.fillRect(x - 11, y - 6, 22, 1);
   ctx.fillStyle = '#86163a';
   ctx.fillRect(x - 2 * f, y - 20, 1, 4);
+}
+
+// Ворота к лестнице открывает призрак привратника — он виден только в свете своего фонаря.
+async function keeperGate(g) {
+  if (!g.flags.keeperOpened) {
+    g.hint('Ворота заперты. Их открывал привратник — по звону. Принеси ему свет: его фонарь у входа на площадь.', 7);
+    await g.waitUntil(() => g.flags.keeperOpened);
+  }
+  g.openExits();
 }
 
 async function boyTalk(g) {
