@@ -10,6 +10,7 @@
 import { createShelfPacker, packRect } from './packer.js';
 import { scale2xWords, nearestWords } from './upscale.js';
 import { RS } from '../core/frame.js';
+import { crispen } from './hd.js';
 
 const PAGE = 1024;
 
@@ -76,6 +77,8 @@ export function createAtlas({ pageSize = PAGE, maxPages = 2, makeCanvas, rs = 1 
       sc.translate(pad, pad);
       draw(sc, ax, ay);
       sc.restore();
+      // HD-кадр: чёткий край и 15-битный цвет (src/art/hd.js)
+      if (opts.crisp) crispen(sc, pw, ph, opts.crisp === true ? undefined : opts.crisp);
     } else {
       sc.translate(pad, pad);
       draw(sc, ax, ay);

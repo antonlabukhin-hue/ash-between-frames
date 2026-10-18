@@ -115,3 +115,20 @@ describe('Scale2x', () => {
     expect(dst[1 * 6 + 2]).toBe(1);
   });
 });
+
+describe('Пикселизация HD-кадров', () => {
+  it('убирает полутона края и сводит цвет к 15 битам', async () => {
+    const { crispenData } = await import('../../src/art/hd.js');
+    const d = new Uint8ClampedArray([
+      200, 100, 50, 255, // непрозрачный
+      10, 20, 30, 60, // полупрозрачный край — исчезает
+      13, 77, 141, 200, // почти непрозрачный — становится сплошным
+      0, 0, 0, 0,
+    ]);
+    crispenData(d, 4, 1);
+    expect(d[3]).toBe(255);
+    expect(d[7]).toBe(0);
+    expect(d[11]).toBe(255);
+    for (const i of [0, 1, 2, 8, 9, 10]) expect(d[i] % 8).toBe(0);
+  });
+});

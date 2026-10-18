@@ -4,6 +4,12 @@ import { drawHero, drawHollow, drawFramer, drawRinger, drawShadow, drawEater, dr
 import { P } from './palette.js';
 import { createOverrides, heroOverrideKey, enemyOverrideKey } from './overrides.js';
 import { RS } from '../core/frame.js';
+import { drawHero32 } from './hero32.js';
+import { drawHollow32, drawFramer32, drawRinger32, drawEater32 } from './enemies32.js';
+
+// 32-битные кадры персонажей (HD-маляры). false — прежние 16-битные через Scale2x.
+export const hd = { on: true };
+const HD_OPTS = { hd: true, crisp: true };
 
 // 32-битная сетка: кадры хранятся в RS раз плотнее мира (страницы 2048×2048)
 export const atlas = createAtlas({ maxPages: 3, rs: RS });
@@ -18,7 +24,7 @@ export function loadSpriteOverrides(base) {
 
 // Выводит кадр; variant: null — обычный, иначе цвет силуэта (вспышка, двойной контур, шлейф).
 // ov — смысловой ключ ручного кадра: если он есть в манифесте, кодовый кадр не рисуется.
-function put(ctx, key, w, h, ax, ay, draw, x, y, variant, outline = true, ov = null, flip = false) {
+function put(ctx, key, w, h, ax, ay, draw, x, y, variant, outline = true, ov = null, flip = false, hdDraw = null) {
   const f = ov ? overrides.get(ov) : null;
   let base;
   if (f) {
@@ -32,8 +38,9 @@ function put(ctx, key, w, h, ax, ay, draw, x, y, variant, outline = true, ov = n
       } else c.drawImage(f.img, f.x, f.y, f.w, f.h, bx - f.ax, by - f.ay, f.w, f.h);
       c.restore();
     }, { outline: f.outline ? OUTLINE : null });
-  } else base = atlas.sprite(key, w, h, ax, ay, draw, { outline: outline ? OUTLINE : null });
-  blit(ctx, variant ? atlas.tinted(key, base, variant) : base, x, y);
+  } else if (hdDraw && hd.on) base = atlas.sprite(`hd|${key}`, w, h, ax, ay, hdDraw, { outline: outline ? OUTLINE : null, ...HD_OPTS });
+  else base = atlas.sprite(key, w, h, ax, ay, draw, { outline: outline ? OUTLINE : null });
+  blit(ctx, variant ? atlas.tinted(base.key, base, variant) : base, x, y);
 }
 
 // ── герой ─────────────────────────────────────────────────────────────
@@ -48,20 +55,21 @@ export function heroKey(o) {
 
 export function drawHeroC(ctx, x, y, o, variant = null) {
   const q = heroKey(o);
-  put(ctx, q.key, 44, 44, 22, 38, (c, ax, ay) =>
-    drawHero(c, ax, ay, {
-      dir: o.dir, flip: o.flip, walk: q.walk / 6, sway: q.sway * 2.5, aim: (q.aim * Math.PI) / 4,
-      swing: q.swing >= 0 ? q.swing * 0.04 : null, swingStep: o.swingStep, glow: o.glow, charges: o.charges ?? 3,
-      moving: o.moving, t: q.hem * 0.35, noShadow: true,
-    }), x, y, variant, true, heroOverrideKey(o, q), o.dir === 'side' && o.flip);
+  const args = {
+    dir: o.dir, flip: o.flip, walk: q.walk / 6, sway: q.sway * 2.5, aim: (q.aim * Math.PI) / 4,
+    swing: q.swing >= 0 ? q.swing * 0.04 : null, swingStep: o.swingStep, glow: o.glow, charges: o.charges ?? 3,
+    moving: o.moving, t: q.hem * 0.35, noShadow: true,
+  };
+  put(ctx, q.key, 44, 44, 22, 38, (c, ax, ay) => drawHero(c, ax, ay, args), x, y, variant, true,
+    heroOverrideKey(o, q), o.dir === 'side' && o.flip, (c, ax, ay) => drawHero32(c, ax, ay, args));
 }
 
 // ── враги ─────────────────────────────────────────────────────────────
 const ENEMY = {
-  hollow: { w: 24, h: 34, ax: 12, ay: 30, fn: drawHollow, label: (q) => (q.lunge ? 'lunge' : q.windup ? 'windup' : `walk${Math.round(q.walk * 4)}`), q: (o) => ({ walk: Math.floor((o.walk || 0) * 4) / 4, t: (Math.floor((o.t || 0) * 12) % 4) / 12, windup: o.windup, lunge: o.lunge }) },
-  framer: { w: 16, h: 18, ax: 8, ay: 15, fn: drawFramer, label: (q) => `f${Math.round(q.t * 10)}${q.look ? `l${q.look}` : ''}`, q: (o) => ({ t: (Math.floor((o.t || 0) * 10) & 1) / 10, look: o.look || 0 }) },
-  ringer: { w: 22, h: 30, ax: 11, ay: 27, fn: drawRinger, label: (q) => (q.charge ? `charge${Math.round((q.t - 0.05) * 30)}` : 'idle'), q: (o) => ({ t: o.charge ? (Math.floor((o.t || 0) * 30) & 1) / 30 + 0.05 : 0, charge: o.charge }) },
-  eater: { w: 28, h: 26, ax: 14, ay: 23, fn: drawEater, label: (q) => (q.windup ? 'bite' : `f${Math.round(q.t * 8)}`), q: (o) => ({ t: (Math.floor((o.t || 0) * 8) % 10) / 8, windup: o.windup }) },
+  hollow: { w: 24, h: 34, ax: 12, ay: 30, fn: drawHollow, hd: drawHollow32, label: (q) => (q.lunge ? 'lunge' : q.windup ? 'windup' : `walk${Math.round(q.walk * 4)}`), q: (o) => ({ walk: Math.floor((o.walk || 0) * 4) / 4, t: (Math.floor((o.t || 0) * 12) % 4) / 12, windup: o.windup, lunge: o.lunge }) },
+  framer: { w: 16, h: 18, ax: 8, ay: 15, fn: drawFramer, hd: drawFramer32, label: (q) => `f${Math.round(q.t * 10)}${q.look ? `l${q.look}` : ''}`, q: (o) => ({ t: (Math.floor((o.t || 0) * 10) & 1) / 10, look: o.look || 0 }) },
+  ringer: { w: 22, h: 30, ax: 11, ay: 27, fn: drawRinger, hd: drawRinger32, label: (q) => (q.charge ? `charge${Math.round((q.t - 0.05) * 30)}` : 'idle'), q: (o) => ({ t: o.charge ? (Math.floor((o.t || 0) * 30) & 1) / 30 + 0.05 : 0, charge: o.charge }) },
+  eater: { w: 28, h: 26, ax: 14, ay: 23, fn: drawEater, hd: drawEater32, label: (q) => (q.windup ? 'bite' : `f${Math.round(q.t * 8)}`), q: (o) => ({ t: (Math.floor((o.t || 0) * 8) % 10) / 8, windup: o.windup }) },
 };
 
 export function drawEnemyC(ctx, kind, x, y, o, variant = null) {
@@ -69,7 +77,9 @@ export function drawEnemyC(ctx, kind, x, y, o, variant = null) {
   const d = ENEMY[kind];
   const q = d.q(o);
   const key = `${kind}|${o.phase}|${JSON.stringify(q)}`;
-  put(ctx, key, d.w, d.h, d.ax, d.ay, (c, ax, ay) => d.fn(c, ax, ay, { ...q, phase: o.phase, noShadow: true }), x, y, variant, true, enemyOverrideKey(kind, o.phase, d.label(q)));
+  const args = { ...q, phase: o.phase, noShadow: true };
+  put(ctx, key, d.w, d.h, d.ax, d.ay, (c, ax, ay) => d.fn(c, ax, ay, args), x, y, variant, true, enemyOverrideKey(kind, o.phase, d.label(q)),
+    false, d.hd ? (c, ax, ay) => d.hd(c, ax, ay, args) : null);
 }
 
 function drawShadowC(ctx, x, y, o, variant) {
