@@ -3,8 +3,10 @@ import { createAtlas, blit } from './atlas.js';
 import { drawHero, drawHollow, drawFramer, drawRinger, drawShadow, drawEater, drawMel } from './sprites.js';
 import { P } from './palette.js';
 import { createOverrides, heroOverrideKey, enemyOverrideKey } from './overrides.js';
+import { RS } from '../core/frame.js';
 
-export const atlas = createAtlas({ maxPages: 3 });
+// 32-битная сетка: кадры хранятся в RS раз плотнее мира (страницы 2048×2048)
+export const atlas = createAtlas({ maxPages: 3, rs: RS });
 const OUTLINE = '#05060c';
 const TAU = Math.PI * 2;
 

@@ -1,7 +1,7 @@
 // Отрисовка комнаты: параллакс, пол, пустоты, объекты, персонажи по глубине, эффекты, свет, HUD.
 // Персонажи и декор выводятся из атласа (src/art/spritecache.js), невидимое отсекается,
 // частицы — из пула, свет — ступенчатые маски. Лимиты — docs/PERFORMANCE_BUDGET.md.
-import { W, H } from './core/renderer.js';
+import { W, H, RS } from './core/renderer.js';
 import { P, PHASE_COLOR } from './art/palette.js';
 import { TILE, T } from './art/tiles.js';
 import { tileAt } from './world/room.js';
@@ -129,11 +129,12 @@ function drawMemoryIslands(g, ctx) {
       by1 = Math.max(by1, y + h);
     }
     ctx.clip();
+    const k = pc.rs || 1;
     bx0 = Math.max(0, bx0);
     by0 = Math.max(0, by0);
-    bx1 = Math.min(pc.width, bx1);
-    by1 = Math.min(pc.height, by1);
-    if (bx1 > bx0 && by1 > by0) ctx.drawImage(pc, bx0, by0, bx1 - bx0, by1 - by0, bx0, by0, bx1 - bx0, by1 - by0);
+    bx1 = Math.min(pc.width / k, bx1);
+    by1 = Math.min(pc.height / k, by1);
+    if (bx1 > bx0 && by1 > by0) ctx.drawImage(pc, bx0 * k, by0 * k, (bx1 - bx0) * k, (by1 - by0) * k, bx0, by0, bx1 - bx0, by1 - by0);
     ctx.restore();
     const s = islandScale(isl.k);
     ring(ctx, isl.x, isl.y, isl.rx * s, isl.k < 1 ? 'rgba(255,210,122,0.9)' : 'rgba(224,160,64,0.45)', isl.ry / isl.rx, 2);
@@ -570,8 +571,9 @@ export function renderWorld(g, ctx) {
   if (!room) return;
   ensureLight();
   const shake = g.cam.shakeT > 0 && g.save.settings.screenShake ? g.cam.shakeA : 0;
-  const cx = Math.round(g.cam.x + (Math.random() - 0.5) * shake * 2);
-  const cy = Math.round(g.cam.y + (Math.random() - 0.5) * shake * 2);
+  // камера — с шагом пикселя плотной сетки: движение вдвое плавнее
+  const cx = Math.round((g.cam.x + (Math.random() - 0.5) * shake * 2) * RS) / RS;
+  const cy = Math.round((g.cam.y + (Math.random() - 0.5) * shake * 2) * RS) / RS;
   view = { x0: cx, y0: cy, x1: cx + W, y1: cy + H };
   secT = callProbe();
   let drawn = 0;
@@ -585,11 +587,13 @@ export function renderWorld(g, ctx) {
   ctx.save();
   ctx.translate(-cx, -cy);
   // только видимая часть запечённой комнаты
+  const rc = g.roomCanvas;
+  const rk = rc.rs || 1;
   const sx = Math.max(0, cx);
   const sy = Math.max(0, cy);
-  const sw = Math.min(g.roomCanvas.width - sx, W + (cx < 0 ? cx : 0));
-  const sh = Math.min(g.roomCanvas.height - sy, H + (cy < 0 ? cy : 0));
-  if (sw > 0 && sh > 0) ctx.drawImage(g.roomCanvas, sx, sy, sw, sh, sx, sy, sw, sh);
+  const sw = Math.min(rc.width / rk - sx, W + (cx < 0 ? cx : 0));
+  const sh = Math.min(rc.height / rk - sy, H + (cy < 0 ? cy : 0));
+  if (sw > 0 && sh > 0) ctx.drawImage(rc, sx * rk, sy * rk, sw * rk, sh * rk, sx, sy, sw, sh);
   const x0 = Math.max(0, Math.floor(cx / TILE));
   const y0 = Math.max(0, Math.floor(cy / TILE));
   drawVoidLayer(g, ctx, x0, y0, x0 + Math.ceil(W / TILE) + 1, y0 + Math.ceil(H / TILE) + 1);
@@ -874,5 +878,5 @@ function glitch(g, ctx) {
   const y = Math.floor(Math.random() * H);
   const h = 1 + Math.floor(Math.random() * 4);
   const dx = Math.random() > 0.5 ? 2 : -2;
-  ctx.drawImage(ctx.canvas, 0, y, W, h, dx, y, W, h);
+  ctx.drawImage(ctx.canvas, 0, y * RS, W * RS, h * RS, dx, y, W, h);
 }

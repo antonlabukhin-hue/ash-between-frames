@@ -1,45 +1,73 @@
-// Кадр с nearest-neighbor и ТОЛЬКО целым масштабом в физических пикселях устройства.
-// Подбираем масштаб s так, чтобы высота кадра была около 224 (в пределах 180–248),
-// ширина — по соотношению сторон 320…448. Остаток экрана — тёмные поля.
-import { frameSize } from './frame.js';
+// Кадр с nearest-neighbor. Мир — в логических пикселях W×H, холст — в RS раз плотнее
+// (32-битная сетка), базовое преобразование контекста — scale(RS). Холст растягивается
+// на экран целым масштабом в физических пикселях, а если так остаются большие поля —
+// дробным «вписанным» (src/core/frame.js).
+// Размер берётся из visualViewport за вычетом безопасных зон (вырез, полоска «домой»).
+import { frameSize, RS } from './frame.js';
 
-export let W = 384;
-export let H = 216;
+export let W = 480;
+export let H = 270;
+export { RS };
 export const MIN_W = 320;
-export const MAX_W = 448;
+export const MAX_W = 512;
+
+function viewport() {
+  const vv = window.visualViewport;
+  const cs = getComputedStyle(document.body);
+  const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+  const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  return {
+    width: Math.max(1, (vv?.width || window.innerWidth) - padX),
+    height: Math.max(1, (vv?.height || window.innerHeight) - padY),
+  };
+}
 
 export function createRenderer(canvas, stage) {
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.imageSmoothingEnabled = false;
-  const r = { canvas, ctx, scale: 1, cssScale: 1, ox: 0, oy: 0, onResize: null };
+  const r = { canvas, ctx, rs: RS, scale: 1, cssScale: 1, exact: true, ox: 0, oy: 0, onResize: null };
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
-    const f = frameSize(window.innerWidth * dpr, window.innerHeight * dpr);
+    const vp = viewport();
+    const f = frameSize(vp.width * dpr, vp.height * dpr);
     const changed = f.w !== W || f.h !== H;
     W = f.w;
     H = f.h;
-    if (canvas.width !== W || canvas.height !== H) {
-      canvas.width = W;
-      canvas.height = H;
+    if (canvas.width !== W * RS || canvas.height !== H * RS) {
+      canvas.width = W * RS;
+      canvas.height = H * RS;
     }
     ctx.imageSmoothingEnabled = false;
     r.scale = f.scale;
-    r.cssScale = f.scale / dpr;
-    stage.style.width = `${(W * f.scale) / dpr}px`;
-    stage.style.height = `${(H * f.scale) / dpr}px`;
-    stage.style.setProperty('--px', `${r.cssScale}px`);
+    r.exact = f.exact;
+    // CSS-пикселей на один логический пиксель мира
+    r.cssScale = (f.scale * RS) / dpr;
+    const cw = W * r.cssScale;
+    const chh = H * r.cssScale;
+    stage.style.width = `${cw}px`;
+    stage.style.height = `${chh}px`;
+    // размер HTML-интерфейса — от высоты сцены, а не от логического кадра
+    stage.style.setProperty('--px', `${chh / 224}px`);
     const rect = stage.getBoundingClientRect();
     r.ox = rect.left;
     r.oy = rect.top;
-    document.body.classList.toggle('portrait', window.innerHeight > window.innerWidth && 'ontouchstart' in window);
+    const touch = window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window;
+    document.body.classList.toggle('portrait', window.innerHeight > window.innerWidth && touch);
     if (changed) r.onResize?.();
   }
-  window.addEventListener('resize', resize);
-  window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+  window.addEventListener('resize', resize, { passive: true });
+  window.addEventListener('orientationchange', () => setTimeout(resize, 220), { passive: true });
+  window.visualViewport?.addEventListener('resize', resize, { passive: true });
   resize();
 
   r.resize = resize;
-  r.toCanvas = (cx, cy) => [(cx - r.ox) / r.cssScale, (cy - r.oy) / r.cssScale];
+  // Сбросить преобразование к базовому (логические пиксели мира).
+  r.begin = () => ctx.setTransform(RS, 0, 0, RS, 0, 0);
+  // Экран → логические координаты кадра (мышь, касания).
+  r.toCanvas = (cx, cy) => {
+    const rect = stage.getBoundingClientRect();
+    return [((cx - rect.left) * W) / rect.width, ((cy - rect.top) * H) / rect.height];
+  };
   return r;
 }

@@ -1,6 +1,8 @@
 // Тайлы 16×16, нарисованные кодом. Статичная часть комнаты кэшируется в один холст.
 import { P } from './palette.js';
 import { hash2 } from '../core/math.js';
+import { upscaleCanvas } from './upscale.js';
+import { RS } from '../core/frame.js';
 
 export const TILE = 16;
 
@@ -265,16 +267,35 @@ export function drawTile(ctx, room, tx, ty) {
   }
 }
 
+// Комната печатается в логических пикселях и удваивается Scale2x в 32-битную сетку
+// (холст помечен полем rs — во сколько раз он плотнее мира).
 export function buildRoomCanvas(room) {
   const c = document.createElement('canvas');
   c.width = room.w * TILE;
   c.height = room.h * TILE;
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   // комнаты нового стиля запекаются своим «маляром» целиком
-  if (room.def?.paint) {
-    room.def.paint(ctx, room);
-    return c;
+  if (room.def?.paint) room.def.paint(ctx, room);
+  else for (let ty = 0; ty < room.h; ty++) for (let tx = 0; tx < room.w; tx++) drawTile(ctx, room, tx, ty);
+  const out = dense(room, c);
+  // детали в плотной сетке (блики луж, тонкие швы) — поверх удвоенной комнаты
+  if (room.def?.paintHd) {
+    const hd = out.getContext('2d');
+    hd.save();
+    hd.scale(out.rs || 1, out.rs || 1);
+    room.def.paintHd(hd, room);
+    hd.restore();
   }
-  for (let ty = 0; ty < room.h; ty++) for (let tx = 0; tx < room.w; tx++) drawTile(ctx, room, tx, ty);
-  return c;
+  return out;
+}
+
+function dense(room, c) {
+  if (RS === 1) return c;
+  const out = upscaleCanvas(c, RS);
+  out.rs = RS;
+  if (room.pastCanvas && !room.pastCanvas.rs) {
+    room.pastCanvas = upscaleCanvas(room.pastCanvas, RS);
+    room.pastCanvas.rs = RS;
+  }
+  return out;
 }

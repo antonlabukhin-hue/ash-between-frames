@@ -346,6 +346,7 @@ function frame(now) {
   const consumed = ui.handleInput(input);
   if (!consumed && input.pressed('pause') && game.scene === 'play') pauseMenu();
   if (!consumed && input.pressed('map') && game.scene === 'play' && !game.cinematic) mapMenu();
+  renderer.begin();
   if (game.scene === 'sprites') {
     game.time += dt;
     drawSpriteSheet(renderer.ctx, game.time);
@@ -381,10 +382,10 @@ function frame(now) {
       lightLimit: g.quality.lights,
       enemies: enemies.length,
       far: enemies.filter((e) => e.far).length,
-      canvasBytes: at.bytes + (g.roomCanvas ? g.roomCanvas.width * g.roomCanvas.height * 4 : 0) + lightLayerBytes() + lightCacheBytes() + W * H * 4,
+      canvasBytes: at.bytes + (g.roomCanvas ? g.roomCanvas.width * g.roomCanvas.height * 4 : 0) + lightLayerBytes() + lightCacheBytes() + W * H * 4 * renderer.rs * renderer.rs,
       atlasFrames: at.frames,
       profile: g.quality.name + (g.autoQuality ? ' (авто)' : ''),
-      frame: `${W}×${H} ×${renderer.scale}`,
+      frame: `${W}×${H} (сетка ×${renderer.rs}) ×${+renderer.scale.toFixed(2)}`,
     });
   }
   const playing = game.scene === 'play' && !ui.mode && !game.cinematic && !game.paused;
