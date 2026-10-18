@@ -14,7 +14,8 @@ import { drawHud, drawDigits, digitsWidth } from './ui/hud.js';
 import { hash2 } from './core/math.js';
 import { atlas, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js';
 import { blit } from './art/atlas.js';
-import { lightMask } from './art/lightmask.js';
+import { softMask, glow } from './art/glow.js';
+import { drawWet, drawFog, drawRain, drawVignette } from './art/atmo.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 
 const OUTLINE = '#05060c';
@@ -234,10 +235,7 @@ function drawEnemy(g, ctx, e) {
     ctx.globalAlpha = 1;
     return;
   }
-  const o = {
-    phase: e.tl.phase, t: e.t, walk: e.walk, windup: e.state === 'windup', lunge: e.state === 'lunge',
-    charge: e.charge, look: e.look, shield: e.kind === 'shadow' && !(e.exposed > 0),
-  };
+  const o = enemyOpts(e);
   if (e.kind === 'framer' && isPhased(g, e)) {
     // пропущенный кадр: почти невидим
     if (Math.floor(e.t * 30) % 5 === 0) {
@@ -632,6 +630,8 @@ export function renderWorld(g, ctx) {
     drawn++;
   }
   for (const pk of g.pickups) if (visible(pk.x, pk.y, 16, 8)) drawPickup(ctx, pk, g.time);
+  // мокрый камень: отражения огней и персонажей, всплески
+  drawWet(g, ctx, cx, cy, reflectFigures(g));
 
   // сортировка по глубине, только видимое
   const list = [];
@@ -701,7 +701,10 @@ export function renderWorld(g, ctx) {
   sec('эффекты');
 
   ambientAsh(g, ctx);
+  drawFog(g, ctx, cx, cy);
   drawLighting(g, ctx, cx, cy);
+  drawRain(g, ctx);
+  drawVignette(g, ctx);
   sec('свет');
 
   // поверх света: метки, полоски здоровья, цифры — одинаковы во всех профилях
@@ -769,11 +772,32 @@ export function renderWorld(g, ctx) {
   frameStats.culled = culled;
 }
 
+const heroOpts = (g, p) => ({
+  dir: p.dir, flip: p.flip, t: g.time, walk: p.walk, sway: p.sway, moving: p.moving, aim: p.aim,
+  swing: p.swing ? p.swing.t : null, swingStep: p.swing?.step, glow: inPerfectWindow(p.combo), charges: p.charges.n,
+});
+
+const enemyOpts = (e) => ({
+  phase: e.tl.phase, t: e.t, walk: e.walk, windup: e.state === 'windup', lunge: e.state === 'lunge',
+  charge: e.charge, look: e.look, shield: e.kind === 'shadow' && !(e.exposed > 0),
+});
+
+// Кто отражается в лужах: герой и видимые враги на земле.
+function reflectFigures(g) {
+  if (g.quality.reflect < 2) return null;
+  const out = [];
+  const p = g.player;
+  if (p && !p.dead && !(p.falling > 0)) out.push({ y: p.y, draw: (c) => drawHeroC(c, p.x, p.y, heroOpts(g, p)) });
+  for (const e of g.enemies) {
+    if (e.spawn > 0 || e.dead || e.draw || e.kind === 'echo' || !visible(e.x, e.y, 48)) continue;
+    if (e.kind === 'framer' && isPhased(g, e)) continue;
+    out.push({ y: e.y, draw: (c) => drawEnemyC(c, e.kind, e.x, e.y, enemyOpts(e)) });
+  }
+  return out;
+}
+
 function drawHeroSprite(g, ctx, p) {
-  const o = {
-    dir: p.dir, flip: p.flip, t: g.time, walk: p.walk, sway: p.sway, moving: p.moving, aim: p.aim,
-    swing: p.swing ? p.swing.t : null, swingStep: p.swing?.step, glow: inPerfectWindow(p.combo), charges: p.charges.n,
-  };
+  const o = heroOpts(g, p);
   if (p.falling > 0) {
     const k = p.falling / 0.5;
     ctx.globalAlpha = k > 0.5 ? 1 : 0.5;
@@ -792,10 +816,10 @@ function drawHeroSprite(g, ctx, p) {
     });
     ctx.globalAlpha = 1;
   }
-  // контрсвет: тёплый в острове памяти, холодный стальной в Шраме
+  // контрсвет: тёплый в острове памяти, холодный стальной в Шраме; тонкий — полпикселя мира
   const warm = g.memIslands?.length && inIslands(g.memIslands, p.x, p.y);
   ctx.globalAlpha = 0.85;
-  drawHeroC(ctx, p.x - 1, p.y - 1, o, warm ? P.amber : '#7b88a3');
+  drawHeroC(ctx, p.x - 0.5, p.y - 0.5, o, warm ? P.amber : '#8fa3c8');
   ctx.globalAlpha = 1;
   if (p.doubleOutline > 0) {
     // двойной контур при смене состояния
@@ -824,21 +848,24 @@ function ambientAsh(g, ctx) {
   }
 }
 
-// Свет: тьма в половинном разрешении, ступенчатые маски из кэша, число по профилю.
+// Свет 32-битного кадра: тьма в половинном разрешении с мягкими масками (растягивается
+// сглаженно), затем цветные ореолы огней сложением цветов — тёплые острова в холодной ночи.
+// Число источников — по профилю, лишние гасятся по удалённости от героя.
 function drawLighting(g, ctx, cx, cy) {
   const dark = g.room.def.dark ?? 0.45;
   frameStats.lights = 0;
   if (dark <= 0) return;
   const q = g.quality;
   const lc = lightCtx;
+  const t = g.time;
   lc.globalCompositeOperation = 'source-over';
   lc.clearRect(0, 0, W / 2, H / 2);
-  lc.fillStyle = `rgba(4,5,14,${dark})`;
+  lc.fillStyle = g.room.def.darkColor || `rgba(5,7,20,${Math.min(0.92, dark * 1.12)})`;
   lc.fillRect(0, 0, W / 2, H / 2);
   lc.globalCompositeOperation = 'destination-out';
   const p = g.player;
   const list = [];
-  if (p) list.push({ x: p.x, y: p.y - 8, r: 46, s: 0.85, hero: true });
+  if (p) list.push({ x: p.x, y: p.y - 8, r: 50, s: 0.8, hero: true });
   // остальные — ближайшие к герою, в пределах кадра
   const extra = [];
   for (const l of g.lights) {
@@ -850,25 +877,44 @@ function drawLighting(g, ctx, cx, cy) {
   extra.sort((a, b) => a.d - b.d);
   list.push(...extra.slice(0, q.lights - 1));
   for (const l of list) {
-    const m = lightMask(l.r / 2, q.lightRings, '0,0,0', l.s);
-    const r = (m.width - 1) / 2;
-    lc.drawImage(m, Math.round((l.x - cx) / 2 - r), Math.round((l.y - cy) / 2 - r));
+    const m = softMask(l.r / 2, l.s);
+    const r = m.width / 2;
+    lc.drawImage(m, (l.x - cx) / 2 - r, (l.y - cy) / 2 - r);
   }
   frameStats.lights = list.length;
   lc.globalCompositeOperation = 'source-over';
-  ctx.imageSmoothingEnabled = false;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
   ctx.drawImage(lightCanvas, 0, 0, W, H);
-  // тёплые ореолы прошлого — ступенчатые пятна, без градиентов
-  if (q.lightRings >= 3) {
-    ctx.globalCompositeOperation = 'lighter';
-    for (const l of list) {
-      if (l.c !== 'amber') continue;
-      const m = lightMask(l.r * 0.8, q.lightRings - 1, '110,64,18', 0.3);
-      const r = (m.width - 1) / 2;
-      ctx.drawImage(m, Math.round(l.x - cx - r), Math.round(l.y - cy - r));
-    }
-    ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
+  if (!q.bloom) return;
+  // цветной свет: широкое пятно на земле и яркое ядро у источника (лёгкое мерцание огня)
+  ctx.globalCompositeOperation = 'lighter';
+  for (const l of list) {
+    if (l.hero) continue;
+    const c = l.c === 'cold' ? 'cold' : l.c;
+    const flick = c === 'amber' || c === 'fire' ? 0.9 + 0.1 * Math.sin(t * 11 + l.x) * Math.sin(t * 7.3 + l.y) : 1;
+    ctx.globalAlpha = flick;
+    const wide = glow(Math.round(l.r * 1.1), c, c === 'cold' ? 0.12 : 0.26, 0.75);
+    ctx.drawImage(wide, l.x - cx - wide.width / 2, l.y - cy - wide.height / 2 + 6);
+    const core = glow(Math.max(5, Math.round(l.r * 0.2)), c, 0.8);
+    ctx.drawImage(core, l.x - cx - core.width / 2, l.y - cy - core.height / 2);
   }
+  // излучатели без собственного света: глаза врагов, снаряды
+  for (const e of g.enemies) {
+    if (e.spawn > 0 || e.dead || !visible(e.x, e.y, 60)) continue;
+    const c = e.tl?.phase === PAST ? 'amber' : 'crimson';
+    const gl = glow(10, c, 0.22);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(gl, e.x - cx - 10, e.y - cy - (e.hitY ?? 9) - 16);
+  }
+  for (const pr of g.projectiles) {
+    const c = pr.tl?.phase === PAST ? 'amber' : 'crimson';
+    const gl = glow(12, c, 0.4);
+    ctx.drawImage(gl, pr.x - cx - 12, pr.y - cy - 12);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 // Редкие сбои кадра — мир «проходит через неисправный экран» (не на Low).
