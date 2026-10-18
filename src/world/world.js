@@ -57,8 +57,12 @@ export function collectLights(g) {
   const out = [];
   for (const p of g.props) {
     const r = p.def.light?.[p.tl.phase];
-    if (r) out.push({ x: p.x, y: p.y - 12, r, c: p.tl.phase === PAST ? 'amber' : 'cold', reveal: p.def.reveal?.[p.tl.phase] || 0 });
+    if (!r) continue;
+    const c = p.lightColor || p.def.lightColor?.[p.tl.phase] || (p.tl.phase === PAST ? 'amber' : 'cold');
+    out.push({ x: p.x, y: p.y - (p.def.lightY ?? 12), base: p.y, r, c, reveal: p.def.reveal?.[p.tl.phase] || 0 });
   }
+  // постоянные источники комнаты (зарево провала и т.п.)
+  for (const l of g.room?.def.lights || []) out.push(l);
   for (const pr of g.projectiles) if (pr.light) out.push({ x: pr.x, y: pr.y, r: pr.light, c: 'cold' });
   return out;
 }

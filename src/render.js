@@ -1,7 +1,7 @@
 // Отрисовка комнаты: параллакс, пол, пустоты, объекты, персонажи по глубине, эффекты, свет, HUD.
 // Персонажи и декор выводятся из атласа (src/art/spritecache.js), невидимое отсекается,
 // частицы — из пула, свет — ступенчатые маски. Лимиты — docs/PERFORMANCE_BUDGET.md.
-import { W, H } from './core/renderer.js';
+import { W, H, RS } from './core/renderer.js';
 import { P, PHASE_COLOR } from './art/palette.js';
 import { TILE, T } from './art/tiles.js';
 import { tileAt } from './world/room.js';
@@ -12,9 +12,10 @@ import { isShifted, isFading, PAST, PRESENT, otherPhase, channelProgress } from 
 import { inPerfectWindow } from './combat/combo.js';
 import { drawHud, drawDigits, digitsWidth } from './ui/hud.js';
 import { hash2 } from './core/math.js';
-import { atlas, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js';
+import { atlas, hd, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js';
 import { blit } from './art/atlas.js';
-import { lightMask } from './art/lightmask.js';
+import { softMask, glow } from './art/glow.js';
+import { drawWet, drawFog, drawRain, drawLeaves, drawVignette } from './art/atmo.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 
 const OUTLINE = '#05060c';
@@ -129,11 +130,12 @@ function drawMemoryIslands(g, ctx) {
       by1 = Math.max(by1, y + h);
     }
     ctx.clip();
+    const k = pc.rs || 1;
     bx0 = Math.max(0, bx0);
     by0 = Math.max(0, by0);
-    bx1 = Math.min(pc.width, bx1);
-    by1 = Math.min(pc.height, by1);
-    if (bx1 > bx0 && by1 > by0) ctx.drawImage(pc, bx0, by0, bx1 - bx0, by1 - by0, bx0, by0, bx1 - bx0, by1 - by0);
+    bx1 = Math.min(pc.width / k, bx1);
+    by1 = Math.min(pc.height / k, by1);
+    if (bx1 > bx0 && by1 > by0) ctx.drawImage(pc, bx0 * k, by0 * k, (bx1 - bx0) * k, (by1 - by0) * k, bx0, by0, bx1 - bx0, by1 - by0);
     ctx.restore();
     const s = islandScale(isl.k);
     ring(ctx, isl.x, isl.y, isl.rx * s, isl.k < 1 ? 'rgba(255,210,122,0.9)' : 'rgba(224,160,64,0.45)', isl.ry / isl.rx, 2);
@@ -157,10 +159,12 @@ function propEntry(g, p, phase) {
   // состояние, зависящее от окружения (свет фонаря возвращает прошлое декору)
   const state = c.state ? c.state(p, g) : undefined;
   const key = `p|${p.kind}|${phase}|${frame}|${inst}|${state ?? ''}`;
-  return atlas.sprite(key, c.w, c.h, c.ax, c.ay, (bctx, ax, ay) => {
+  // 32-битный маляр объекта рисует в плотной сетке, кадр пикселизуется
+  const hdDraw = hd.on && p.def.drawHd;
+  return atlas.sprite(hdDraw ? `hd|${key}` : key, c.w, c.h, c.ax, c.ay, (bctx, ax, ay) => {
     const tl = { ...p.tl, phase };
-    p.def.draw(bctx, { ...p, x: ax, y: ay, tl, state }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
-  });
+    (hdDraw || p.def.draw)(bctx, { ...p, x: ax, y: ay, tl, state }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
+  }, hdDraw ? { hd: true, crisp: true } : undefined);
 }
 
 export function drawProp(g, ctx, p) {
@@ -233,10 +237,7 @@ function drawEnemy(g, ctx, e) {
     ctx.globalAlpha = 1;
     return;
   }
-  const o = {
-    phase: e.tl.phase, t: e.t, walk: e.walk, windup: e.state === 'windup', lunge: e.state === 'lunge',
-    charge: e.charge, look: e.look, shield: e.kind === 'shadow' && !(e.exposed > 0),
-  };
+  const o = enemyOpts(e);
   if (e.kind === 'framer' && isPhased(g, e)) {
     // пропущенный кадр: почти невидим
     if (Math.floor(e.t * 30) % 5 === 0) {
@@ -570,8 +571,9 @@ export function renderWorld(g, ctx) {
   if (!room) return;
   ensureLight();
   const shake = g.cam.shakeT > 0 && g.save.settings.screenShake ? g.cam.shakeA : 0;
-  const cx = Math.round(g.cam.x + (Math.random() - 0.5) * shake * 2);
-  const cy = Math.round(g.cam.y + (Math.random() - 0.5) * shake * 2);
+  // камера — с шагом пикселя плотной сетки: движение вдвое плавнее
+  const cx = Math.round((g.cam.x + (Math.random() - 0.5) * shake * 2) * RS) / RS;
+  const cy = Math.round((g.cam.y + (Math.random() - 0.5) * shake * 2) * RS) / RS;
   view = { x0: cx, y0: cy, x1: cx + W, y1: cy + H };
   secT = callProbe();
   let drawn = 0;
@@ -585,11 +587,13 @@ export function renderWorld(g, ctx) {
   ctx.save();
   ctx.translate(-cx, -cy);
   // только видимая часть запечённой комнаты
+  const rc = g.roomCanvas;
+  const rk = rc.rs || 1;
   const sx = Math.max(0, cx);
   const sy = Math.max(0, cy);
-  const sw = Math.min(g.roomCanvas.width - sx, W + (cx < 0 ? cx : 0));
-  const sh = Math.min(g.roomCanvas.height - sy, H + (cy < 0 ? cy : 0));
-  if (sw > 0 && sh > 0) ctx.drawImage(g.roomCanvas, sx, sy, sw, sh, sx, sy, sw, sh);
+  const sw = Math.min(rc.width / rk - sx, W + (cx < 0 ? cx : 0));
+  const sh = Math.min(rc.height / rk - sy, H + (cy < 0 ? cy : 0));
+  if (sw > 0 && sh > 0) ctx.drawImage(rc, sx * rk, sy * rk, sw * rk, sh * rk, sx, sy, sw, sh);
   const x0 = Math.max(0, Math.floor(cx / TILE));
   const y0 = Math.max(0, Math.floor(cy / TILE));
   drawVoidLayer(g, ctx, x0, y0, x0 + Math.ceil(W / TILE) + 1, y0 + Math.ceil(H / TILE) + 1);
@@ -628,6 +632,8 @@ export function renderWorld(g, ctx) {
     drawn++;
   }
   for (const pk of g.pickups) if (visible(pk.x, pk.y, 16, 8)) drawPickup(ctx, pk, g.time);
+  // мокрый камень: отражения огней и персонажей, всплески
+  drawWet(g, ctx, cx, cy, reflectFigures(g));
 
   // сортировка по глубине, только видимое
   const list = [];
@@ -697,7 +703,11 @@ export function renderWorld(g, ctx) {
   sec('эффекты');
 
   ambientAsh(g, ctx);
+  drawFog(g, ctx, cx, cy);
   drawLighting(g, ctx, cx, cy);
+  drawRain(g, ctx);
+  drawLeaves(g, ctx);
+  drawVignette(g, ctx);
   sec('свет');
 
   // поверх света: метки, полоски здоровья, цифры — одинаковы во всех профилях
@@ -765,11 +775,32 @@ export function renderWorld(g, ctx) {
   frameStats.culled = culled;
 }
 
+const heroOpts = (g, p) => ({
+  dir: p.dir, flip: p.flip, t: g.time, walk: p.walk, sway: p.sway, moving: p.moving, aim: p.aim,
+  swing: p.swing ? p.swing.t : null, swingStep: p.swing?.step, glow: inPerfectWindow(p.combo), charges: p.charges.n,
+});
+
+const enemyOpts = (e) => ({
+  phase: e.tl.phase, t: e.t, walk: e.walk, windup: e.state === 'windup', lunge: e.state === 'lunge',
+  charge: e.charge, look: e.look, shield: e.kind === 'shadow' && !(e.exposed > 0),
+});
+
+// Кто отражается в лужах: герой и видимые враги на земле.
+function reflectFigures(g) {
+  if (g.quality.reflect < 2) return null;
+  const out = [];
+  const p = g.player;
+  if (p && !p.dead && !(p.falling > 0)) out.push({ y: p.y, draw: (c) => drawHeroC(c, p.x, p.y, heroOpts(g, p)) });
+  for (const e of g.enemies) {
+    if (e.spawn > 0 || e.dead || e.draw || e.kind === 'echo' || !visible(e.x, e.y, 48)) continue;
+    if (e.kind === 'framer' && isPhased(g, e)) continue;
+    out.push({ y: e.y, draw: (c) => drawEnemyC(c, e.kind, e.x, e.y, enemyOpts(e)) });
+  }
+  return out;
+}
+
 function drawHeroSprite(g, ctx, p) {
-  const o = {
-    dir: p.dir, flip: p.flip, t: g.time, walk: p.walk, sway: p.sway, moving: p.moving, aim: p.aim,
-    swing: p.swing ? p.swing.t : null, swingStep: p.swing?.step, glow: inPerfectWindow(p.combo), charges: p.charges.n,
-  };
+  const o = heroOpts(g, p);
   if (p.falling > 0) {
     const k = p.falling / 0.5;
     ctx.globalAlpha = k > 0.5 ? 1 : 0.5;
@@ -788,10 +819,10 @@ function drawHeroSprite(g, ctx, p) {
     });
     ctx.globalAlpha = 1;
   }
-  // контрсвет: тёплый в острове памяти, холодный стальной в Шраме
+  // контрсвет: тёплый в острове памяти, холодный стальной в Шраме; тонкий — полпикселя мира
   const warm = g.memIslands?.length && inIslands(g.memIslands, p.x, p.y);
   ctx.globalAlpha = 0.85;
-  drawHeroC(ctx, p.x - 1, p.y - 1, o, warm ? P.amber : '#7b88a3');
+  drawHeroC(ctx, p.x - 0.5, p.y - 0.5, o, warm ? P.amber : '#8fa3c8');
   ctx.globalAlpha = 1;
   if (p.doubleOutline > 0) {
     // двойной контур при смене состояния
@@ -820,21 +851,25 @@ function ambientAsh(g, ctx) {
   }
 }
 
-// Свет: тьма в половинном разрешении, ступенчатые маски из кэша, число по профилю.
+// Свет 32-битного кадра: тьма в половинном разрешении с мягкими масками (растягивается
+// сглаженно), затем цветные ореолы огней сложением цветов — тёплые острова в холодной ночи.
+// Число источников — по профилю, лишние гасятся по удалённости от героя.
 function drawLighting(g, ctx, cx, cy) {
   const dark = g.room.def.dark ?? 0.45;
   frameStats.lights = 0;
   if (dark <= 0) return;
   const q = g.quality;
   const lc = lightCtx;
+  const t = g.time;
   lc.globalCompositeOperation = 'source-over';
   lc.clearRect(0, 0, W / 2, H / 2);
-  lc.fillStyle = `rgba(4,5,14,${dark})`;
+  // тьма с холодным лунным оттенком: тёплые огни на её фоне читаются ярче
+  lc.fillStyle = g.room.def.darkColor || `rgba(6,10,30,${Math.min(0.92, dark * 1.12)})`;
   lc.fillRect(0, 0, W / 2, H / 2);
   lc.globalCompositeOperation = 'destination-out';
   const p = g.player;
   const list = [];
-  if (p) list.push({ x: p.x, y: p.y - 8, r: 46, s: 0.85, hero: true });
+  if (p) list.push({ x: p.x, y: p.y - 8, r: 50, s: 0.8, hero: true });
   // остальные — ближайшие к герою, в пределах кадра
   const extra = [];
   for (const l of g.lights) {
@@ -846,25 +881,52 @@ function drawLighting(g, ctx, cx, cy) {
   extra.sort((a, b) => a.d - b.d);
   list.push(...extra.slice(0, q.lights - 1));
   for (const l of list) {
-    const m = lightMask(l.r / 2, q.lightRings, '0,0,0', l.s);
-    const r = (m.width - 1) / 2;
-    lc.drawImage(m, Math.round((l.x - cx) / 2 - r), Math.round((l.y - cy) / 2 - r));
+    // высокий источник (фонарь на столбе) светит на землю под собой: центр — между огнём и основанием
+    const ly = l.base != null ? (l.y + l.base) / 2 + 4 : l.y;
+    const m = softMask((l.r * (l.hero ? 1 : 1.15)) / 2, l.s);
+    const r = m.width / 2;
+    lc.drawImage(m, (l.x - cx) / 2 - r, (ly - cy) / 2 - r);
   }
   frameStats.lights = list.length;
   lc.globalCompositeOperation = 'source-over';
-  ctx.imageSmoothingEnabled = false;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
   ctx.drawImage(lightCanvas, 0, 0, W, H);
-  // тёплые ореолы прошлого — ступенчатые пятна, без градиентов
-  if (q.lightRings >= 3) {
-    ctx.globalCompositeOperation = 'lighter';
-    for (const l of list) {
-      if (l.c !== 'amber') continue;
-      const m = lightMask(l.r * 0.8, q.lightRings - 1, '110,64,18', 0.3);
-      const r = (m.width - 1) / 2;
-      ctx.drawImage(m, Math.round(l.x - cx - r), Math.round(l.y - cy - r));
+  ctx.restore();
+  if (!q.bloom) return;
+  // цветной свет: широкое пятно на земле и яркое ядро у источника (лёгкое мерцание огня)
+  ctx.globalCompositeOperation = 'lighter';
+  for (const l of list) {
+    if (l.hero) continue;
+    const c = l.c === 'cold' ? 'cold' : l.c;
+    const flick = c === 'amber' || c === 'fire' ? 0.9 + 0.1 * Math.sin(t * 11 + l.x) * Math.sin(t * 7.3 + l.y) : 1;
+    ctx.globalAlpha = flick;
+    // пятно на земле (эллипс в перспективе), ореол вокруг огня и яркое ядро
+    const gy = l.base ?? l.y + 6;
+    const wide = glow(Math.round(l.r * 1.2), c, c === 'cold' ? 0.12 : 0.36, 0.55);
+    ctx.drawImage(wide, l.x - cx - wide.width / 2, gy - cy - wide.height / 2);
+    if (l.base != null && l.base - l.y > 16) {
+      const halo = glow(Math.round(l.r * 0.55), c, 0.22);
+      ctx.drawImage(halo, l.x - cx - halo.width / 2, l.y - cy - halo.height / 2);
     }
-    ctx.globalCompositeOperation = 'source-over';
+    const core = glow(Math.max(5, Math.round(l.r * 0.18)), c, 0.85);
+    ctx.drawImage(core, l.x - cx - core.width / 2, l.y - cy - core.height / 2);
   }
+  // излучатели без собственного света: глаза врагов, снаряды
+  for (const e of g.enemies) {
+    if (e.spawn > 0 || e.dead || !visible(e.x, e.y, 60)) continue;
+    const c = e.tl?.phase === PAST ? 'amber' : 'crimson';
+    const gl = glow(6, c, 0.2);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(gl, e.x - cx - 6, e.y - cy - (e.hitY ?? 9) - 12);
+  }
+  for (const pr of g.projectiles) {
+    const c = pr.tl?.phase === PAST ? 'amber' : 'crimson';
+    const gl = glow(12, c, 0.4);
+    ctx.drawImage(gl, pr.x - cx - 12, pr.y - cy - 12);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 // Редкие сбои кадра — мир «проходит через неисправный экран» (не на Low).
@@ -874,5 +936,5 @@ function glitch(g, ctx) {
   const y = Math.floor(Math.random() * H);
   const h = 1 + Math.floor(Math.random() * 4);
   const dx = Math.random() > 0.5 ? 2 : -2;
-  ctx.drawImage(ctx.canvas, 0, y, W, h, dx, y, W, h);
+  ctx.drawImage(ctx.canvas, 0, y * RS, W * RS, h * RS, dx, y, W, h);
 }

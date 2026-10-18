@@ -1,26 +1,40 @@
 import { describe, it, expect } from 'vitest';
-import { frameSize } from '../../src/core/frame.js';
+import { frameSize, RS, LIMITS } from '../../src/core/frame.js';
 import { createShelfPacker, packRect, packerFill } from '../../src/art/packer.js';
 import { createParticlePool, spawnParticle, updateParticles, resizePool } from '../../src/world/particles.js';
 import { PROFILES, detectProfile, resolveProfile, createAutoTuner, tuneStep } from '../../src/core/quality.js';
 
-describe('Подбор кадра: только целый масштаб', () => {
+describe('Подбор кадра: 32-битная сетка', () => {
   const cases = [
-    [1920, 1080], [2532, 1170], [2340, 1080], [1334, 750], [1152, 648], [2560, 1440], [844, 390],
+    [1920, 1080], [2532, 1170], [2340, 1080], [1334, 750], [1152, 648], [2560, 1440], [844, 390], [1366, 768], [1280, 720], [3840, 2160],
   ];
   it.each(cases)('%i×%i', (w, h) => {
     const f = frameSize(w, h);
-    expect(Number.isInteger(f.scale)).toBe(true);
-    expect(f.h).toBeGreaterThanOrEqual(180);
-    expect(f.h).toBeLessThanOrEqual(248);
-    expect(f.w).toBeGreaterThanOrEqual(320);
-    expect(f.w).toBeLessThanOrEqual(448);
-    expect(f.w * f.scale).toBeLessThanOrEqual(Math.max(w, 320 * f.scale));
-    expect(f.h * f.scale).toBeLessThanOrEqual(h);
+    expect(f.rs).toBe(RS);
+    expect(f.h).toBeGreaterThanOrEqual(LIMITS.minH);
+    expect(f.h).toBeLessThanOrEqual(LIMITS.maxH);
+    expect(f.w).toBeGreaterThanOrEqual(LIMITS.minW);
+    expect(f.w).toBeLessThanOrEqual(LIMITS.maxW);
     expect(f.w % 2).toBe(0);
+    expect(f.h % 2).toBe(0);
+    // кадр помещается на экран и почти не оставляет полей
+    const cw = f.w * f.rs * f.scale;
+    const ch = f.h * f.rs * f.scale;
+    expect(cw).toBeLessThanOrEqual(w + 0.01);
+    expect(ch).toBeLessThanOrEqual(h + 0.01);
+    expect((cw * ch) / (w * h)).toBeGreaterThan(0.85);
+    if (f.exact) expect(Number.isInteger(f.scale)).toBe(true);
   });
-  it('1080p даёт ×5 при высоте 216', () => {
-    expect(frameSize(1920, 1080)).toMatchObject({ scale: 5, h: 216 });
+  it('1080p — целый ×2 при кадре 480×270', () => {
+    expect(frameSize(1920, 1080)).toMatchObject({ scale: 2, w: 480, h: 270, exact: true });
+  });
+  it('телефон 844×390 @3 заполняется целым ×3', () => {
+    expect(frameSize(2532, 1170)).toMatchObject({ scale: 3, w: 422, exact: true });
+  });
+  it('неудобный размер — дробный масштаб без полей', () => {
+    const f = frameSize(1152, 648);
+    expect(f.exact).toBe(false);
+    expect(1152 - f.w * f.rs * f.scale).toBeLessThan(4);
   });
 });
 
@@ -82,5 +96,39 @@ describe('Профили качества', () => {
     expect(tuneStep(t, 'medium', 20, 1 / 60)).toBeNull();
     const t2 = createAutoTuner();
     for (let i = 0; i < 400; i++) expect(tuneStep(t2, 'low', 30, 1 / 60)).toBeNull();
+  });
+});
+
+describe('Scale2x', () => {
+  it('скругляет диагональ и не вносит новых цветов', async () => {
+    const { scale2xWords } = await import('../../src/art/upscale.js');
+    // 3×3: диагональ из «1» на фоне «0»
+    const src = new Uint32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+    const dst = new Uint32Array(36);
+    scale2xWords(src, 3, 3, dst);
+    expect(new Set(dst)).toEqual(new Set([0, 1]));
+    // ровная заливка остаётся ровной
+    const flat = scale2xWords(new Uint32Array(9).fill(7), 3, 3, new Uint32Array(36));
+    expect(flat.every((v) => v === 7)).toBe(true);
+    // ступенька диагонали заполняется с обеих сторон — линия становится сплошной
+    expect(dst[2 * 6 + 1]).toBe(1);
+    expect(dst[1 * 6 + 2]).toBe(1);
+  });
+});
+
+describe('Пикселизация HD-кадров', () => {
+  it('убирает полутона края и сводит цвет к 15 битам', async () => {
+    const { crispenData } = await import('../../src/art/hd.js');
+    const d = new Uint8ClampedArray([
+      200, 100, 50, 255, // непрозрачный
+      10, 20, 30, 60, // полупрозрачный край — исчезает
+      13, 77, 141, 200, // почти непрозрачный — становится сплошным
+      0, 0, 0, 0,
+    ]);
+    crispenData(d, 4, 1);
+    expect(d[3]).toBe(255);
+    expect(d[7]).toBe(0);
+    expect(d[11]).toBe(255);
+    for (const i of [0, 1, 2, 8, 9, 10]) expect(d[i] % 8).toBe(0);
   });
 });

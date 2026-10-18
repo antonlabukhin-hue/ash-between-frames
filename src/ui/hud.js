@@ -3,7 +3,7 @@ import { P, RAMP } from '../art/palette.js';
 import { px, disc, ring } from '../art/sprites.js';
 import { regenProgress } from '../timeline/charges.js';
 import { FRAGMENTS } from '../items/fragments.js';
-import { W, H } from '../core/renderer.js';
+import { W, H, RS } from '../core/renderer.js';
 import { atlas } from '../art/spritecache.js';
 import { blit } from '../art/atlas.js';
 import { ABILITIES, isUnlocked, cooldownLeft } from '../player/abilities.js';
@@ -69,19 +69,21 @@ export function drawHud(g, ctx) {
   const p = g.player;
   if (!p) return;
   const key = hudKey(g);
-  if (!layer || layer.width !== W) {
+  if (!layer || layer.width !== W * RS) {
     layer = document.createElement('canvas');
-    layer.width = W;
-    layer.height = HUD_H;
+    layer.width = W * RS;
+    layer.height = HUD_H * RS;
     layerKey = '';
   }
   if (key !== layerKey) {
     layerKey = key;
     const lc = layer.getContext('2d');
+    lc.setTransform(RS, 0, 0, RS, 0, 0);
+    lc.imageSmoothingEnabled = false;
     lc.clearRect(0, 0, W, HUD_H);
     paintHud(g, lc);
   }
-  ctx.drawImage(layer, 0, 0);
+  ctx.drawImage(layer, 0, 0, W, HUD_H);
   drawBossBar(g, ctx);
 }
 

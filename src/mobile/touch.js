@@ -20,11 +20,19 @@ export function createTouch(root, input, renderer) {
   const knob = stick.firstChild;
   root.append(zone, stick);
 
-  const mk = (cls, label, action) => {
+  // name — подпись для экранного диктора, label — значок на кнопке
+  const mk = (cls, label, action, name) => {
     const b = document.createElement('button');
     b.className = `tbtn ${cls}`;
-    b.textContent = label;
+    b.type = 'button';
     b.dataset.action = action;
+    b.setAttribute('aria-label', name);
+    b.title = name;
+    const icon = document.createElement('span');
+    icon.className = 'ticon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = label;
+    b.appendChild(icon);
     root.appendChild(b);
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -43,14 +51,14 @@ export function createTouch(root, input, renderer) {
     return b;
   };
   const btn = {
-    attack: mk('attack', '⚔', 'attack'),
-    dodge: mk('dodge', '↷', 'dodge'),
-    shift: mk('shift', '⧗', 'shift'),
-    rift: mk('rift', '✦', 'rift'),
-    interact: mk('interact', '✋', 'interact'),
-    ab1: mk('ab ab1', '1', 'ab1'),
-    ab2: mk('ab ab2', '2', 'ab2'),
-    ab3: mk('ab ab3', '3', 'ab3'),
+    attack: mk('attack', '⚔', 'attack', 'Удар'),
+    dodge: mk('dodge', '↷', 'dodge', 'Уклонение'),
+    shift: mk('shift', '⧗', 'shift', 'Сдвиг: в прошлое'),
+    rift: mk('rift', '✦', 'rift', 'Разлом'),
+    interact: mk('interact', '✋', 'interact', 'Взаимодействие'),
+    ab1: mk('ab ab1', '1', 'ab1', 'Способность 1'),
+    ab2: mk('ab ab2', '2', 'ab2', 'Способность 2'),
+    ab3: mk('ab ab3', '3', 'ab3', 'Способность 3'),
   };
 
   let stickId = null;

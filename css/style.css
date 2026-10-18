@@ -501,3 +501,79 @@ select {
   animation-delay: 1.5s;
   opacity: 0.9;
 }
+
+/* ================================================================
+   32-битный кадр на телефоне: безопасные зоны, сенсорные кнопки
+   в пиксельной оправе (восьмиугольник, янтарь — удар, бирюза —
+   сдвиг), минимальная зона касания на низких экранах.
+   ================================================================ */
+body {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+#stage { flex: 0 0 auto; isolation: isolate; }
+
+#touch .tbtn {
+  --sz: calc(var(--ui-scale, 1) * var(--bs, 1));
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
+  background: rgba(5, 8, 17, 0.8);
+  box-shadow: inset 0 0 0 2px rgba(48, 55, 82, 0.96), inset 0 0 0 3px rgba(5, 6, 12, 0.75);
+  color: var(--milk);
+  text-shadow: 2px 2px 0 var(--void);
+  transition: transform 70ms steps(2), background-color 120ms steps(2), box-shadow 120ms steps(2);
+}
+#touch .tbtn.down {
+  transform: translateY(2px);
+  background: rgba(224, 160, 64, 0.44);
+  box-shadow: inset 0 0 0 2px var(--amber-hi), inset 0 0 0 4px rgba(224, 160, 64, 0.18);
+}
+#touch .tbtn.attack {
+  width: calc(86px * var(--sz)); height: calc(86px * var(--sz));
+  font-size: calc(26px * var(--sz));
+  color: var(--amber-hi);
+  box-shadow: inset 0 0 0 2px var(--amber), inset 0 0 0 4px rgba(224, 160, 64, 0.16);
+}
+#touch .tbtn.dodge { width: calc(60px * var(--sz)); height: calc(60px * var(--sz)); right: calc(5% + 94px * var(--sz)); font-size: calc(20px * var(--sz)); color: #b9c2d0; }
+#touch .tbtn.shift {
+  width: calc(64px * var(--sz)); height: calc(64px * var(--sz));
+  right: calc(5% + 8px * var(--sz)); bottom: calc(10% + 96px * var(--sz));
+  font-size: calc(26px * var(--sz));
+  color: var(--teal);
+  box-shadow: inset 0 0 0 2px var(--teal), inset 0 0 0 4px rgba(58, 208, 192, 0.14);
+}
+#touch .tbtn.rift { width: calc(52px * var(--sz)); height: calc(52px * var(--sz)); right: calc(5% + 88px * var(--sz)); bottom: calc(6% + 76px * var(--sz)); font-size: calc(19px * var(--sz)); color: var(--ash-hi); }
+#touch .tbtn.rift.ready {
+  color: var(--milk);
+  box-shadow: inset 0 0 0 2px var(--milk), inset 0 0 0 4px rgba(236, 228, 207, 0.16);
+  animation: rift-ready 1.2s steps(2) infinite;
+}
+@keyframes rift-ready {
+  50% { box-shadow: inset 0 0 0 2px var(--milk), inset 0 0 0 4px rgba(236, 228, 207, 0.36); }
+}
+#touch .tbtn.interact {
+  width: calc(56px * var(--sz)); height: calc(56px * var(--sz));
+  right: calc(5% + 166px * var(--sz)); bottom: calc(6% + 42px * var(--sz));
+  font-size: calc(17px * var(--sz));
+  color: var(--amber-hi);
+  box-shadow: inset 0 0 0 2px var(--amber), inset 0 0 0 4px rgba(224, 160, 64, 0.14);
+}
+#touch .tbtn.ab { box-shadow: inset 0 0 0 2px rgba(58, 208, 192, 0.7); }
+#touch .ticon { display: block; transform: translateY(-1px); pointer-events: none; line-height: 1; }
+#touch .tbtn.down .ticon { transform: translateY(1px); }
+
+#touch .stick {
+  box-shadow: inset 0 0 0 3px rgba(58, 208, 192, 0.12);
+}
+#touch .stick .knob { background: var(--amber); box-shadow: 0 0 0 2px rgba(5, 6, 12, 0.82); }
+
+/* низкий альбомный экран: кнопки чуть меньше, но зона касания не меньше 54 px */
+@media (max-height: 420px) and (orientation: landscape) {
+  #touch .tbtn.attack { width: max(72px, calc(80px * var(--sz))); height: max(72px, calc(80px * var(--sz))); }
+  #touch .tbtn.dodge, #touch .tbtn.shift { width: max(54px, calc(58px * var(--sz))); height: max(54px, calc(58px * var(--sz))); }
+}
+.prompt { max-width: 62%; }
+
+/* в портретной ориентации сцена не сжимается — показываем просьбу повернуть */
+body.portrait #stage { visibility: hidden; }

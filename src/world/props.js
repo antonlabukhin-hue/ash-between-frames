@@ -5,6 +5,7 @@ import { P } from '../art/palette.js';
 import { px, line, disc, ring, drawBrassBoy, drawGhost, shadow } from '../art/sprites.js';
 import { createTimeline, PAST, PRESENT } from '../timeline/timeline.js';
 import { hash2 } from '../core/math.js';
+import { drawLampHd, drawBannerHd, drawTreeHd, drawDeadTreeHd, drawGraveHd, drawGateTowerHd } from '../art/road32.js';
 
 // flat — рисуется под персонажами; rect — x,y,w,h в пикселях (левый верх).
 // Иначе x,y — точка основания, foot — {w,h} твёрдого основания.
@@ -55,6 +56,8 @@ export const PROP_KINDS = {
     foot: { w: 12, h: 6 },
     solid: { past: true, present: true },
     light: { past: 80, present: 0 },
+    lightColor: { past: 'fire', present: 'cold' },
+    lightY: 8,
     draw: drawCampfire,
   },
   statue: {
@@ -68,14 +71,26 @@ export const PROP_KINDS = {
   chest: { name: 'Сундук', foot: { w: 14, h: 6 }, solid: { past: true, present: true }, draw: drawChest },
   gate: { name: 'Ворота', flat: false, draw: drawGate },
   pillar: { foot: { w: 14, h: 8 }, solid: { past: true, present: true }, draw: drawPillar },
-  tree: { foot: { w: 6, h: 4 }, solid: { past: true, present: true }, draw: drawTree },
-  deadTree: { foot: { w: 6, h: 4 }, solid: { past: true, present: true }, draw: drawDeadTree },
-  banner: { foot: { w: 4, h: 3 }, solid: { past: true, present: true }, draw: drawBanner },
-  grave: { foot: { w: 10, h: 4 }, solid: { past: true, present: true }, draw: drawGrave },
+  tree: { foot: { w: 6, h: 4 }, solid: { past: true, present: true }, draw: drawTree, drawHd: drawTreeHd },
+  deadTree: { foot: { w: 6, h: 4 }, solid: { past: true, present: true }, draw: drawDeadTree, drawHd: drawDeadTreeHd },
+  banner: { foot: { w: 4, h: 3 }, solid: { past: true, present: true }, draw: drawBanner, drawHd: drawBannerHd },
+  grave: { foot: { w: 10, h: 4 }, solid: { past: true, present: true }, draw: drawGrave, drawHd: drawGraveHd },
+  // кованый фонарь у дороги (32-битный кадр); erased — в стёртой части, свет малиновый
+  roadLamp: {
+    foot: { w: 4, h: 3 },
+    solid: { past: true, present: true },
+    light: { past: 72, present: 64 },
+    lightColor: { past: 'amber', present: 'amber' },
+    lightY: 34,
+    draw: drawLampHd,
+    drawHd: drawLampHd,
+  },
+  // башня ворот: кладка, бойница с огнём, багровое знамя; между башнями — колокол
+  gateTower: { foot: { w: 18, h: 8 }, solid: { past: true, present: true }, light: { past: 34, present: 34 }, lightY: 60, draw: drawGateTowerHd, drawHd: drawGateTowerHd },
   rubble: { draw: drawRubble },
-  candles: { draw: drawCandles, light: { past: 26, present: 26 } },
+  candles: { draw: drawCandles, light: { past: 26, present: 26 }, lightColor: { past: 'fire', present: 'fire' }, lightY: 6 },
   glyph: { name: 'Знак арены', flat: true, draw: drawGlyph },
-  stove: { foot: { w: 26, h: 8 }, solid: { past: true, present: true }, light: { past: 60, present: 60 }, draw: drawStove },
+  stove: { foot: { w: 26, h: 8 }, solid: { past: true, present: true }, light: { past: 60, present: 60 }, lightColor: { past: 'fire', present: 'fire' }, draw: drawStove },
   table: { foot: { w: 30, h: 8 }, solid: { past: true, present: true }, draw: drawTable },
   window: { draw: drawWindowProp },
   portraits: { draw: drawPortraits },
@@ -497,10 +512,12 @@ const CACHE = {
   statue: C(26, 46, 13, 44, 2, 4),
   chest: C(20, 18, 10, 16, 0, 1, (p) => `${p.open}`),
   pillar: C(22, 64, 11, 56, 0, 1, (p) => `${p.tall ?? 40}|${p.broken ? 1 : 0}`),
-  tree: C(36, 50, 18, 46, 2, 4, (p) => p.id),
+  tree: C(48, 62, 24, 58, 2, 4, (p) => p.id),
   deadTree: C(30, 38, 15, 35),
   banner: C(18, 46, 3, 44, 6, 6),
   grave: C(14, 20, 7, 18),
+  roadLamp: C(14, 46, 7, 44, 6, 3, (p) => (p.erased ? 'e' : '')),
+  gateTower: C(26, 96, 13, 92, 4, 4),
   rubble: C(20, 10, 10, 8),
   candles: C(14, 12, 7, 10, 8, 2),
   stove: C(32, 44, 16, 42, 7, 6),
