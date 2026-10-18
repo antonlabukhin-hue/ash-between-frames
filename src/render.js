@@ -19,6 +19,7 @@ import { drawWet, drawFog, drawRain, drawLeaves, drawVignette } from './art/atmo
 import { drawArtOver } from './art/roomart.js';
 import { heatCost } from './timeline/heat.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
+import { threadList, chainOf } from './timeline/threads.js';
 
 const OUTLINE = '#05060c';
 let lightCanvas = null;
@@ -545,6 +546,48 @@ function paintSlash(ctx, x, y, angle, span, radius, c) {
   }
 }
 
+// ── нити причин (П3) ─────────────────────────────────────────────────────
+// Пока герой целится сдвигом, видна цепочка цели: тонкая янтарная нить с провисом; натянутая
+// (причина работает) — яркая, с бегущими бусинами. Без прицела — только натянутые, бледно.
+const threadAnchor = (o) => (o.def.flat ? propCenter(o) : [o.x, o.y - (o.def.threadY ?? 12)]);
+function drawThreads(g, ctx, p) {
+  const all = threadList(g.props);
+  if (!all.length) return;
+  const target = (p.channel?.target || p.shiftTarget)?.obj;
+  const key = (t) => `${t.from.id}>${t.to.id}`;
+  const chain = target ? new Set(chainOf(g.props, target).map(key)) : null;
+  for (const t of all) {
+    if (t.from.hidden || t.to.hidden) continue;
+    const hot = chain?.has(key(t));
+    if (!hot && !t.on) continue;
+    const [x0, y0] = threadAnchor(t.from);
+    const [x1, y1] = threadAnchor(t.to);
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const sag = Math.min(18, len * 0.12);
+    const n = Math.max(6, Math.floor(len / 3));
+    const a = hot ? (t.on ? 0.95 : 0.8) : 0.3;
+    const col = t.on ? P.amberHi : hot ? '#e0a040' : '#b8721f';
+    ctx.globalAlpha = a;
+    for (let i = 0; i <= n; i++) {
+      if (!t.on && i % 2) continue; // ослабленная нить — пунктиром
+      const k = i / n;
+      const x = x0 + (x1 - x0) * k;
+      const y = y0 + (y1 - y0) * k + Math.sin(k * Math.PI) * sag;
+      px(ctx, Math.round(x), Math.round(y), 1, 1, col);
+    }
+    if (t.on) {
+      // бусины бегут от причины к следствию
+      for (let b = 0; b < Math.max(1, Math.floor(len / 40)); b++) {
+        const k = ((g.time * 40) / len + b / Math.max(1, Math.floor(len / 40))) % 1;
+        const x = x0 + (x1 - x0) * k;
+        const y = y0 + (y1 - y0) * k + Math.sin(k * Math.PI) * sag;
+        px(ctx, Math.round(x) - 1, Math.round(y) - 1, 2, 2, P.milk);
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 // ── подсветка выбранного (Diablo-подход) ───────────────────────────────
 // Контур силуэта в 4 стороны на полпикселя мира и сам кадр поверх света — объект
 // «загорается». Цвет: тёплый молочный — взаимодействие, янтарь/малиновый — во что
@@ -1041,6 +1084,7 @@ export function renderWorld(g, ctx) {
   const p = g.player;
   // как в Diablo: на земле под объектом маркеров нет — светится сам объект,
   // а имя и действие пишутся табличкой над ним (HTML-слой, src/ui/overlay.js)
+  if (p && !p.dead && !g.cinematic) drawThreads(g, ctx, p);
   if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
   g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
   // реплики призраков в сценах прошлого

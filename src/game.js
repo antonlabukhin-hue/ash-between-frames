@@ -7,6 +7,7 @@ import { updateProjectiles } from './combat/projectiles.js';
 import { createProp, propFoot, propCenter } from './world/props.js';
 import { collectLights, isPit, isWall, solidPropAt } from './world/world.js';
 import { updateIslands, inIslands, auraSources, carryPos, dropPos } from './world/memory.js';
+import { link, resolveThreads, chainOf } from './timeline/threads.js';
 import { updateFx, burst, addText, ringFx } from './world/fx.js';
 import { tickTimeline, isShifted, PAST } from './timeline/timeline.js';
 import { writeSave, freshSave } from './save/save.js';
@@ -144,6 +145,9 @@ export function createGame({ input, audio, ui, storage, save }) {
     g.props.push(p);
     return p;
   };
+
+  // нить причины: cause → effect (docs/TIME_DESIGN.md, П3)
+  g.link = (cause, effect, o) => link(cause, effect, o);
 
   // ── переносной свет (П2) ──────────────────────────────────────────
   g.pickUp = (o) => {
@@ -519,6 +523,13 @@ export function createGame({ input, audio, ui, storage, save }) {
       }
       pr.update?.(g, pr, dt);
     }
+    // нити причин: следствия идут за причинами каскадом
+    for (const pr of resolveThreads(g.props)) {
+      const [ex, ey] = propCenter(pr);
+      burst(g, ex, ey - 4, pr.tl.phase === PAST ? [P.amberHi, P.milk] : [P.crimson, P.ink], 8, 34);
+      audio.sfx.shift(pr.tl.phase);
+      pr.onShift?.(g, pr, pr.tl.phase);
+    }
     if (g.props.some((pr) => pr.removed)) g.props = g.props.filter((pr) => !pr.removed);
   }
 
@@ -627,6 +638,12 @@ export function createGame({ input, audio, ui, storage, save }) {
     updateFx(g, dt);
     updateScenes(dt);
     g.lights = collectLights(g);
+    // первая встреча с нитью причин — подсказка
+    const st = p?.shiftTarget?.obj;
+    if (st && !save.flags.threadHinted && !g.cinematic && chainOf(g.props, st).length) {
+      save.flags.threadHinted = true;
+      g.hint('Янтарная нить — причина и следствие. Сдвигай причину: следствие пойдёт за ней.', 6);
+    }
     // интерактив
     const found = !g.cinematic && p && !p.dead ? findInteract() : { target: null, near: null };
     g.interactTarget = found.target;

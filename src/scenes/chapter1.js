@@ -389,6 +389,22 @@ export const camp = {
     fire.onShift = (gg, f, phase) => {
       if (phase === PAST) g.flags.fireLit = true;
     };
+    // нить причин (П3): котёл кипит, только если горит костёр; пар поднимает заслонку погреба
+    const kettle = g.addProp('kettle', fire.x + 24, fire.y + 2);
+    const hatch = g.addProp('hatch', 26, TOP(9) + 4, { w: 20, h: 14, prompt: 'Спуститься в погреб' });
+    g.link(kettle, hatch, { need: [fire] });
+    kettle.update = (gg, k) => {
+      k.tl.switchable = !!g.flags.camp; // до сцены у костра — не отвлекать от обучения
+      k.boil = k.tl.phase === PAST && fire.tl.phase === PAST;
+    };
+    hatch.canInteract = () => hatch.tl.phase === PAST && !g.flags.cellarLooted;
+    hatch.onInteract = async () => {
+      g.flags.cellarLooted = true;
+      for (let i = 0; i < 5; i++) g.spawnPickup('ash', hatch.x + 10, hatch.y + 8);
+      g.spawnPickup('shard', hatch.x + 10, hatch.y + 10);
+      await g.say([NOTE('В погребе — свечи, мешок золы и записка: «Арно, суп в котле. Не жди меня — грейся. С.»')]);
+      g.persist();
+    };
   },
   async script(g) {
     const { arno, sena, fire } = g.campNpc;
