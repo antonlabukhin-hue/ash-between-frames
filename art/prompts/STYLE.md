@@ -17,10 +17,15 @@ ART STYLE
 - Hand-placed pixel clusters, deliberate dithering in gradients, 1-pixel highlights on edges.
 - Dark melancholic gothic fantasy. Mood: a world that is forgetting itself.
 
-CAMERA
+CAMERA — ONE PROJECTION FOR THE WHOLE IMAGE
 - Top-down 3/4 orthographic view, like a classic action-RPG map (Diablo-like but straight-on):
   seen from above at a steep angle, vertical walls slightly visible, NO perspective,
   NO vanishing point, NO converging lines, constant scale from top to bottom of the image.
+- There is NO HORIZON in this view. The ground never recedes into the distance. The map ends at
+  its top edge with a VERTICAL obstacle seen from the front: a city wall, a cliff, a building
+  facade or a gate. Only a thin strip of sky may show ABOVE that wall's battlements.
+- Never continue a road or ground "beyond" the top wall into a perspective landscape — that mixes
+  two projections and makes the road look like it climbs up a vertical ladder.
 
 LIGHT
 - Night. Cold blue-black ambient light, soft moonlight from the TOP-LEFT.

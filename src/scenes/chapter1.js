@@ -99,7 +99,7 @@ export const road = {
   paintHd: paintRoadHd,
   drawParallax: drawRoadParallax,
   drawOver: drawRoadOver,
-  skyRows: 6,
+  skyRows: 2, // узкая полоса неба над зубцами стены; ряды 2–5 — фасад стены с аркой
   lights: [
     { x: T(4), y: TOP(20), r: 60, c: 'crimson' },
     { x: T(14), y: TOP(20), r: 64, c: 'crimson' },
