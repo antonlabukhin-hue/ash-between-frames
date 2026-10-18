@@ -308,6 +308,9 @@ async function quitToTitle() {
 
 game.onDeath = () => {
   ui.closeAll();
+  // отпустить всё зажатое (стик, удар), спрятать сенсорные кнопки до появления меню
+  input.clear();
+  touch.update(game, false);
   ui.menu({
     title: 'Тебя стёрло',
     extra: note('Сюжет помнит тебя — ты вернёшься к началу комнаты. Временные фрагменты рассыпались.'),

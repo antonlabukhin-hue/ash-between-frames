@@ -240,11 +240,20 @@ export function createUI(root, { audio }) {
     menuItems = items.map((it) => {
       const b = el('button', 'btn', panel, `${esc(it.text)}${it.sub ? `<span class="sub">${esc(it.sub)}</span>` : ''}`);
       b.disabled = !!it.disabled;
-      b.addEventListener('click', () => {
-        if (b.disabled) return;
+      b.type = 'button';
+      // срабатывание один раз: и по click, и по отпусканию пальца (некоторые мобильные
+      // браузеры не присылают click, если перед этим палец держал игровую кнопку)
+      let fired = 0;
+      const activate = () => {
+        if (b.disabled || !b.isConnected || performance.now() - fired < 500) return;
+        fired = performance.now();
         audio.unlock();
         audio.sfx.uiOk();
         it.on();
+      };
+      b.addEventListener('click', activate);
+      b.addEventListener('pointerup', (e) => {
+        if (e.pointerType !== 'mouse') activate();
       });
       b.addEventListener('pointerenter', () => {
         menuFocus = menuItems.indexOf(b);
