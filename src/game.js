@@ -235,7 +235,9 @@ export function createGame({ input, audio, ui, storage, save }) {
       } else if (ev.type === 'shift') {
         const t = ev.target;
         if (t.obj && !t.obj.dead && !t.obj.removed && t.obj.tl?.switchable) {
-          applyShift(g, t, { free: true, byShade: true });
+          // тень не отменяет сдвиг: уже сдвинутое она продлевает, иначе — сдвигает сама
+          if (isShifted(t.obj.tl)) t.obj.tl.left = Math.max(t.obj.tl.left, t.obj.tl.hold);
+          else applyShift(g, t, { free: true, byShade: true });
           ringFx(g, sh.x, sh.y - 10, 2, 18, P.teal, 0.3);
         }
       }
