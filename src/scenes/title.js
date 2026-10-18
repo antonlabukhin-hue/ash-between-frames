@@ -1,8 +1,12 @@
 // Титульная сцена: слева — янтарное прошлое, в центре — луна и колокольня на нитях,
 // справа — малиновое Стирание, рассыпающееся на пиксели. Рен смотрит на это со спины.
-import { W, H } from '../core/renderer.js';
+import { W, H, RS } from '../core/renderer.js';
+import { upscaleCanvas } from '../art/upscale.js';
+import { drawHero32 } from '../art/hero32.js';
+import { crispen } from '../art/hd.js';
+import { glow, vignette, fogTexture, FOG_W, FOG_H } from '../art/glow.js';
 import { P } from '../art/palette.js';
-import { drawHero, px, line, ring } from '../art/sprites.js';
+import { px, line, ring } from '../art/sprites.js';
 import { mulberry32, hash2, clamp } from '../core/math.js';
 
 let bg = null;
@@ -280,6 +284,36 @@ function buildBackground() {
   leftCastle(ctx, rnd);
   rightRuins(ctx, rnd);
   foreground(ctx, rnd);
+  // 32-битная сетка: фон удваивается Scale2x (ровные наклоны вместо лесенок)
+  const lw = bg.width;
+  const lh = bg.height;
+  bg = upscaleCanvas(bg, RS);
+  bg.lw = lw;
+  bg.lh = lh;
+}
+
+// Атмосфера титула: ореол луны, тёплое и малиновое зарево половин, туман у земли.
+function titleLight(ctx, t) {
+  const ox = OX();
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = glow(70, 'moon', 0.32);
+  ctx.drawImage(halo, ox + 196 - 70, 46 - 70);
+  const warm = glow(150, 'amber', 0.2 + Math.sin(t * 1.3) * 0.02, 0.7);
+  ctx.drawImage(warm, ox + 40 - 150, 130 - warm.height / 2);
+  const red = glow(130, 'crimson', 0.2 + Math.sin(t * 2.1) * 0.03, 0.7);
+  ctx.drawImage(red, ox + 340 - 130, 120 - red.height / 2);
+  const bell = glow(22, 'amber', 0.5 + Math.sin(t * 3) * 0.08);
+  ctx.drawImage(bell, ox + 192 - 22, 88 - 22);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.imageSmoothingEnabled = true;
+  const fog = fogTexture('cold', 3);
+  ctx.globalAlpha = 0.55;
+  const fx = -((t * 6) % FOG_W);
+  for (let x = fx; x < W; x += FOG_W) ctx.drawImage(fog, x, H - FOG_H + 10, FOG_W, FOG_H);
+  ctx.globalAlpha = 1;
+  ctx.drawImage(vignette(W, H, 0.5), 0, 0, W, H);
+  ctx.restore();
 }
 
 // Знамёна и герой рисуются поверх, с анимацией.
@@ -297,8 +331,8 @@ function banner(ctx, x, y, t) {
 
 let heroBuf = null;
 export function drawTitle(ctx, t) {
-  if (!bg || bg.width !== W || bg.height !== H) buildBackground();
-  ctx.drawImage(bg, 0, 0);
+  if (!bg || bg.lw !== W || bg.lh !== H) buildBackground();
+  ctx.drawImage(bg, 0, 0, W, H);
   ctx.save();
   ctx.translate(OX(), 0);
   floatingIslands(ctx, t);
@@ -314,18 +348,27 @@ export function drawTitle(ctx, t) {
   }
   banner(ctx, 90, 168, t);
   banner(ctx, 126, 170, t + 1);
-  // Рен со спины, вдвое крупнее
+  // Рен со спины, вдвое крупнее — 32-битный кадр в учетверённой сетке (1:1 с холстом)
+  const D = 2 * RS;
   if (!heroBuf) {
     heroBuf = document.createElement('canvas');
-    heroBuf.width = 40;
-    heroBuf.height = 40;
+    heroBuf.width = 40 * D;
+    heroBuf.height = 40 * D;
   }
-  const hc = heroBuf.getContext('2d');
-  hc.clearRect(0, 0, 40, 40);
-  drawHero(hc, 20, 36, { dir: 'up', t, sway: Math.sin(t * 1.2) * 2.5, charges: 3, moving: false, aim: Math.PI / 2 + 0.6 });
+  const hc = heroBuf.getContext('2d', { willReadFrequently: true });
+  hc.setTransform(1, 0, 0, 1, 0, 0);
+  hc.clearRect(0, 0, heroBuf.width, heroBuf.height);
+  hc.setTransform(D, 0, 0, D, 0, 0);
+  drawHero32(hc, 20, 36, { dir: 'up', t, sway: Math.sin(t * 1.2) * 2.5, charges: 3, moving: false, aim: Math.PI / 2 + 0.6 });
+  crispen(hc, heroBuf.width, heroBuf.height);
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(heroBuf, 0, 0, 40, 40, 192 - 40, 132, 80, 80);
+  ctx.fillStyle = 'rgba(3,4,10,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(192, 205, 16, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.drawImage(heroBuf, 0, 0, heroBuf.width, heroBuf.height, 192 - 40, 132, 80, 80);
   ctx.restore();
+  titleLight(ctx, t);
   // пепел
   for (let i = 0; i < 40; i++) {
     const r = hash2(i, 1, 4);

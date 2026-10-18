@@ -56,6 +56,8 @@ export const PROP_KINDS = {
     foot: { w: 12, h: 6 },
     solid: { past: true, present: true },
     light: { past: 80, present: 0 },
+    lightColor: { past: 'fire', present: 'cold' },
+    lightY: 8,
     draw: drawCampfire,
   },
   statue: {
