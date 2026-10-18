@@ -174,7 +174,7 @@ export const road = {
     g.hint(`${key(g, 'move')} — идти по дороге`, 5);
     await g.waitUntil(() => p.x > T(6));
     if (!g.flags.signRead) {
-      g.hint(`Подойди к янтарному значку у указателя — ${key(g, 'interact')} осмотреть`, 8);
+      g.hint(`Подойди к указателю — он засветится, ${key(g, 'interact')} осмотреть`, 8);
       await g.waitUntil(() => g.flags.signRead);
     }
     if (!g.flags.signShifted) {

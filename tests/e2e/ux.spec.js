@@ -39,6 +39,8 @@ test('interact_near_sign: идём по дороге и жмём E — указ�
   // естественная траектория: просто вправо по дороге, пока не появится подсказка
   await page.keyboard.down('d');
   await expect(prompt).toContainText('Осмотреть указатель', { timeout: 6000 });
+  // табличка над указателем: имя и действие с клавишей
+  await expect(page.locator('.plate:not(.hidden)').first()).toContainText('Осмотреть указатель');
   await page.keyboard.up('d');
   const y = await page.evaluate(() => window.__abf.game.player.y);
   expect(y).toBeGreaterThan(110); // герой остался на дороге, не подбирался к указателю сверху
@@ -69,6 +71,7 @@ for (const [w, h] of [[844, 390], [667, 375]]) {
     await expect(page.locator('.banner')).not.toHaveClass(/show/);
     await expect(page.locator('.caption')).not.toHaveClass(/show/);
     await expect(page.locator('#ui > .prompt')).toBeHidden();
+    await expect(page.locator('.plate:not(.hidden)')).toHaveCount(0);
     await expect(page.locator('.choices .btn.locked')).toBeDisabled();
     const box = await page.locator('.choices').boundingBox();
     expect(box.y).toBeGreaterThanOrEqual(0);
@@ -107,6 +110,7 @@ test('target_enemy_over_nearby_prop: Q выбирает врага, на кот�
   const r = await page.evaluate(() => window.__abf.game.player.shiftTarget?.obj.kind);
   expect(r).toBe('hollow');
   await expect(page.locator('#ui > .prompt')).toContainText('Пустокожий');
+  await expect(page.locator('.plate:not(.hidden)').first()).toContainText('Пустокожий');
   // смотрим на мост — цель меняется на мост
   const [bx, by] = await screenOf(page, 32 * 16 + 32, 7 * 16 + 6);
   await page.mouse.move(bx, by);

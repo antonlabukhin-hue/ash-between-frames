@@ -580,3 +580,89 @@ body.portrait #stage { visibility: hidden; }
 
 /* меню (пауза, смерть, титул) всегда над сенсорным слоем */
 #ui .menu { z-index: 30; }
+
+/* ================================================================
+   Типографика и подписи (по образцу Diablo / Nox): имена и заголовки —
+   капитель с засечками, текст — гуманистический гротеск, всё на тёмной
+   подложке с тенью. Пиксельный шрифт остался только в логотипе и цифрах.
+   ================================================================ */
+:root {
+  --font-title: 'Alegreya SC', Georgia, serif;
+  --font-body: 'Alegreya Sans', 'Segoe UI', sans-serif;
+  --fs: max(15px, calc(var(--px) * 7.2));
+  --bronze: rgba(176, 138, 58, 0.6);
+}
+body { font-family: var(--font-body); font-weight: 500; }
+#ui { text-shadow: 0 1px 0 #000, 0 0 3px rgba(0, 0, 0, 0.7); }
+.menu .logo h1 { font-family: 'Pixelify Sans', monospace; }
+.menu h2, .dialogue .name, .banner .t, .card .n, .bossname, .choices .cprompt {
+  font-family: var(--font-title);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.menu h2 { font-size: 1.35em; }
+.banner .t { font-size: calc(var(--px) * 13); }
+.banner .s { font-family: var(--font-body); font-size: max(14px, calc(var(--px) * 6.2)); }
+.dialogue { font-size: var(--fs); line-height: 1.38; background: linear-gradient(180deg, rgba(14, 14, 24, 0.95), rgba(6, 6, 12, 0.95)); border-color: var(--bronze); }
+.dialogue .name { font-size: 1.08em; }
+.btn { font-family: var(--font-title); font-size: 1.05em; letter-spacing: 0.02em; }
+.btn .sub { font-family: var(--font-body); }
+.menu .panel, .choices, .card { border-color: var(--bronze); background: linear-gradient(180deg, rgba(14, 14, 24, 0.95), rgba(6, 6, 12, 0.95)); }
+.hint {
+  font-size: max(14px, calc(var(--px) * 6.4));
+  line-height: 1.35;
+  background: rgba(6, 6, 12, 0.78);
+  border-left-color: var(--amber);
+}
+.hint b { color: var(--amber-hi); font-weight: 700; }
+.toast, .bossname { font-size: max(14px, calc(var(--px) * 6.2)); }
+.caption { font-family: var(--font-title); font-size: calc(var(--px) * 10); }
+.caption .cont { font-family: var(--font-body); }
+.keys, .note { font-size: max(14px, 0.95em); }
+
+/* строка подсказки остаётся только для экранного диктора */
+#ui > .prompt:not(.hidden) {
+  position: absolute;
+  width: 1px; height: 1px; padding: 0; margin: -1px; border: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+/* таблички над объектами */
+.plate {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: calc(var(--px) * 1.6) calc(var(--px) * 4);
+  background: rgba(6, 6, 12, 0.8);
+  border: 1px solid var(--bronze);
+  border-radius: 2px;
+  white-space: nowrap;
+  text-align: center;
+  font-size: max(13px, calc(var(--px) * 5.8));
+  line-height: 1.25;
+  color: var(--milk);
+  z-index: 4;
+}
+.plate .nm { font-family: var(--font-title); font-weight: 700; letter-spacing: 0.03em; }
+.plate .ln { display: flex; align-items: center; justify-content: center; gap: 0.4em; }
+.plate .key {
+  display: inline-block;
+  min-width: 1.35em;
+  padding: 0 0.25em;
+  border: 1px solid var(--milk);
+  border-radius: 3px;
+  background: #24232e;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.86em;
+  line-height: 1.3;
+  text-shadow: none;
+}
+.plate .cost { color: var(--teal); font-style: normal; font-size: 0.75em; letter-spacing: 0.1em; }
+.plate.tone-warm .nm { color: var(--amber-hi); }
+.plate.tone-past { border-color: rgba(224, 160, 64, 0.85); }
+.plate.tone-past .nm, .plate.tone-past .ln span { color: var(--amber-hi); }
+.plate.tone-present { border-color: rgba(200, 40, 74, 0.85); }
+.plate.tone-present .nm { color: #ff8aa2; }
+.plate.dim { opacity: 0.6; }
+.plate .bar { height: 3px; margin-top: 2px; background: #24232e; }
+.plate .bar i { display: block; height: 100%; background: var(--teal); }

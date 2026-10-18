@@ -1,6 +1,12 @@
 // Точка входа: меню, игровой цикл, пауза, настройки, смерть.
 import '@fontsource/pixelify-sans/400.css';
 import '@fontsource/pixelify-sans/700.css';
+// текст интерфейса: Alegreya SC (имена, заголовки — капитель с засечками) и Alegreya Sans
+// (диалоги, подсказки — читается мелким кеглем); оба с кириллицей
+import '@fontsource/alegreya-sc/500.css';
+import '@fontsource/alegreya-sc/700.css';
+import '@fontsource/alegreya-sans/500.css';
+import '@fontsource/alegreya-sans/700.css';
 import '../css/style.css';
 import { createRenderer } from './core/renderer.js';
 import { createInput } from './core/input.js';
