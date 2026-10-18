@@ -595,8 +595,9 @@ export function createGame({ input, audio, ui, storage, save }) {
         } else if (pk.kind === 'heal') g.heal(pk.amount ?? 40);
         else if (pk.kind === 'fragment') g.giveFragment(pk.id);
         else if (pk.kind === 'scrap') {
-          g.flags.nameScrap = true;
-          g.remember('nameScrap');
+          const m = pk.memory ?? 'nameScrap';
+          if (m === 'nameScrap') g.flags.nameScrap = true;
+          g.remember(m);
         }
         pk.onTake?.(g);
       }

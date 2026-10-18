@@ -325,6 +325,8 @@ export const tornRoad = {
     for (const [x, y] of [[5, 3], [26, 15], [4, 15]]) g.addProp('pillar', T(x), TOP(y + 1), { tall: 30, broken: true });
     for (const [x, y] of [[2, 2], [29, 15], [11, 16]]) g.addProp('deadTree', T(x), TOP(y + 1));
     if (!g.flags.nameScrap) g.spawnPickup('scrap', T(29), T(1), { vx: 0, vy: 0 });
+    // квест «Имя пса» (карта 4.10): первый обрывок — жетон у разбитой колонны
+    if (!g.hasMemory('dogTag') && !g.save.spentMemories?.includes('dogTag') && !g.flags.dogNamed) g.spawnPickup('scrap', T(3), T(15), { vx: 0, vy: 0, memory: 'dogTag' });
   },
   update(g) {
     eraseEnemiesInPits(g);

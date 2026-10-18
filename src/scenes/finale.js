@@ -7,6 +7,7 @@ import { P } from '../art/palette.js';
 import { PAST } from '../timeline/timeline.js';
 import { burst } from '../world/fx.js';
 import { hasFragment } from '../items/fragments.js';
+import { spendMemory } from '../story/memories.js';
 import { mulberry32 } from '../core/math.js';
 import { killEnemy } from '../enemies/enemies.js';
 
@@ -112,12 +113,22 @@ export const under = {
       REN('Колокол держит город. Но он же держит вас здесь.'),
     ]);
     const shard = hasFragment(g.save, 'bellShard');
+    // четвёртый финал (карта 4.9): нужны «Песня звонаря» и «Праздник фонарей»
+    const lastRing = ['ringerSong', 'lanternFeast'];
+    const canLastRing = lastRing.every((m) => g.hasMemory(m));
     const i = await g.choose('Что сохранить?', [
       { text: 'Спасти людей', sub: 'Колокол рухнет окончательно. В убежище появятся новые лица.' },
       { text: 'Сохранить колокол', sub: 'Город останется ориентиром. Браслет получит лишний заряд. Жители исчезнут.' },
       { text: 'Расколоть колокол', sub: shard ? 'Трещина колокола: часть жителей спасётся, часть звона станет твоей.' : 'Нужен осколок из тайника на лестнице', disabled: !shard },
+      ...(lastRing.some((m) => g.hasMemory(m))
+        ? [{
+            text: 'Позвонить в последний раз',
+            sub: canLastRing ? 'Отдать «Песню звонаря» и «Праздник фонарей»: звон отпустит всех, колокол останется в прошлом.' : 'Нужны оба воспоминания: «Песня звонаря» и «Праздник фонарей»',
+            disabled: !canLastRing,
+          }]
+        : []),
     ]);
-    const choice = ['people', 'bell', 'split'][i];
+    const choice = ['people', 'bell', 'split', 'lastRing'][i];
     g.flags.bellChoice = choice;
     if (choice === 'bell') {
       g.save.upgrades.charges = (g.save.upgrades.charges || 0) + 1;
@@ -134,6 +145,15 @@ export const under = {
       });
       g.save.fragments = g.save.fragments.filter((f) => f !== 'bellShard');
       g.audio.sfx.bell(262, true);
+    } else if (choice === 'lastRing') {
+      lastRing.forEach((m) => spendMemory(g.save, m));
+      g.audio.sfx.bell(262, true);
+      await g.wait(0.6);
+      await g.say([
+        { who: '', text: 'Рен поднимает руку — и звон, которого нет, звучит: четыре удара, пауза, два. Праздничный.' },
+        { who: '', text: 'Площадь над головой вспоминает фонари. Песня и праздник уходят из памяти Рена — в колокол.' },
+      ]);
+      g.audio.sfx.bell(196, true);
     } else {
       g.audio.sfx.heal();
     }
@@ -144,6 +164,7 @@ export const under = {
       people: [VIL('Мы пойдём за тобой. Куда угодно, где есть стол и окно.')],
       bell: [{ who: '', text: 'Жители рассыпаются тихо, как пепел. Где-то наверху колокол бьёт один раз — для тех, кто ещё не стёрт.' }],
       split: [VIL('Половина звона — это тоже звон. Спасибо.'), { who: '', text: 'Осколок колокола тёплый. Он помнит удар.' }],
+      lastRing: [VIL('Это же праздничный звон… Нас позвали. Наконец-то — не прощаться, а прийти.'), { who: '', text: 'Колокол остаётся в прошлом. Его видно теперь только в свете памяти.' }],
     };
     await g.say(after[choice]);
     g.transition('kitchen', '@');
@@ -175,8 +196,8 @@ export const kitchen = {
   facing: -Math.PI / 2,
   setup(g) {
     const f = g.flags;
-    g.addProp('window', T(15), TOP(2) - 2, { bell: f.bellChoice === 'bell' || f.bellChoice === 'split' });
-    const saved = 2 + (f.camp ? 1 : 0) + (f.camp === 'both' ? 1 : 0) + (f.bellChoice === 'people' ? 2 : f.bellChoice === 'split' ? 1 : 0);
+    g.addProp('window', T(15), TOP(2) - 2, { bell: f.bellChoice === 'bell' || f.bellChoice === 'split' || f.bellChoice === 'lastRing' });
+    const saved = 2 + (f.camp ? 1 : 0) + (f.camp === 'both' || f.camp === 'fixed' ? 1 : 0) + (f.bellChoice === 'people' || f.bellChoice === 'lastRing' ? 2 : f.bellChoice === 'split' ? 1 : 0);
     const portraits = g.addProp('portraits', T(7), TOP(2) - 3, { count: saved });
     void portraits;
     const shelf = g.addProp('shelf', T(19), TOP(2) - 4, { cups: 2 + g.save.items.length });
@@ -192,20 +213,18 @@ export const kitchen = {
     const tik = npc(g, drawTik, T(14), TOP(5), { prompt: 'Поговорить с Тиком' });
     tik.onInteract = () => talkTik(g);
     const dog = npc(g, drawDog, T(17), TOP(6), { prompt: 'Погладить Старого Пса' });
-    dog.onInteract = async () => {
-      g.audio.sfx.heal();
-      await g.say([{ who: 'Старый Пёс', text: 'Пёс существует только в настоящем. Но хвост у него виляет так, будто он тебя узнал.', portrait: 'dog' }]);
-    };
-    if (f.camp === 'arno' || f.camp === 'both') {
+    dog.prompt = f.dogNamed ? 'Погладить Грома' : 'Погладить Старого Пса';
+    dog.onInteract = () => talkDog(g, dog);
+    if (f.camp === 'arno' || f.camp === 'both' || f.camp === 'fixed') {
       const a = g.addProp('ghostNpc', T(4), TOP(11), { drawFn: drawGhost, drawOpts: { hat: true, alpha: 0.85 }, prompt: 'Поговорить с Арно', markY: 26 });
-      a.onInteract = () => g.say([{ who: 'Арно', text: f.camp === 'both' ? 'Сена говорит, что я храплю. Значит, я есть.' : 'Здесь пахнет хлебом. Я и забыл, что так бывает.', portrait: 'arno' }]);
+      a.onInteract = () => g.say([{ who: 'Арно', text: f.camp === 'fixed' ? 'Та женщина у окна… Мы точно незнакомы? Она смеётся, как кто-то, кого я ждал.' : f.camp === 'both' ? 'Сена говорит, что я храплю. Значит, я есть.' : 'Здесь пахнет хлебом. Я и забыл, что так бывает.', portrait: 'arno' }]);
     }
-    if (f.camp === 'sena' || f.camp === 'both') {
+    if (f.camp === 'sena' || f.camp === 'both' || f.camp === 'fixed') {
       const s = g.addProp('ghostNpc', T(8), TOP(11), { drawFn: drawGhost, drawOpts: { dress: true, color: P.amberHi, alpha: 0.85 }, prompt: 'Поговорить с Сеной', markY: 26 });
       s.onInteract = () => g.say([{ who: 'Сена', text: 'Я помню дорогу за двоих. Если пойдёшь снова — спрашивай.', portrait: 'sena' }]);
     }
-    if (f.bellChoice === 'people' || f.bellChoice === 'split') {
-      const n = f.bellChoice === 'people' ? 2 : 1;
+    if (f.bellChoice === 'people' || f.bellChoice === 'split' || f.bellChoice === 'lastRing') {
+      const n = f.bellChoice === 'split' ? 1 : 2;
       for (let i = 0; i < n; i++) {
         const v = g.addProp('ghostNpc', T(13 + i * 3), TOP(11), { drawFn: drawGhost, drawOpts: { color: P.milk, alpha: 0.85, hat: i === 0 }, prompt: 'Поговорить с жителем', markY: 26 });
         v.onInteract = () => g.say([{ who: 'Житель Колокольных Ворот', text: i === 0 ? 'Тесно, зато все на своих местах.' : 'Я помню, как звучал праздник. Хочешь, напою?', portrait: 'villager' }]);
@@ -218,7 +237,8 @@ export const kitchen = {
     if (g.flags.chapterEndSeen || !g.save.chapterDone) return;
     g.flags.chapterEndSeen = true;
     await g.wait(1);
-    if (g.flags.bellChoice === 'people') await g.say([MARA('Кухня стала теснее. Это хорошо. Пустые кухни хуже пустых дорог.')]);
+    if (g.flags.bellChoice === 'lastRing') await g.say([MARA('Слышал? Колокол. Праздничный. Я думала, его больше никто не помнит.')]);
+    else if (g.flags.bellChoice === 'people') await g.say([MARA('Кухня стала теснее. Это хорошо. Пустые кухни хуже пустых дорог.')]);
     else if (g.flags.bellChoice === 'bell') {
       g.audio.sfx.bell(196, true);
       await g.wait(1.5);
@@ -246,6 +266,19 @@ export const kitchen = {
 };
 
 async function talkMara(g) {
+  // квест «Кто заменил мальчика»: кепка из тайника под площадью возвращает Маре имя сына
+  if (g.flags.maraQuest && g.flags.vaultTaken && !g.flags.boyFound) {
+    await g.say([
+      REN('Под площадью был тайник. В нём — вот это.'),
+      MARA('Латунная кепка… Я сама пришивала козырёк.'),
+      MARA('Ян. Его звали Ян. Он спрятал её, чтобы я не ругалась, что он лезет на фонтан.'),
+      MARA('Статуя на площади — не он. Но она помнит его вместо меня. Пусть стоит.'),
+    ]);
+    g.flags.boyFound = true;
+    g.persist();
+    g.ui.card('Квест завершён', 'Кто заменил мальчика', 'Мара вспомнила имя сына. Теперь его помнят двое — она и латунь.', 4.5);
+    return;
+  }
   const lines = g.save.chapterDone
     ? [MARA('Ешь. Мир не перестанет стираться от того, что ты голоден.'), MARA('Если будешь в руинах — приноси золу. Печь её любит.')]
     : [MARA('Ты рано. Кухня ещё не проснулась.')];
@@ -254,11 +287,41 @@ async function talkMara(g) {
 }
 
 async function talkTik(g) {
+  // квест «Имя пса»: Тик знает, каким было имя, — коротким, как удар
+  if (!g.flags.dogNamed && (g.hasMemory('dogTag') || g.hasMemory('dogBowl'))) {
+    const both = g.hasMemory('dogTag') && g.hasMemory('dogBowl');
+    await g.say([
+      TIK('Пса звали коротко — как удар колокола. Один слог, и он уже бежит.'),
+      both ? TIK('«Гр…» и «…ом». Сложи сам. И скажи ему — он ждёт.') : TIK('Половины имени мало. Вторая где-то там, где пёс ел в последний раз. В руинах, может быть.'),
+    ]);
+    return;
+  }
   await g.say([
     TIK('Мир не сломан. Его переписали поверх самого себя. Где-то под Шрамом всё ещё лежит Отпечаток.'),
     TIK('Точные удары ускоряют твой браслет. Идеальные уклонения — открывают Окно Эха: следующий удар сам меняет состояние врага.'),
     TIK('Три точных удара подряд — разлом. Полный разлом (пробел) переворачивает всё вокруг разом.'),
   ]);
+}
+
+// Старый Пёс: назвать по имени, если собраны оба обрывка (жетон и миска).
+async function talkDog(g, dog) {
+  const DOG = (t) => ({ who: g.flags.dogNamed ? 'Гром' : 'Старый Пёс', text: t, portrait: 'dog' });
+  g.audio.sfx.heal();
+  if (g.flags.dogNamed) {
+    await g.say([DOG('Гром поднимает уши на своё имя и тычется носом тебе в ладонь. На вылазках он находит зарытую золу.')]);
+    return;
+  }
+  if (g.hasMemory('dogTag') && g.hasMemory('dogBowl')) {
+    const i = await g.choose('Назвать пса?', [{ text: 'Гром', sub: 'Жетон «Гр…» и миска «…ом»' }, { text: 'Не сейчас' }]);
+    if (i !== 0) return;
+    g.flags.dogNamed = true;
+    dog.prompt = 'Погладить Грома';
+    g.persist();
+    await g.say([DOG('Пёс замирает. Потом виляет так, что дрожит весь стол. Он вспомнил, что он — Гром.')]);
+    g.ui.card('Квест завершён', 'Имя пса', 'Гром будет находить зарытую золу на вылазках.', 4.5);
+    return;
+  }
+  await g.say([DOG(g.hasMemory('dogTag') || g.hasMemory('dogBowl') ? 'Пёс обнюхивает обрывок имени и смотрит на дверь. Половины мало.' : 'Пёс существует только в настоящем. Но хвост у него виляет так, будто он тебя узнал.')]);
 }
 
 async function readRecords(g) {
@@ -420,6 +483,13 @@ export const ruins = {
     g.voidZones = [];
     g.enemies.forEach((e) => killEnemy(g, e));
     for (let i = 0; i < 15; i++) g.spawnPickup('ash', T(15) + (Math.random() - 0.5) * 40, T(9));
+    // квест «Имя пса»: вторая половина имени — на дне миски в руинах
+    if (!g.flags.dogNamed && !g.hasMemory('dogBowl') && !g.save.spentMemories?.includes('dogBowl')) g.spawnPickup('scrap', T(15), T(12), { vx: 0, vy: 0, memory: 'dogBowl' });
+    // Гром находит зарытую золу
+    if (g.flags.dogNamed) {
+      for (let i = 0; i < 8; i++) g.spawnPickup('ash', T(4 + (i % 4) * 7), T(14 - (i % 2) * 9));
+      g.toast('Гром нашёл зарытую золу', 2.5);
+    }
     g.toast('Руины затихли. Проход к убежищу открыт.', 3);
     g.openExits(true);
   },
