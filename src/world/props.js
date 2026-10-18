@@ -5,7 +5,7 @@ import { P } from '../art/palette.js';
 import { px, line, disc, ring, drawBrassBoy, drawGhost, shadow } from '../art/sprites.js';
 import { createTimeline, PAST, PRESENT } from '../timeline/timeline.js';
 import { hash2 } from '../core/math.js';
-import { drawKettleHd, drawHatchHd, drawHandLanternHd, drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
+import { drawWeightPlateHd, drawKettleHd, drawHatchHd, drawHandLanternHd, drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
 import { drawTik32, drawMara32, drawDog32, drawGhost32, drawBrassBoy32, drawVillager32, drawStillOne32 } from '../art/npcs32.js';
 import { drawTik, drawMara, drawDog } from '../art/sprites.js';
 import { drawLampHd, drawBannerHd, drawTreeHd, drawDeadTreeHd, drawGraveHd, drawGateTowerHd } from '../art/road32.js';
@@ -76,6 +76,8 @@ export const PROP_KINDS = {
     threadY: 10,
     draw: drawKettleHd,
   },
+  // Эхо (П4): плиту держит вес героя или тени; нажата — фаза «прошлое» (причина для нитей)
+  weightPlate: { name: 'Плита-противовес', flat: true, weight: true, timeline: { hold: Infinity, cost: 0, switchable: false }, threadY: 0, draw: drawWeightPlateHd },
   hatch: { name: 'Заслонка погреба', flat: true, timeline: { hold: Infinity, cost: 0 }, draw: drawHatchHd },
   // стёртая надпись: читается только внутри острова памяти
   inscription: { name: 'Стёртая надпись', flat: true, auraOnly: true, draw: drawInscription },

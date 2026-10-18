@@ -13,6 +13,7 @@ import { dist, norm, angleDiff, clamp } from '../core/math.js';
 import { propCenter } from '../world/props.js';
 import { P } from '../art/palette.js';
 import { rankTargets, nextTarget } from './targeting.js';
+import { createRecorder, recordFrame, recordEvent, recordFull, createShade } from './echo.js';
 import { ABILITIES, createAbilityState, tickAbilities, canUse, markUsed, castAbility, updateSpark, isUnlocked } from './abilities.js';
 
 const SPEED = 74;
@@ -102,9 +103,10 @@ export function effectiveCost(g, p, tl, free = false) {
   return heatCost(p.heat, g.time, free ? 0 : shiftCost(tl, { free: p.echo > 0 || g.freeShift }));
 }
 
-export function applyShift(g, target, { free = false } = {}) {
+export function applyShift(g, target, { free = false, byShade = false } = {}) {
   const p = g.player;
   const obj = target.obj;
+  if (p.echoRec && !byShade) recordEvent(p.echoRec, { type: 'shift', target });
   // отмена: передумал быстро — заряд возвращается
   if (isShifted(obj.tl)) {
     const back = cancelRefund(obj.tl, g.time);
@@ -147,7 +149,18 @@ export function applyShift(g, target, { free = false } = {}) {
   return true;
 }
 
+// Конец записи: тень встаёт в начало пути и повторяет его в прошлом.
+function releaseEcho(g, p) {
+  const rec = p.echoRec;
+  p.echoRec = null;
+  if (!rec || rec.frames.length < 2) return;
+  g.echoShade = createShade(rec);
+  g.audio.sfx.shift('past');
+  ringFx(g, rec.start.x, rec.start.y - 8, 4, 30, P.teal, 0.5);
+}
+
 function startSwing(g, p, hit) {
+  if (p.echoRec) recordEvent(p.echoRec, { type: 'attack', aim: p.aim, step: hit.step });
   p.swing = { ...hit, t: 0, aim: p.aim };
   p.hitSet.clear();
   g.audio.sfx.swing(hit.step);
@@ -456,6 +469,22 @@ export function updatePlayer(g, p, dt) {
     else {
       addText(g, p.x, p.y - 28, 'разлом не готов', P.ash4, { life: 0.6 });
     }
+  }
+
+  // ── Эхо (П4): запись до 5 секунд, затем тень повторяет ──
+  if (!locked && inp.pressed('echo') && g.flags.echoUnlocked) {
+    if (p.echoRec) releaseEcho(g, p);
+    else if (g.echoShade) addText(g, p.x, p.y - 28, 'Эхо ещё здесь', P.ash4, { life: 0.7 });
+    else if (!spend(p.charges, 1)) addText(g, p.x, p.y - 28, 'нет заряда', P.ash4, { life: 0.7 });
+    else {
+      p.echoRec = createRecorder(p.x, p.y);
+      g.audio.sfx.flash();
+      ringFx(g, p.x, p.y - 8, 4, 26, P.teal, 0.4);
+    }
+  }
+  if (p.echoRec) {
+    recordFrame(p.echoRec, dt, { x: p.x, y: p.y, dir: p.dir, flip: p.flip, aim: p.aim });
+    if (recordFull(p.echoRec)) releaseEcho(g, p);
   }
 
   // ── взаимодействие ──

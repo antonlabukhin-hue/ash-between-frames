@@ -59,6 +59,7 @@ export function createTouch(root, input, renderer) {
     ab1: mk('ab ab1', '1', 'ab1', 'Способность 1'),
     ab2: mk('ab ab2', '2', 'ab2', 'Способность 2'),
     ab3: mk('ab ab3', '3', 'ab3', 'Способность 3'),
+    echo: mk('echo', '◐', 'echo', 'Эхо: запись'),
   };
 
   let stickId = null;
@@ -164,6 +165,8 @@ export function createTouch(root, input, renderer) {
     btn.interact.classList.toggle('hidden', !g.interactTarget);
     ['ab1', 'ab2', 'ab3'].forEach((k, i) => btn[k].classList.toggle('hidden', !g.flags?.[['abSpark', 'abSeam', 'abShade'][i]]));
     btn.rift.classList.toggle('ready', g.player.rift >= 1);
+    btn.echo.classList.toggle('hidden', !g.flags?.echoUnlocked);
+    btn.echo.classList.toggle('rec', !!g.player.echoRec);
     btn.shift.style.opacity = g.player.shiftTarget ? '1' : '0.55';
   };
   st.update({}, false);

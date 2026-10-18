@@ -8,7 +8,9 @@ import { createProp, propFoot, propCenter } from './world/props.js';
 import { collectLights, isPit, isWall, solidPropAt } from './world/world.js';
 import { updateIslands, inIslands, auraSources, carryPos, dropPos } from './world/memory.js';
 import { link, resolveThreads, chainOf } from './timeline/threads.js';
-import { updateFx, burst, addText, ringFx } from './world/fx.js';
+import { stepShade, hitShade } from './player/echo.js';
+import { pointInRect } from './world/room.js';
+import { updateFx, burst, addText, ringFx, slashFx } from './world/fx.js';
 import { tickTimeline, isShifted, PAST } from './timeline/timeline.js';
 import { writeSave, freshSave } from './save/save.js';
 import { addFragment, hasFragment, loseFragments, FRAGMENTS } from './items/fragments.js';
@@ -148,6 +150,57 @@ export function createGame({ input, audio, ui, storage, save }) {
 
   // нить причины: cause → effect (docs/TIME_DESIGN.md, П3)
   g.link = (cause, effect, o) => link(cause, effect, o);
+
+  // ── Эхо (П4) ─────────────────────────────────────────────────────
+  g.hitShade = (n = 1) => {
+    const sh = g.echoShade;
+    if (!sh || sh.done) return;
+    burst(g, sh.x, sh.y - 10, [P.teal, P.tealHi], 6, 40);
+    if (hitShade(sh, n)) {
+      burst(g, sh.x, sh.y - 10, [P.teal, P.milk], 16, 60);
+      addText(g, sh.x, sh.y - 28, 'Эхо рассыпалось', P.teal);
+    }
+  };
+  function updateShade(dt) {
+    const sh = g.echoShade;
+    if (!sh) return;
+    for (const ev of stepShade(sh, dt)) {
+      if (ev.type === 'attack') {
+        slashFx(g, sh.x, sh.y - 8, ev.aim, 2.2, 20, P.teal, 0.16);
+        for (const e of g.enemies) {
+          if (e.dead || e.spawn > 0 || dist(e.x, e.y, sh.x, sh.y) > 24) continue;
+          const da = Math.atan2(e.y - sh.y, e.x - sh.x) - ev.aim;
+          if (Math.abs(Math.atan2(Math.sin(da), Math.cos(da))) > 1.2) continue;
+          g.damageEnemy(e, 6, { kx: Math.cos(ev.aim) * 60, ky: Math.sin(ev.aim) * 40 });
+        }
+      } else if (ev.type === 'shift') {
+        const t = ev.target;
+        if (t.obj && !t.obj.dead && !t.obj.removed && t.obj.tl?.switchable) {
+          applyShift(g, t, { free: true, byShade: true });
+          ringFx(g, sh.x, sh.y - 10, 2, 18, P.teal, 0.3);
+        }
+      }
+    }
+    if (sh.done) {
+      burst(g, sh.x, sh.y - 10, [P.teal, P.ink], 8, 30);
+      g.echoShade = null;
+    }
+  }
+  // плиты-противовесы: нажата (фаза «прошлое»), когда на ней стоит Эхо или герой
+  function updatePlates() {
+    const p = g.player;
+    const sh = g.echoShade;
+    for (const pl of g.props) {
+      if (!pl.def.weight) continue;
+      const on = !!((sh && !sh.done && pointInRect(sh.x, sh.y, pl)) || (!pl.echoOnly && p && !p.dead && pointInRect(p.x, p.y, pl)));
+      const want = on ? PAST : pl.tl.base;
+      if (pl.tl.phase !== want) {
+        pl.tl.phase = want;
+        pl.tl.left = on ? Infinity : 0;
+        audio.sfx.shift(want);
+      }
+    }
+  }
 
   // ── переносной свет (П2) ──────────────────────────────────────────
   g.pickUp = (o) => {
@@ -290,7 +343,11 @@ export function createGame({ input, audio, ui, storage, save }) {
     g.scenes = [];
     g.islandState = new Map();
     g.memIslands = [];
-    if (g.player) g.player.carry = null;
+    g.echoShade = null;
+    if (g.player) {
+      g.player.carry = null;
+      g.player.echoRec = null;
+    }
     g.barks = [];
     g.barkList = [];
     g.voidZones = [];
@@ -486,6 +543,8 @@ export function createGame({ input, audio, ui, storage, save }) {
   function updateProps(dt) {
     const p = g.player;
     if (p?.carry) Object.assign(p.carry, carryPos(p.x, p.y, p.flip));
+    updateShade(dt);
+    updatePlates();
     // острова памяти: ореолы объектов (PROP_KINDS.aura) и особые источники комнаты
     const extra = g.room.def.memorySources?.(g);
     g.memIslands = updateIslands(g.islandState, extra ? [...auraSources(g.props), ...extra] : auraSources(g.props), dt);

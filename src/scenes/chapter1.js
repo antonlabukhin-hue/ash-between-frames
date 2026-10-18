@@ -759,6 +759,12 @@ export const stairs = {
     // пролёты: существуют попеременно в прошлом и настоящем
     const spans = [[39, PAST], [28, PRESENT], [17, PAST], [6, PRESENT]];
     g.stairProps = spans.map(([y, exists]) => g.addProp('stair', TOP(5), TOP(y), { w: 64, h: 64, exists, noRift: false }));
+    // Эхо (П4): верхний пролёт держит плита-противовес, которая есть только в прошлом —
+    // на неё может встать лишь Эхо. Пока тень стоит на плите, пролёт разложен.
+    const top = g.stairProps[3];
+    const plate = g.addProp('weightPlate', TOP(10), TOP(12), { w: 16, h: 16, echoOnly: true });
+    g.link(plate, top, { to: top.exists });
+    g.stairPlate = plate;
     g.stairStreak = 0;
     for (const s of g.stairProps) {
       s.onShift = (gg, obj, phase) => {
@@ -784,6 +790,18 @@ export const stairs = {
     g.stairStreak = 0;
   },
   async script(g) {
+    // Эхо открывается на верхней площадке, у плиты-противовеса
+    if (!g.flags.echoUnlocked) {
+      (async () => {
+        await g.waitUntil(() => g.player.y < TOP(17));
+        g.flags.echoUnlocked = true;
+        g.persist();
+        g.toast('Браслет помнит твои шаги');
+        g.hint(`${key(g, 'echo')} — записать Эхо: до 5 секунд твоих действий. Тень повторит их в прошлом и задержится на месте. Ещё раз ${key(g, 'echo')} — закончить запись.`, 9);
+        await g.wait(9.5);
+        g.hint('Плита у края есть только в прошлом. Встать на неё может лишь Эхо — пока тень держит вес, верхний пролёт разложен.', 8);
+      })();
+    }
     g.hint(`Наступай на ту версию лестницы, что существует. ${key(g, 'shift')} у пролёта — вызвать его. Пролёт держится недолго.`, 8);
     await g.wait(4);
     g.hint('Говорят, тот, кто вызовет три пролёта подряд без единой царапины, найдёт тайник.', 6);
