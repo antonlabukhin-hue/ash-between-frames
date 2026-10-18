@@ -12,7 +12,13 @@ await page.waitForTimeout(500);
 await page.screenshot({ path: 'shots/m-title.png' });
 await page.evaluate(async () => {
   const A = window.__abf;
-  await A.shot('square', (g) => g.spawnWave([{ kind: 'hollow', x: g.player.x + 30, y: g.player.y - 20 }]));
+  await A.shot('square', (g) => {
+    g.player.x = 230;
+    g.player.y = 250;
+    const keep = (o) => { o.tl.phase = 'past'; o.tl.left = Infinity; };
+    keep(g.lanterns[0]);
+    g.spawnWave([{ kind: 'hollow', x: 280, y: 230 }, { kind: 'ringer', x: 180, y: 200 }]);
+  });
   await A.sleep(1200);
 });
 await page.screenshot({ path: 'shots/m-play.png' });

@@ -59,8 +59,6 @@ function drawVoidLayer(g, ctx, x0, y0, x1, y1) {
         }
         continue;
       }
-      if (tile !== T.VOID) continue;
-      voidSquares(ctx, x, y, tx, ty, t, per);
     }
   }
 }
@@ -78,6 +76,38 @@ function voidSquares(ctx, x, y, tx, ty, t, per) {
   }
 }
 
+// Анимированное поле пустоты: плитка 64×64, 8 кадров дрейфа квадратов, якорь — мир.
+const voidFrames = [];
+function voidFrame(i) {
+  if (voidFrames[i]) return voidFrames[i];
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const v = c.getContext('2d');
+  v.fillStyle = P.void;
+  v.fillRect(0, 0, 64, 64);
+  for (let k = 0; k < 26; k++) {
+    const r = hash2(k, 3, 11);
+    const yy = Math.floor((hash2(k, 7, 2) * 64 - i * (2 + r * 3)) % 64 + 64) % 64;
+    v.fillStyle = r > 0.8 ? P.crimson1 : r > 0.45 ? P.crimson0 : '#0d0a18';
+    const sz = r > 0.86 ? 2 : 1;
+    v.fillRect(Math.floor(hash2(k, 5, 3) * 64), yy, sz, sz);
+  }
+  voidFrames[i] = { canvas: c, pattern: null };
+  return voidFrames[i];
+}
+
+function drawVoidField(g, ctx, cx, cy) {
+  const n = g.quality.decorAnim ? 8 : 2;
+  const f = voidFrame(Math.floor(g.time * 4) % n);
+  if (!f.pattern) f.pattern = ctx.createPattern(f.canvas, 'repeat');
+  ctx.save();
+  ctx.translate(-cx, -cy);
+  ctx.fillStyle = f.pattern;
+  ctx.fillRect(cx, cy, W, H);
+  ctx.restore();
+}
+
 // ── объекты через атлас ─────────────────────────────────────────────────
 // Кадр декора: цикл по fps; в Шраме каждый третий кадр пропускается (рывки), на Low — реже.
 function propFrame(g, c, phase) {
@@ -92,10 +122,12 @@ function propEntry(g, p, phase) {
   const c = p.def.cache;
   const frame = propFrame(g, c, phase);
   const inst = c.inst ? c.inst(p) : '';
-  const key = `p|${p.kind}|${phase}|${frame}|${inst}`;
+  // состояние, зависящее от окружения (свет фонаря возвращает прошлое декору)
+  const state = c.state ? c.state(p, g) : undefined;
+  const key = `p|${p.kind}|${phase}|${frame}|${inst}|${state ?? ''}`;
   return atlas.sprite(key, c.w, c.h, c.ax, c.ay, (bctx, ax, ay) => {
     const tl = { ...p.tl, phase };
-    p.def.draw(bctx, { ...p, x: ax, y: ay, tl }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
+    p.def.draw(bctx, { ...p, x: ax, y: ay, tl, state }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
   });
 }
 
@@ -213,10 +245,16 @@ function drawEnemy(g, ctx, e) {
 }
 
 
+// Подбираемое — кадр из атласа (3 положения покачивания).
 function drawPickup(ctx, pk, t) {
   const bob = Math.round(Math.sin(t * 5 + pk.seed) * 1.5);
-  const x = Math.round(pk.x);
-  const y = Math.round(pk.y);
+  const key = `pk|${pk.kind}|${bob}`;
+  const e = atlas.sprite(key, 16, 18, 8, 13, (b, ax, ay) => paintPickup(b, pk.kind, ax, ay, bob, t));
+  blit(ctx, e, pk.x, pk.y);
+}
+
+function paintPickup(ctx, kind, x, y, bob, t) {
+  const pk = { kind };
   px(ctx, x - 2, y, 5, 1, 'rgba(3,4,10,0.5)');
   if (pk.kind === 'ash') {
     px(ctx, x - 1, y - 4 + bob, 3, 3, P.ash3);
@@ -231,7 +269,7 @@ function drawPickup(ctx, pk, t) {
     px(ctx, x - 2, y - 5 + bob, 1, 1, P.amberHi);
   } else if (pk.kind === 'fragment' || pk.kind === 'scrap') {
     const c = pk.kind === 'scrap' ? P.milk : P.amberHi;
-    ring(ctx, x, y - 7 + bob, 5 + Math.sin(t * 6), 'rgba(255,210,122,0.5)');
+    ring(ctx, x, y - 7 + bob, 5, 'rgba(255,210,122,0.5)');
     px(ctx, x - 2, y - 9 + bob, 5, 5, P.ink);
     px(ctx, x - 1, y - 8 + bob, 3, 3, c);
   }
@@ -301,6 +339,15 @@ function drawFxItem(ctx, f) {
     ring(ctx, f.x, f.y, r, f.c, f.squash);
     ctx.globalAlpha = 1;
   } else if (f.kind === 'slash') {
+    // серп из атласа: 32 направления
+    const aq = ((Math.round(f.angle / (Math.PI / 16)) % 32) + 32) % 32;
+    const R = Math.round(f.radius);
+    const key = `slash|${aq}|${f.span.toFixed(2)}|${R}|${f.c}`;
+    const e = atlas.sprite(key, R * 2 + 6, R * 2 + 6, R + 3, R + 3, (b, ax, ay) => paintSlash(b, ax, ay, (aq * Math.PI) / 16, f.span, R, f.c));
+    ctx.globalAlpha = k;
+    blit(ctx, e, f.x, f.y);
+    ctx.globalAlpha = 1;
+  } else if (f.kind === 'slash-old') {
     // серп удара
     const steps = 14;
     ctx.globalAlpha = k;
@@ -329,6 +376,18 @@ function drawFxItem(ctx, f) {
       ly = ny;
     }
     ctx.globalAlpha = 1;
+  }
+}
+
+function paintSlash(ctx, x, y, angle, span, radius, c) {
+  const steps = 14;
+  for (let i = 0; i <= steps; i++) {
+    const a = angle - span / 2 + (span * i) / steps;
+    const w = Math.sin((i / steps) * Math.PI);
+    for (let d = 0; d < 3 + w * 3; d++) {
+      const rr = radius - d;
+      px(ctx, x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.75, 1, 1, d < 2 ? P.milk : c);
+    }
   }
 }
 
@@ -369,7 +428,16 @@ function drawInteractMarker(g, ctx, obj) {
 
 
 // Сводка для отладочного оверлея (обновляется каждый кадр).
-export const frameStats = { objects: 0, lights: 0, culled: 0 };
+export const frameStats = { objects: 0, lights: 0, culled: 0, sec: {} };
+// Счётчик вызовов (подставляет оверлей): разбивка кадра по разделам для поиска пиков.
+let callProbe = () => 0;
+export const setCallProbe = (f) => (callProbe = f);
+let secT = 0;
+const sec = (name) => {
+  const n = callProbe();
+  frameStats.sec[name] = n - secT;
+  secT = n;
+};
 
 export function renderWorld(g, ctx) {
   const room = g.room;
@@ -383,11 +451,14 @@ export function renderWorld(g, ctx) {
   const cx = Math.round(g.cam.x + (Math.random() - 0.5) * shake * 2);
   const cy = Math.round(g.cam.y + (Math.random() - 0.5) * shake * 2);
   view = { x0: cx, y0: cy, x1: cx + W, y1: cy + H };
+  secT = callProbe();
   let drawn = 0;
   let culled = 0;
 
   // параллакс неба (экранные координаты) — под прозрачной полосой холста комнаты
   room.def.drawParallax?.(g, ctx, cx, cy, q);
+  // поле Стирания под дырами пустоты — один fillRect узором
+  if (!room.def.paint) drawVoidField(g, ctx, cx, cy);
 
   ctx.save();
   ctx.translate(-cx, -cy);
@@ -420,6 +491,7 @@ export function renderWorld(g, ctx) {
     }
   }
 
+  sec('пол');
   room.def.drawFloor?.(g, ctx, q);
 
   // плоские объекты
@@ -429,7 +501,7 @@ export function renderWorld(g, ctx) {
       culled++;
       continue;
     }
-    p.def.draw(ctx, p, g);
+    drawProp(g, ctx, p);
     drawn++;
   }
   for (const pk of g.pickups) if (visible(pk.x, pk.y, 16, 8)) drawPickup(ctx, pk, g.time);
@@ -455,11 +527,18 @@ export function renderWorld(g, ctx) {
   if (g.player && !g.player.dead) list.push({ y: g.player.y, kind: 'hero', o: g.player });
   for (const extra of g.drawables) list.push(extra);
   list.sort((a, b) => a.y - b.y);
+  sec('декор пола');
   for (const it of list) {
     drawn++;
     if (it.kind === 'prop') {
       const p = it.o;
+      // высокий декор перед героем становится полупрозрачным — бой не закрывается
+      const c = p.def.cache;
+      const hero = g.player;
+      const cover = c && c.ay > 28 && hero && hero.y < p.y && Math.abs(hero.x - p.x) < c.w / 2 + 4 && hero.y > p.y - c.ay - 4;
+      if (cover) ctx.globalAlpha = 0.45;
       drawProp(g, ctx, p);
+      if (cover) ctx.globalAlpha = 1;
       if (isShifted(p.tl) && p.tl.switchable && !p.def.flat) {
         const [mx] = propCenter(p);
         const fading = isFading(p.tl) && Math.floor(g.time * 10) % 2 === 0;
@@ -470,6 +549,7 @@ export function renderWorld(g, ctx) {
     else if (it.draw) it.draw(ctx, g);
   }
 
+  sec('спрайты');
   for (const pr of g.projectiles) {
     const r = pr.kind === 'ring' ? pr.rad : 4;
     if (pr.x + r < view.x0 || pr.x - r > view.x1 || pr.y + r < view.y0 || pr.y - r > view.y1) continue;
@@ -487,12 +567,15 @@ export function renderWorld(g, ctx) {
     ctx.fillRect(x | 0, y | 0, pl.size[i], pl.size[i]);
   }
   ctx.globalAlpha = 1;
+  sec('снаряды+частицы');
   for (const f of g.fx) drawFxItem(ctx, f);
   room.def.drawOver?.(g, ctx, q);
   ctx.restore();
+  sec('эффекты');
 
   ambientAsh(g, ctx);
   drawLighting(g, ctx, cx, cy);
+  sec('свет');
 
   // поверх света: метки, полоски здоровья, цифры — одинаковы во всех профилях
   ctx.save();
@@ -545,8 +628,10 @@ export function renderWorld(g, ctx) {
     ctx.fillRect(0, 0, W, 1);
     ctx.fillRect(0, H - 1, W, 1);
   }
+  sec('метки+цифры');
   if (q.glitch) glitch(g, ctx);
   if (g.scene === 'play') drawHud(g, ctx);
+  sec('HUD');
   frameStats.objects = drawn;
   frameStats.culled = culled;
 }

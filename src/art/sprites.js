@@ -46,6 +46,64 @@ export function disc(ctx, cx, cy, r, c) {
 // Пиксельное кольцо (эллипс). step=1 — сплошное: строки отрезками, крутые участки —
 // вертикальными столбиками, четыре симметричные четверти. step>1 — пунктир.
 export function ring(ctx, cx, cy, r, c, squash = 1, step = 1) {
+  // большие кольца — одним drawImage из заготовки (см. ringBase)
+  if (r >= 6) {
+    ringFast(ctx, cx, cy, r, c, squash, step);
+    return;
+  }
+  ringPx(ctx, cx, cy, r, c, squash, step);
+}
+
+// Заготовки колец: базовые радиусы 32…512, толщина 2 px, масштаб 0,5–1 ближайшим соседом.
+const ringBases = new Map();
+function parseColor(c) {
+  const m = /^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/.exec(c);
+  if (!m) return [c, 1];
+  return [`rgb(${m[1]},${m[2]},${m[3]})`, Math.round(Number(m[4]) * 8) / 8];
+}
+
+function ringBase(B, squash, color, step) {
+  const key = `${B}|${squash}|${color}|${step}`;
+  let base = ringBases.get(key);
+  if (base) return base;
+  const w = B * 2 + 4;
+  const h = Math.ceil(B * 2 * squash) + 4;
+  base = document.createElement('canvas');
+  base.width = w;
+  base.height = h;
+  const b = base.getContext('2d');
+  const cx = w / 2;
+  const cy = h / 2;
+  ringPx(b, cx, cy, B, color, squash, step);
+  if (step === 1) {
+    ringPx(b, cx, cy, B - 1, color, squash, 1);
+    ringPx(b, cx, cy, B - 1.5, color, squash, 1);
+  } else {
+    ringPx(b, cx + 1, cy, B, color, squash, step);
+  }
+  ringBases.set(key, base);
+  if (ringBases.size > 40) ringBases.delete(ringBases.keys().next().value);
+  return base;
+}
+
+function ringFast(ctx, cx, cy, r, c, squash, step) {
+  const [color, a] = parseColor(c);
+  if (a <= 0) return;
+  let B = 8;
+  while (B < r) B *= 2;
+  const base = ringBase(B, squash, color, step > 1 ? 2 : 1);
+  const s = r / B;
+  const dw = Math.round(base.width * s);
+  const dh = Math.round(base.height * s);
+  const prev = ctx.globalAlpha;
+  if (a < 1) ctx.globalAlpha = prev * a;
+  ctx.drawImage(base, Math.round(cx - dw / 2), Math.round(cy - dh / 2), dw, dh);
+  ctx.globalAlpha = prev;
+}
+
+export const ringCacheBytes = () => [...ringBases.values()].reduce((s, c) => s + c.width * c.height * 4, 0);
+
+function ringPx(ctx, cx, cy, r, c, squash = 1, step = 1) {
   ctx.fillStyle = c;
   cx = Math.round(cx);
   cy = Math.round(cy);

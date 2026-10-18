@@ -15,7 +15,7 @@ import { ROOMS, CHAPTER1 } from './scenes/rooms.js';
 import { drawSpriteSheet } from './scenes/spritesheet.js';
 import { resolveProfile, createAutoTuner, tuneStep, PROFILES } from './core/quality.js';
 import { createPerf, instrument, recordFrame, summary, setOverlay, showOverlay } from './core/perf.js';
-import { frameStats, lightLayerBytes } from './render.js';
+import { frameStats, lightLayerBytes, setCallProbe } from './render.js';
 import { atlasStats, atlas } from './art/spritecache.js';
 import { lightCacheBytes } from './art/lightmask.js';
 import { W, H } from './core/renderer.js';
@@ -393,7 +393,10 @@ function frame(now) {
 }
 
 function toggleOverlay(on = !perf.on) {
-  if (on) instrument(perf, renderer.ctx);
+  if (on) {
+    instrument(perf, renderer.ctx);
+    setCallProbe(() => perf.calls);
+  }
   setOverlay(perf, on);
 }
 window.addEventListener('keydown', (e) => {

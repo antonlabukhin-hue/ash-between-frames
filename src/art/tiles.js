@@ -223,7 +223,8 @@ export function drawTile(ctx, room, tx, ty) {
     return;
   }
   if (t === T.VOID) {
-    rect(ctx, x, y, 16, 16, P.void);
+    // пустота — дыра в холсте комнаты: под ней один анимированный узор на весь кадр
+    ctx.clearRect(x, y, 16, 16);
     const above = ty > 0 ? room.tiles[(ty - 1) * room.w + tx] : T.VOID;
     if (above !== T.VOID && above !== T.WALL) cliff(ctx, x, y, tx, ty, s);
     return;
@@ -269,6 +270,11 @@ export function buildRoomCanvas(room) {
   c.width = room.w * TILE;
   c.height = room.h * TILE;
   const ctx = c.getContext('2d');
+  // комнаты нового стиля запекаются своим «маляром» целиком
+  if (room.def?.paint) {
+    room.def.paint(ctx, room);
+    return c;
+  }
   for (let ty = 0; ty < room.h; ty++) for (let tx = 0; tx < room.w; tx++) drawTile(ctx, room, tx, ty);
   return c;
 }

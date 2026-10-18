@@ -9,6 +9,9 @@ import { isPit } from '../world/world.js';
 import { killEnemy } from '../enemies/enemies.js';
 import { dist } from '../core/math.js';
 import { unlockAbility } from '../player/abilities.js';
+import { SQ, paintSquare, drawSquareParallax, pastAt, drawStillOne, drawGarland, drawVillager } from '../art/level01.js';
+import { atlas } from '../art/spritecache.js';
+import { blit } from '../art/atlas.js';
 import { line, px } from '../art/sprites.js';
 
 const REN = (text) => ({ who: 'Рен', text, portrait: 'ren', style: 'white' });
@@ -358,32 +361,40 @@ export const camp = {
   },
 };
 
-// ── 3. Площадь без центра ────────────────────────────────────────────
+// ── 3. Площадь без центра — эталонная комната Enhanced 16-bit ────────
+// Архитектура, пол и небо запекаются (src/art/level01.js), объекты — из атласа.
+// Свет зажжённого фонаря и ожившая статуя возвращают прошлое окружающему декору.
 function squareMap() {
-  const m = grid(32, 22);
-  fill(m, 1, 2, 30, 19, '+');
-  fill(m, 1, 2, 3, 3, '#');
-  fill(m, 28, 2, 3, 3, '#');
-  fill(m, 15, 0, 2, 2, '>');
-  fill(m, 15, 21, 2, 1, '+');
-  put(m, 16, 20, '@');
+  const m = grid(SQ.w, SQ.h);
+  fill(m, 2, 6, 26, 16, '+');
+  fill(m, 14, 5, 2, 1, '>');
+  fill(m, 15, 22, 2, 1, '+');
+  put(m, 15, 21, '@');
   return rows(m);
 }
+
+const GARLANDS = [
+  [36, 204, 100],
+  [276, 444, 100],
+];
 
 export const square = {
   id: 'square',
   title: 'Площадь без центра',
-  walls: 'city',
   subtitle: 'Город Колокольных Ворот',
   music: 'city',
-  dark: 0.6,
+  dark: 0.55,
   floor: '+',
   under: { '>': '+' },
   map: squareMap(),
   facing: -Math.PI / 2,
   exits: [{ marker: '>', to: 'stairs', gate: true }],
-  setup(g) {
-    const statue = g.addProp('statue', T(16), TOP(11) + 4, { prompt: 'Осмотреть статую', markY: 40 });
+  paint: paintSquare,
+  drawParallax: drawSquareParallax,
+  ashColor: '#5a5470',
+  setup(g, room) {
+    const [cx, cy] = SQ.center;
+    const statue = g.addProp('statue16', cx, cy + 10, { prompt: 'Осмотреть постамент', markY: 62 });
     g.statue = statue;
     statue.onInteract = async () => {
       if (statue.tl.phase === PAST) {
@@ -391,35 +402,91 @@ export const square = {
         else await g.say([{ who: 'Латунный Мальчик', text: 'Не звони в колокол…', portrait: 'boy' }]);
         return;
       }
-      await g.say([NOTE('Разбитая статуя мальчика. На постаменте: «…ОТЛИТ В ГОД ПОСЛЕДНЕГО ЗВОНА».')]);
+      await g.say([NOTE('На постаменте обмякла латунная кукла с пустым лицом. Табличка: «…ОТЛИТ В ГОД ПОСЛЕДНЕГО ЗВОНА».')]);
       g.flags.statueRead = true;
     };
     statue.onShift = (gg, s, phase) => {
       if (phase === PAST) g.flags.statueAwake = true;
+      g.squareGhosts?.forEach((v) => (v.hidden = phase !== PAST));
+      if (g.stillOne) g.stillOne.hidden = phase === PAST;
     };
-    g.lanterns = [[8, 8], [24, 8], [16, 17]].map(([x, y]) => g.addProp('lantern', T(x), TOP(y + 1)));
-    for (const [x, y] of [[5, 5], [26, 5], [5, 17], [26, 17]]) g.addProp('banner', T(x), TOP(y + 1));
-    g.addProp('candles', T(14), TOP(12) + 2);
-    g.addProp('candles', T(18), TOP(12) + 2);
-    for (const [x, y] of [[3, 12], [28, 13], [11, 4]]) g.addProp('rubble', T(x), TOP(y + 1));
+    g.lanterns = [[152, 132], [328, 132], [240, 306]].map(([x, y]) => g.addProp('lantern16', x, y));
+    const fountain = g.addProp('fountain', 104, 182, { markY: 40 });
+    fountain.prompt = 'Напиться';
+    fountain.canInteract = () => fountain.tl.phase === PAST && !g.flags.drankFountain;
+    fountain.onInteract = () => {
+      g.flags.drankFountain = true;
+      g.heal(25);
+      g.toast('Вода из прошлого ещё холодная');
+    };
+    for (const [x, y, w, h] of [[170, 146, 36, 16], [276, 146, 36, 16], [212, 312, 44, 16]]) g.addProp('carpet', x, y, { w, h });
+    if (room.shopSign) g.addProp('shopSign', room.shopSign.x, room.shopSign.y);
+    // жители прошлого и один силуэт Шрама спиной к игроку
+    const ghosts = [[70, 236], [124, 290], [178, 212], [306, 212], [372, 262], [410, 160]];
+    g.squareGhosts = ghosts.map(([x, y], i) =>
+      g.addProp('ghostNpc', x, y, { drawFn: drawVillager, drawOpts: { v: i % 4 }, hidden: true }),
+    );
+    g.stillOne = g.addProp('ghostNpc', 384, 236, { drawFn: drawStillOne });
+    g.addProp('candles', cx - 22, cy + 14);
+    g.addProp('candles', cx + 22, cy + 14);
+    for (const [x, y] of [[436, 236], [60, 330], [430, 330]]) g.addProp('rubble', x, y);
+  },
+  drawFloor(g, ctx) {
+    // окна фасадов: прошлое — тёплые огоньки, настоящее — пустые проёмы
+    for (const w of g.room.windows || []) {
+      if (w.x + w.w < g.cam.x || w.x > g.cam.x + 460) continue;
+      const lit = pastAt(g, w.x + w.w / 2, w.y + 70);
+      if (lit) {
+        ctx.fillStyle = '#b8721f';
+        ctx.fillRect(w.x, w.y, w.w, w.h);
+        ctx.fillStyle = '#ffd27a';
+        ctx.fillRect(w.x + 1, w.y + 1, w.w - 2, Math.max(2, (w.h >> 1) - 1));
+        ctx.fillStyle = '#4a3424';
+        if (w.kind !== 'rose') ctx.fillRect(w.x + (w.w >> 1), w.y, 1, w.h);
+        else ctx.fillRect(w.x, w.y + (w.h >> 1), w.w, 1);
+      } else if (w.kind === 'shop') {
+        ctx.fillStyle = '#141a2c';
+        ctx.fillRect(w.x + 2, w.y + 2, w.w - 6, 2);
+      }
+    }
+    // тонкая малиновая трещина в центре площади — пока статуя в Шраме
+    if (g.statue && g.statue.tl.phase !== PAST) {
+      const [cx, cy] = SQ.center;
+      const on = Math.floor(g.time * 7) % 5 !== 0;
+      ctx.fillStyle = on ? '#86163a' : '#4a0c1e';
+      for (const [dx, dy, w] of [[-58, 30, 9], [-49, 31, 7], [-42, 32, 10], [-32, 31, 6], [26, 30, 8], [34, 29, 9], [43, 30, 6], [49, 31, 10]]) ctx.fillRect(cx + dx, cy + dy, w, 1);
+      if (on) {
+        ctx.fillStyle = '#c8284a';
+        ctx.fillRect(cx - 46, cy + 32, 2, 1);
+        ctx.fillRect(cx + 38, cy + 29, 2, 1);
+      }
+    }
+  },
+  drawOver(g, ctx) {
+    // гирлянды флажков (кадры из атласа, по 3 на состояние)
+    const f = g.quality.decorAnim ? Math.floor(g.time * 3) % 3 : 0;
+    GARLANDS.forEach(([x0, x1, y], i) => {
+      const past = pastAt(g, (x0 + x1) / 2, y + 40);
+      const e = atlas.sprite(`garland|${i}|${past ? 1 : 0}|${f}`, x1 - x0 + 4, 22, 0, 0, (b) => drawGarland(b, 2, x1 - x0 + 2, 2, past, f));
+      blit(ctx, e, x0 - 2, y - 2);
+    });
   },
   update(g) {
-    if (g.squareWaves && g.lanterns) {
-      const lit = g.lanterns.filter((l) => l.tl.phase === PAST).length;
-      g.squareLit = lit;
-    }
+    if (g.squareWaves && g.lanterns) g.squareLit = g.lanterns.filter((l) => l.tl.phase === PAST).length;
   },
   async script(g) {
     if (g.flags.squareDone) {
       g.statue.tl.phase = PAST;
+      g.squareGhosts.forEach((v) => (v.hidden = false));
+      g.stillOne.hidden = true;
       g.lanterns.forEach((l) => (l.tl.phase = PAST));
       g.openExits(true);
       return;
     }
-    g.hint(`${key(g, 'interact')} — осмотреть статую в центре площади`, 6);
+    g.hint(`${key(g, 'interact')} — осмотреть постамент в центре площади`, 6);
     await g.waitUntil(() => g.flags.statueRead || g.flags.statueAwake);
     if (!g.flags.statueAwake) {
-      g.hint(`${key(g, 'shift')} у статуи — пусть вспомнит, кем была`, 6);
+      g.hint(`${key(g, 'shift')} у постамента — пусть кукла вспомнит, кем была`, 6);
       await g.waitUntil(() => g.flags.statueAwake);
     }
     g.ui.clearHint();
@@ -431,18 +498,18 @@ export const square = {
     ]);
     g.squareWaves = true;
     g.spawnWave([
-      { kind: 'hollow', x: T(6), y: T(12) },
-      { kind: 'hollow', x: T(26), y: T(13) },
-      { kind: 'ringer', x: T(16), y: T(5) },
+      { kind: 'hollow', x: T(5), y: T(14) },
+      { kind: 'hollow', x: T(25), y: T(15) },
+      { kind: 'ringer', x: T(15), y: T(7) + 4 },
     ]);
-    g.hint(`Зажги два фонаря (${key(g, 'shift')} у фонаря): в их свете видны Кадровики. Незажжённый фонарь бьёт током.`, 8);
+    g.hint(`Зажги два фонаря (${key(g, 'shift')} у фонаря): в их свете видны Кадровики, а площадь вспоминает праздник. Незажжённый фонарь бьёт током.`, 8);
     await g.waitUntil(() => g.clearedRoom());
     await g.wait(0.8);
     g.spawnWave([
-      { kind: 'framer', x: T(10), y: T(6) },
-      { kind: 'framer', x: T(22), y: T(16) },
-      { kind: 'ringer', x: T(26), y: T(10) },
-      { kind: 'hollow', x: T(6), y: T(15) },
+      { kind: 'framer', x: T(9), y: T(8) },
+      { kind: 'framer', x: T(22), y: T(17) },
+      { kind: 'ringer', x: T(25), y: T(10) },
+      { kind: 'hollow', x: T(5), y: T(18) },
     ]);
     g.toast('Вторая волна');
     await g.waitUntil(() => g.clearedRoom());
@@ -454,6 +521,15 @@ export const square = {
     g.flags.squareDone = true;
     unlockAbility(g, 1);
     g.persist();
+    // тайник за лавкой
+    const cache = g.addProp('chest', 60, 122, { prompt: 'Открыть тайник' });
+    cache.onInteract = () => {
+      cache.open = true;
+      cache.onInteract = null;
+      g.audio.sfx.chest();
+      for (let i = 0; i < 5; i++) g.spawnPickup('ash', cache.x, cache.y + 4);
+      g.spawnPickup('shard', cache.x, cache.y + 6);
+    };
     await g.wait(0.5);
     await boyTalk(g);
     g.openExits();
