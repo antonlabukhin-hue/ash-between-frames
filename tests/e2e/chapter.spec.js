@@ -52,8 +52,8 @@ test('глава 1 проходится от пролога до убежища'
       }
     };
     const exitTo = async (next) => {
-      await until(() => g.exits.some((e) => e.open), 30000, 'открытого выхода');
-      const ex = g.exits.find((e) => e.open);
+      await until(() => g.exits.some((e) => e.open && e.to === next), 30000, 'открытого выхода');
+      const ex = g.exits.find((e) => e.open && e.to === next);
       tp(ex.rect.x + 8, ex.rect.y + 8);
       await until(() => g.room?.id === next, 8000, `перехода в ${next}`);
       await A.sleep(600);
@@ -90,6 +90,11 @@ test('глава 1 проходится от пролога до убежища'
     A.input.tap('interact');
     await until(() => g.flags.talkedArno, 8000, 'Арно');
     await shift(fire);
+    // после спора решают у костра
+    await until(() => fire.prompt === 'Решить у костра', 20000, 'паузы у костра');
+    tp(fire.x, fire.y + 14);
+    await A.sleep(200);
+    A.input.tap('interact');
     await until(() => g.flags.camp, 20000, 'выбора на привале');
     await exitTo('square');
 

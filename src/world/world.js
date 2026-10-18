@@ -36,6 +36,19 @@ export function isPit(g, x, y) {
   return true;
 }
 
+// Надёжная земля — пол, который не исчезнет сам: не пустота, не стирающаяся плита, не трещина
+// и не временный мост. Только здесь запоминаем, куда вернуть героя после падения.
+const NO_ISLANDS = { memIslands: [] };
+export function isStableGround(g, x, y) {
+  const tx = Math.floor(x / TILE);
+  const ty = Math.floor(y / TILE);
+  const t = tileAt(g.room, tx, ty);
+  if (t === T.VOID || t === T.FLICKER || t === T.WALL || t == null) return false;
+  if (g.room.pitAt && g.room.pitAt(NO_ISLANDS, x, y)) return false;
+  for (const z of g.voidZones) if (dist2(x, y, z.x, z.y) < (z.r + 6) * (z.r + 6)) return false;
+  return true;
+}
+
 export function isWall(g, x, y) {
   return tileAt(g.room, Math.floor(x / TILE), Math.floor(y / TILE)) === T.WALL;
 }

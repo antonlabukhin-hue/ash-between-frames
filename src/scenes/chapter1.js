@@ -301,6 +301,7 @@ function tornMap() {
   fill(m, 15, 8, 2, 2, '=');
   fill(m, 31, 8, 1, 3, '>');
   put(m, 2, 9, '@');
+  put(m, 29, 9, 'b'); // вход с привала — назад за запиской
   // ниша с обрывком имени
   fill(m, 27, 1, 4, 2, '.');
   return rows(m);
@@ -313,7 +314,7 @@ export const tornRoad = {
   music: 'road',
   dark: 0.4,
   floor: ',',
-  under: { '>': '=', '@': '=' },
+  under: { '>': '=', '@': '=', b: '=' },
   map: tornMap(),
   facing: 0,
   exits: [{ marker: '>', to: 'camp', gate: true }],
@@ -321,7 +322,7 @@ export const tornRoad = {
     // дорога стирается навстречу и не возвращается (карта зоны 4.2): держат только камни памяти.
     // Первый камень виден с берега; каждый следующий проступает лишь в свете предыдущего.
     makeErosion(room, { x0: 8, x1: 23 });
-    g.tornStones = [10, 15, 20].map((tx, i) => g.addProp('memoryStone', T(tx), TOP(9) + 6, { prompt: null, inAura: i > 0, hidden: i > 0 }));
+    g.tornStones = [10, 15, 20].map((tx, i) => g.addProp('memoryStone', T(tx), TOP(8) + 4, { prompt: null, inAura: i > 0, hidden: i > 0 }));
     for (const [x, y] of [[5, 3], [26, 15], [4, 15]]) g.addProp('pillar', T(x), TOP(y + 1), { tall: 30, broken: true });
     for (const [x, y] of [[2, 2], [29, 15], [11, 16]]) g.addProp('deadTree', T(x), TOP(y + 1));
     if (!g.flags.nameScrap) g.spawnPickup('scrap', T(29), T(1), { vx: 0, vy: 0 });
@@ -333,6 +334,14 @@ export const tornRoad = {
   },
   async script(g) {
     const p = g.player;
+    // повторный заход (вернулся с привала за запиской): волн нет, дорога уже стёрта
+    if (g.flags.tornDone) {
+      g.room.flickerStart = g.time - 30;
+      g.openExits(true);
+      for (const ex of g.exits) if (ex.gate) ex.gate.closed = false;
+      if (!g.flags.nameScrap) g.hint('Записка Сены — в нише наверху справа.', 5);
+      return;
+    }
     await g.waitUntil(() => p.x > T(6));
     g.room.flickerStart = g.time + 1;
     g.spawnWave([
@@ -350,6 +359,8 @@ export const tornRoad = {
     g.spawnPickup('fragment', T(15), T(11), { id: 'backHeat', vx: 0, vy: 0 });
     g.toast('Что-то осталось на дороге');
     unlockAbility(g, 0);
+    g.flags.tornDone = true;
+    g.persist();
     g.openExits(true);
     for (const ex of g.exits) if (ex.gate) ex.gate.closed = false;
   },
@@ -362,6 +373,7 @@ function campMap() {
   scatter(m, 11, 1, 1, 20, 11, ',', '"', 0.3);
   fill(m, 1, 5, 20, 3, '=');
   fill(m, 21, 5, 1, 3, '>');
+  fill(m, 0, 5, 1, 3, '<'); // назад на Разорванную дорогу (за запиской)
   put(m, 2, 6, '@');
   return rows(m);
 }
@@ -373,10 +385,10 @@ export const camp = {
   music: 'road',
   dark: 0.7,
   floor: ',',
-  under: { '>': '=', '@': '=' },
+  under: { '>': '=', '<': '=', '@': '=' },
   map: campMap(),
   facing: 0,
-  exits: [{ marker: '>', to: 'square', gate: true }],
+  exits: [{ marker: '>', to: 'square', gate: true }, { marker: '<', to: 'tornRoad', entry: 'b' }],
   setup(g) {
     for (const [x, y] of [[3, 2], [8, 1], [15, 2], [19, 10], [5, 10], [12, 11]]) g.addProp('tree', T(x), TOP(y + 1));
     const fire = g.addProp('campfire', T(11), TOP(4) + 10, { prompt: null });
@@ -432,6 +444,7 @@ export const camp = {
     g.hint(`${key(g, 'interact')} — поговорить с силуэтом у костра`, 6);
     await g.waitUntil(() => g.flags.talkedArno);
     g.hint(`Костёр помнит другой вечер. ${key(g, 'shift')} — разжечь его в прошлом.`, 6);
+    if (g.flags.fireLit) fire.tl.phase = PAST; // вернулся с дороги за запиской
     await g.waitUntil(() => g.flags.fireLit);
     g.ui.clearHint();
     sena.hidden = false;
@@ -439,30 +452,19 @@ export const camp = {
     await g.wait(0.8);
     const ARNO = (t) => ({ who: 'Арно', text: t, portrait: 'arno' });
     const SENA = (t) => ({ who: 'Сена', text: t, portrait: 'sena' });
-    await g.say([
+    if (!g.flags.campScene) await g.say([
       SENA('Арно? Это мой привал. Это я развела огонь, когда ты ушёл вперёд.'),
       ARNO('Нет. Это моя дорога. Я помню каждый её камень.'),
       SENA('Ты помнишь камни. А я помню тебя.'),
       REN('Один из них — настоящий. Другой — отпечаток. Браслет не скажет, кто.'),
     ]);
+    g.flags.campScene = true;
     g.remember('campfire');
-    const hasScrap = g.hasMemory('nameScrap') || !!g.flags.nameScrap;
-    const hasCharge = g.player.charges.n >= 1;
-    const i = await g.choose('Дорога удержит только одно воспоминание.', [
-      { text: 'Оставить Арно', sub: 'Сена исчезнет' },
-      { text: 'Оставить Сену', sub: 'Арно исчезнет' },
-      {
-        text: 'Показать Сене записку',
-        sub: !hasScrap ? 'Нужна записка «…но, жди у ворот» — она осталась на Разорванной дороге' : !hasCharge ? 'Нужен заряд браслета' : 'Сохранить обоих: записка и заряд браслета',
-        disabled: !hasScrap || !hasCharge,
-      },
-      {
-        text: 'Закрепить костёр',
-        sub: g.hasMemory('campfire') ? 'Узел памяти: отдать «Вечер у костра». Останутся оба — но чужими друг другу' : 'Нужно воспоминание «Вечер у костра»',
-        disabled: !g.hasMemory('campfire'),
-      },
+    await g.say([
+      SENA('Я ему писала. Когда он ушёл вперёд, оставила записку — на дороге, в нише у разбитых плит.'),
+      ARNO('Записку? Не помню никакой записки.'),
     ]);
-    const choice = ['arno', 'sena', 'both', 'fixed'][i];
+    const choice = await campDecision(g, { arno, sena, fire, SENA, ARNO });
     g.flags.camp = choice;
     if (choice === 'fixed') {
       await g.campNode.fix('campfire');
@@ -471,7 +473,6 @@ export const camp = {
         ARNO('Не думаю. Но у вашего костра тепло. Можно, я посижу?'),
       ]);
     } else if (choice === 'both') {
-      g.player.charges.n -= 1;
       await g.say([
         SENA('«…но, жди меня у ворот. С.» Это мой почерк.'),
         SENA('Арно. Я писала тебе, когда ты ушёл вперёд. Ты мой брат.'),
@@ -497,6 +498,52 @@ export const camp = {
     g.openExits();
   },
 };
+
+// Привал после спора: можно поговорить с обоими, показать Сене записку (дневник) — тогда
+// остаются оба; решить, кого оставит дорога, — у костра. Пока решения нет, можно вернуться
+// на Разорванную дорогу за запиской.
+async function campDecision(g, { arno, sena, fire, SENA, ARNO }) {
+  let pick = null;
+  const hasNote = () => g.hasMemory('nameScrap');
+  const arnoTalk = arno.onInteract;
+  sena.prompt = 'Поговорить с Сеной';
+  arno.prompt = 'Поговорить с Арно';
+  sena.onInteract = async () => {
+    if (!hasNote()) {
+      await g.say([SENA('Записка была в нише на Разорванной дороге, наверху справа. Если бы он её прочёл — вспомнил бы.')]);
+      g.hint('Записку можно забрать: тропа налево ведёт назад, на Разорванную дорогу.', 5);
+      return;
+    }
+    await g.present('Показать Сене воспоминание?', { nameScrap: async () => (pick = 'both') }, 'Это не моё. Это не про нас.', 'Сена');
+  };
+  arno.onInteract = async () => {
+    await g.say([ARNO(hasNote() ? 'У тебя что-то от неё? Покажи ей, не мне. Я всё равно не вспомню.' : 'Если не помню, кого жду, — может, и ждать некого.')]);
+  };
+  fire.prompt = 'Решить у костра';
+  fire.onInteract = async () => {
+    const opts = [
+      { text: 'Оставить Арно', sub: 'Сена исчезнет' },
+      { text: 'Оставить Сену', sub: 'Арно исчезнет' },
+      {
+        text: 'Закрепить костёр',
+        sub: g.hasMemory('campfire') ? 'Узел памяти: отдать «Вечер у костра». Останутся оба — но чужими друг другу' : 'Нужно воспоминание «Вечер у костра»',
+        disabled: !g.hasMemory('campfire'),
+      },
+      { text: 'Подумать ещё', sub: hasNote() ? 'Записку можно показать Сене — поговори с ней' : 'Сена писала Арно записку — она осталась на Разорванной дороге' },
+    ];
+    const i = await g.choose('Дорога удержит только одно воспоминание.', opts);
+    pick = ['arno', 'sena', 'fixed', null][i];
+  };
+  g.hint(`Поговори с ними (${key(g, 'interact')}). Записку Сене можно показать из дневника. Решить, кого оставит дорога, — у костра.`, 7);
+  await g.waitUntil(() => pick);
+  sena.onInteract = null;
+  sena.prompt = null;
+  arno.onInteract = arnoTalk;
+  arno.prompt = 'Поговорить с силуэтом';
+  fire.onInteract = null;
+  fire.prompt = null;
+  return pick;
+}
 
 // ── 3. Площадь без центра — эталонная комната Enhanced 16-bit ────────
 // Комната печётся дважды (src/art/square16.js): Шрам на экране, Отпечаток — в островах памяти.

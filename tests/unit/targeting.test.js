@@ -51,3 +51,14 @@ describe('Взаимодействие', () => {
     expect(shiftLabel('Фонарь', 'present')).toBe('в настоящее: Фонарь');
   });
 });
+
+describe('уже сдвинутый объект уступает несдвинутому', () => {
+  it('прицел на дальний камень не отменяет ближний, уже сдвинутый', () => {
+    const near = { obj: 'A', type: 'prop', d: 30, off: 0.05, shifted: true };
+    const far = { obj: 'B', type: 'prop', d: 85, off: 0.05 };
+    expect(rankTargets([near, far])[0].obj).toBe('B');
+  });
+  it('если он единственный — его можно отменить', () => {
+    expect(rankTargets([{ obj: 'A', type: 'prop', d: 30, off: 0.05, shifted: true }])[0].obj).toBe('A');
+  });
+});
