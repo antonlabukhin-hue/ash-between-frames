@@ -70,7 +70,7 @@ test('глава 1 проходится от пролога до убежища'
     await until(() => g.flags.signRead, 8000, 'указателя');
     await shift(sign);
     await until(() => g.flags.metTik, 15000, 'Тика');
-    tp(T(40), T(7));
+    tp(240, 15 * 16);
     await until(() => g.enemies.length > 0 && g.enemies[0].spawn <= 0, 10000, 'Пустокожего');
     killAll();
     await exitTo('tornRoad');

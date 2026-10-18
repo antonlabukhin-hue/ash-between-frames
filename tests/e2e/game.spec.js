@@ -16,12 +16,13 @@ test('пролог: чёрный экран с подписью, потом до
   await expect(page.locator('.caption')).toContainText('произошло ли оно', { timeout: 6000 });
   await expect(page.locator('.fade')).toHaveClass(/on/);
   await page.waitForFunction(() => window.__abf.game.flags.introSeen && !window.__abf.game.cinematic, null, { timeout: 15000 });
-  const x0 = await page.evaluate(() => window.__abf.game.player.x);
-  await page.keyboard.down('d');
+  // дорога идёт вверх, к воротам
+  const y0 = await page.evaluate(() => window.__abf.game.player.y);
+  await page.keyboard.down('w');
   await page.waitForTimeout(600);
-  await page.keyboard.up('d');
-  const x1 = await page.evaluate(() => window.__abf.game.player.x);
-  expect(x1 - x0).toBeGreaterThan(25);
+  await page.keyboard.up('w');
+  const y1 = await page.evaluate(() => window.__abf.game.player.y);
+  expect(y0 - y1).toBeGreaterThan(25);
   await expect(page.locator('.hint')).toContainText('идти');
 });
 
@@ -33,24 +34,26 @@ test('смена состояния: мост проходим только в �
     await A.shot('road');
     const g = A.game;
     const p = g.player;
-    p.x = 30 * 16;
-    p.y = 7 * 16 + 6;
-    A.input.inject('right', true);
-    await A.sleep(900);
-    A.input.inject('right', false);
+    // провал — ряды 18–21 поперёк дороги, мост над ним
+    p.x = 240;
+    p.y = 23 * 16 + 6;
+    A.input.inject('up', true);
+    await A.sleep(450);
+    A.input.inject('up', false);
     await A.sleep(800);
-    const fell = { x: p.x, hp: p.hp };
-    p.x = 31 * 16;
+    const fell = { y: p.y, hp: p.hp };
+    p.y = 22 * 16 + 4;
+    p.aim = -Math.PI / 2;
     await A.sleep(100);
     A.input.tap('shift');
     await A.sleep(1000);
     const phase = g.props.find((o) => o.kind === 'bridge').tl.phase;
-    A.input.inject('right', true);
+    A.input.inject('up', true);
     await A.sleep(1300);
-    A.input.inject('right', false);
-    return { fell, phase, crossed: p.x > 36 * 16, charges: p.charges.n };
+    A.input.inject('up', false);
+    return { fell, phase, crossed: p.y < 17 * 16, charges: p.charges.n };
   });
-  expect(r.fell.x).toBeLessThan(32 * 16);
+  expect(r.fell.y).toBeGreaterThan(22 * 16);
   expect(r.fell.hp).toBe(90);
   expect(r.phase).toBe('past');
   expect(r.crossed).toBe(true);

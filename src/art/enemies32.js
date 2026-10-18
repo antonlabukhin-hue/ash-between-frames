@@ -75,33 +75,61 @@ export function drawHollow32(ctx, x, y, o) {
   }
 }
 
-// ── Кадровик: кадр плёнки на ножках ───────────────────────────────────
+// ── Кадровик: фигура в плаще с рамой кадра вместо головы ────────────────────────────────────────────────
 export function drawFramer32(ctx, x, y, o) {
+  // Кадровик (как на эталоне): высокая фигура в рваном плаще, вместо головы — рама кадра
+  // с глазами внутри, в руке посох с фонарём. В Шраме — бурый плащ, бирюзовые сбои;
+  // в Отпечатке — латунная рама и тёплый огонь фонаря.
   const past = o.phase === 'past';
   const t = o.t || 0;
-  const leg = Math.floor(t * 10) & 1;
-  const B = past
-    ? { hi: '#f2d792', base: '#b08a3a', lo: '#6a4c1c', glass: '#3a2810', glow: '#ffd27a' }
-    : { hi: '#e0506e', base: '#8a1a3c', lo: '#4a0c1e', glass: '#14060c', glow: '#ff5a7a' };
-  // ножки-зажимы
-  for (const [lx, up] of [[-4, leg], [-1.8, 0], [1.2, 0], [3.4, 1 - leg]]) path(ctx, [x + lx, y - 3.5, x + lx + (lx < 0 ? -0.6 : 0.6), y - up * 0.8], INK, 0.8);
-  // рамка с фаской
-  rect(ctx, x - 5.5, y - 11.6, 11, 8.6, INK);
-  rect(ctx, x - 5, y - 11.1, 10, 7.6, lin(ctx, x - 5, y - 11, x + 5, y - 3.5, [[0, B.hi], [0.45, B.base], [1, B.lo]]));
-  rect(ctx, x - 3.6, y - 10, 7.2, 5.4, B.glass);
-  // перфорация
-  for (let i = 0; i < 4; i++) {
-    rect(ctx, x - 4.8, y - 10.6 + i * 1.8, 0.8, 0.9, '#ece4cf');
-    rect(ctx, x + 4, y - 10.6 + i * 1.8, 0.8, 0.9, '#ece4cf');
-  }
-  // глаз в кадре
+  const step = Math.floor(t * 10) & 1;
   const look = o.look || 0;
-  oval(ctx, x, y - 7.3, 2.4, 1.6, '#ece4cf');
-  oval(ctx, x + look * 0.9, y - 7.3, 1, 1.3, VOID);
-  rect(ctx, x + look * 0.9 - 0.7, y - 8.2, 0.5, 0.5, '#ffffff');
-  inside(ctx, () => rect(ctx, x - 3.6, y - 10, 7.2, 0.5, B.glow));
+  const C = past
+    ? { cl0: '#8a6a4a', cl1: '#5a3f2c', cl2: '#2e2018', fr0: '#f2d792', fr1: '#b08a3a', fr2: '#6a4c1c', glass: '#3a2810', eye: '#fff4d0', lamp: '#ffd27a' }
+    : { cl0: '#6e5a52', cl1: '#3e322e', cl2: '#1a1418', fr0: '#c8c2b4', fr1: '#7a7468', fr2: '#3a3630', glass: '#0b0a10', eye: '#ffe9b0', lamp: '#6ff2e0' };
+  // ноги-палки под плащом
+  rect(ctx, x - 2.4, y - 6 + step * 0.6, 1.4, 6 - step * 0.6, '#14121a');
+  rect(ctx, x + 1, y - 6 + (1 - step) * 0.6, 1.4, 6 - (1 - step) * 0.6, '#14121a');
+  // плащ: от плеч к рваному подолу
+  const cl = [x - 4, y - 21, x + 4, y - 21, x + 6.5, y - 5];
+  ragHem(cl, x - 6.5, x + 6.5, y - 4, t, 9, 2.4);
+  cl.push(x - 6.5, y - 5);
+  poly(ctx, cl, lin(ctx, x - 6, y - 21, x + 6, y - 2, [[0, C.cl0], [0.4, C.cl1], [1, C.cl2]]));
+  inside(ctx, () => {
+    path(ctx, [x - 1, y - 19, x - 2.4, y - 5], C.cl2, 0.5);
+    path(ctx, [x + 2.2, y - 19, x + 3.6, y - 5], C.cl2, 0.5);
+    path(ctx, [x - 3.6, y - 19, x - 5.6, y - 7], 'rgba(255,240,220,0.18)', 0.4);
+  });
+  // посох с фонарём (правая рука)
+  const sx = x + 6.5;
+  path(ctx, [sx, y - 0.5, sx + 0.6, y - 30], '#3a2818', 0.9);
+  path(ctx, [sx - 0.3, y - 1, sx + 0.3, y - 29], '#6a4c30', 0.35);
+  oval(ctx, x + 5, y - 15, 1.3, 1.2, C.cl1);
+  poly(ctx, [sx - 2, y - 33, sx + 3, y - 33, sx + 2.4, y - 28, sx - 1.4, y - 28], '#0d0e14');
+  poly(ctx, [sx - 1.4, y - 32.4, sx + 2.4, y - 32.4, sx + 1.9, y - 28.6, sx - 0.9, y - 28.6], C.lamp);
+  oval(ctx, sx + 0.5, y - 30.5, 0.6, 0.9, '#ffffff');
+  poly(ctx, [sx - 2.4, y - 33, sx + 0.5, y - 35.4, sx + 3.4, y - 33], '#0d0e14');
+  // голова — рама кадра с фаской
+  const hx = x;
+  const hy = y - 26;
+  rect(ctx, hx - 5, hy - 6, 10, 11, '#05060c');
+  rect(ctx, hx - 4.4, hy - 5.4, 8.8, 9.8, lin(ctx, hx - 4, hy - 5, hx + 4, hy + 4, [[0, C.fr0], [0.45, C.fr1], [1, C.fr2]]));
+  rect(ctx, hx - 3, hy - 4, 6, 7, C.glass);
+  for (let i = 0; i < 4; i++) {
+    rect(ctx, hx - 4.2, hy - 4.6 + i * 2.4, 0.7, 0.9, '#ece4cf');
+    rect(ctx, hx + 3.5, hy - 4.6 + i * 2.4, 0.7, 0.9, '#ece4cf');
+  }
+  // глаза в кадре
+  rect(ctx, hx - 2.1 + look * 0.5, hy - 1.2, 1.2, 1.4, C.eye);
+  rect(ctx, hx + 0.9 + look * 0.5, hy - 1.2, 1.2, 1.4, C.eye);
+  if (!past) {
+    // сбои кадра: бирюзовые пиксели рядом с рамой
+    for (let i = 0; i < 3; i++) {
+      const k = (Math.floor(t * 12) + i * 5) % 9;
+      rect(ctx, hx + 5.5 + (k % 3), hy - 8 + k * 2, 0.6, 1.6, '#6ff2e0');
+    }
+  }
 }
-
 // ── Звонарь ───────────────────────────────────────────────────────────
 export function drawRinger32(ctx, x, y, o) {
   const past = o.phase === 'past';

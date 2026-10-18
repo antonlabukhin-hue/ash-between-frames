@@ -32,7 +32,7 @@ function ensureLight() {
 
 export const lightLayerBytes = () => (lightCanvas ? lightCanvas.width * lightCanvas.height * 4 : 0);
 
-const SHADOW_W = { hollow: 12, framer: 8, ringer: 14, shadow: 18, eater: 22 };
+const SHADOW_W = { hollow: 12, framer: 12, ringer: 14, shadow: 18, eater: 22 };
 
 // Видимая область мира с полем (высокие спрайты торчат вверх).
 let view = { x0: 0, y0: 0, x1: 0, y1: 0 };

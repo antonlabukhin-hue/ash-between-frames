@@ -69,7 +69,7 @@ export function drawHeroC(ctx, x, y, o, variant = null) {
 // ── враги ─────────────────────────────────────────────────────────────
 const ENEMY = {
   hollow: { w: 24, h: 34, ax: 12, ay: 30, fn: drawHollow, hd: drawHollow32, label: (q) => (q.lunge ? 'lunge' : q.windup ? 'windup' : `walk${Math.round(q.walk * 4)}`), q: (o) => ({ walk: Math.floor((o.walk || 0) * 4) / 4, t: (Math.floor((o.t || 0) * 12) % 4) / 12, windup: o.windup, lunge: o.lunge }) },
-  framer: { w: 16, h: 18, ax: 8, ay: 15, fn: drawFramer, hd: drawFramer32, label: (q) => `f${Math.round(q.t * 10)}${q.look ? `l${q.look}` : ''}`, q: (o) => ({ t: (Math.floor((o.t || 0) * 10) & 1) / 10, look: o.look || 0 }) },
+  framer: { w: 30, h: 40, ax: 14, ay: 37, fn: drawFramer, hd: drawFramer32, label: (q) => `f${Math.round(q.t * 10)}${q.look ? `l${q.look}` : ''}`, q: (o) => ({ t: (Math.floor((o.t || 0) * 10) & 1) / 10, look: o.look || 0 }) },
   ringer: { w: 22, h: 30, ax: 11, ay: 27, fn: drawRinger, hd: drawRinger32, label: (q) => (q.charge ? `charge${Math.round((q.t - 0.05) * 30)}` : 'idle'), q: (o) => ({ t: o.charge ? (Math.floor((o.t || 0) * 30) & 1) / 30 + 0.05 : 0, charge: o.charge }) },
   eater: { w: 28, h: 26, ax: 14, ay: 23, fn: drawEater, hd: drawEater32, label: (q) => (q.windup ? 'bite' : `f${Math.round(q.t * 8)}`), q: (o) => ({ t: (Math.floor((o.t || 0) * 8) % 10) / 8, windup: o.windup }) },
 };

@@ -36,14 +36,15 @@ test('interact_near_sign: идём по дороге и жмём E — указ�
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => !window.__abf.game.cinematic && window.__abf.game.flags.introSeen, null, { timeout: 6000 });
   const prompt = page.locator('#ui > .prompt');
-  // естественная траектория: просто вправо по дороге, пока не появится подсказка
-  await page.keyboard.down('d');
+  // естественная траектория: просто вверх по дороге, пока не появится подсказка
+  await page.keyboard.down('w');
   await expect(prompt).toContainText('Осмотреть указатель', { timeout: 6000 });
   // табличка над указателем: имя и действие с клавишей
   await expect(page.locator('.plate:not(.hidden)').first()).toContainText('Осмотреть указатель');
-  await page.keyboard.up('d');
-  const y = await page.evaluate(() => window.__abf.game.player.y);
-  expect(y).toBeGreaterThan(110); // герой остался на дороге, не подбирался к указателю сверху
+  await page.keyboard.up('w');
+  const x = await page.evaluate(() => window.__abf.game.player.x);
+  expect(x).toBeGreaterThan(192); // герой остался на дороге, не сворачивал к указателю
+  expect(x).toBeLessThan(288);
   await page.keyboard.press('e');
   await expect(page.locator('.dialogue')).toContainText('КОЛОКОЛЬНЫЕ', { timeout: 3000 });
 });
@@ -98,13 +99,13 @@ test('target_enemy_over_nearby_prop: Q выбирает врага, на кот�
   await page.evaluate(async () => {
     const A = window.__abf;
     await A.shot('road', (g) => {
-      g.player.x = 30 * 16;
-      g.player.y = 7 * 16 + 6;
+      g.player.x = 240;
+      g.player.y = 24 * 16 + 6;
       const e = g.spawnEnemy('hollow', g.player.x - 60, g.player.y, { spawn: 0 });
       e.stun = 99;
     });
   });
-  const [sx, sy] = await screenOf(page, 30 * 16 - 60, 7 * 16 - 2);
+  const [sx, sy] = await screenOf(page, 240 - 60, 24 * 16 - 2);
   await page.mouse.move(sx, sy);
   await page.waitForTimeout(150);
   const r = await page.evaluate(() => window.__abf.game.player.shiftTarget?.obj.kind);
@@ -112,7 +113,7 @@ test('target_enemy_over_nearby_prop: Q выбирает врага, на кот�
   await expect(page.locator('#ui > .prompt')).toContainText('Пустокожий');
   await expect(page.locator('.plate:not(.hidden)').first()).toContainText('Пустокожий');
   // смотрим на мост — цель меняется на мост
-  const [bx, by] = await screenOf(page, 32 * 16 + 32, 7 * 16 + 6);
+  const [bx, by] = await screenOf(page, 240, 19 * 16 + 4);
   await page.mouse.move(bx, by);
   await page.waitForTimeout(150);
   expect(await page.evaluate(() => window.__abf.game.player.shiftTarget?.obj.kind)).toBe('bridge');
