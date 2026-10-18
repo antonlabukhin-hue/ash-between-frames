@@ -692,3 +692,23 @@ body { font-family: var(--font-body); font-weight: 500; }
 /* Эхо: кнопка записи над сдвигом */
 .tbtn.echo { width: calc(44px * var(--bs, 1)); height: calc(44px * var(--bs, 1)); right: calc(5% + 14px * var(--bs, 1)); bottom: calc(10% + 166px * var(--bs, 1)); font-size: calc(18px * var(--bs, 1)); border-color: rgba(58, 208, 192, 0.8); }
 .tbtn.echo.rec { background: rgba(58, 208, 192, 0.35); box-shadow: 0 0 10px rgba(58, 208, 192, 0.6); }
+
+/* подсказка — строка внизу по центру, как реплики; печатается, центр кадра и герой свободны */
+.hint {
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: calc(var(--px) * 6);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(64%, 46em);
+  text-align: center;
+  padding: calc(var(--px) * 2) calc(var(--px) * 6);
+  border-left: none;
+  border-top: 1px solid rgba(201, 150, 70, 0.55);
+  background: linear-gradient(180deg, rgba(14, 14, 24, 0.86), rgba(6, 6, 12, 0.86));
+  font-size: max(13px, calc(var(--px) * 5.6));
+  transition: opacity 0.35s;
+}
+.hint .ghost { visibility: hidden; }
+@media (pointer: coarse) { .hint { max-width: 52%; bottom: calc(var(--px) * 4); } }

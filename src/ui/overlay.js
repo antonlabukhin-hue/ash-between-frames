@@ -76,19 +76,57 @@ export function createUI(root, { audio }) {
     later('banner', dur * 1000, () => banner.classList.remove('show'));
   };
 
+  // Подсказка — строка внизу по центру, как реплики: текст печатается и держится столько,
+  // сколько нужно прочитать (не дольше dur). Непечатанная часть занимает место невидимо,
+  // чтобы строка не прыгала.
   let hintText = '';
+  let hintTimer = 0;
+  const typedHtml = (html, n) => {
+    let left = n;
+    let out = '';
+    let hidden = false;
+    for (const part of html.split(/(<[^>]+>)/)) {
+      if (!part) continue;
+      if (part[0] === '<') {
+        out += part;
+        continue;
+      }
+      const chars = [...part];
+      const shown = chars.slice(0, Math.max(0, left)).join('');
+      const rest = chars.slice(Math.max(0, left)).join('');
+      left -= chars.length;
+      out += shown;
+      if (rest) {
+        out += `<span class="ghost">${rest}</span>`;
+        hidden = true;
+      }
+    }
+    return { out, done: !hidden };
+  };
+  const hintLen = (html) => html.replace(/<[^>]+>/g, '').length;
   ui.hint = (html, dur = 4) => {
+    const len = hintLen(html);
+    const read = Math.min(dur, Math.max(2.2, 1.2 + len * 0.045));
     if (hintText !== html) {
-      hint.innerHTML = html;
       hintText = html;
+      clearInterval(hintTimer);
+      let n = 0;
+      hint.innerHTML = typedHtml(html, 0).out;
+      hintTimer = setInterval(() => {
+        n += 2;
+        const r = typedHtml(html, n);
+        hint.innerHTML = r.out;
+        if (r.done) clearInterval(hintTimer);
+      }, 30);
     }
     hint.classList.remove('off');
-    later('hint', dur * 1000, () => {
+    later('hint', (read + len * 0.015) * 1000, () => {
       hint.classList.add('off');
       hintText = '';
     });
   };
   ui.clearHint = () => {
+    clearInterval(hintTimer);
     hint.classList.add('off');
     hintText = '';
   };
