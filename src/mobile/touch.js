@@ -60,6 +60,7 @@ export function createTouch(root, input, renderer) {
     ab2: mk('ab ab2', '2', 'ab2', 'Способность 2'),
     ab3: mk('ab ab3', '3', 'ab3', 'Способность 3'),
     echo: mk('echo', '◐', 'echo', 'Эхо: запись'),
+    gaze: mk('gaze', '◉', 'gaze', 'Взгляд Смотрителя (удерживать)'),
   };
 
   let stickId = null;

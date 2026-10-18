@@ -751,6 +751,10 @@ export function createGame({ input, audio, ui, storage, save }) {
       g.slowT -= dt;
       dt *= 0.35;
     }
+    // Взгляд Смотрителя (удерживать): мир замедляется и гаснет, видно всё, с чем можно что-то сделать
+    g.gaze = !g.cinematic && !ui.mode && !!g.player && !g.player.dead && input.isDown('gaze');
+    g.gazeK = clamp((g.gazeK || 0) + (g.gaze ? dt * 6 : -dt * 8), 0, 1);
+    dt *= 1 - 0.7 * g.gazeK;
     const p = g.player;
     if (!g.cinematic) {
       updatePlayer(g, p, dt);

@@ -578,6 +578,56 @@ function drawEchoRec(g, ctx, p) {
   ring(ctx, p.x, p.y, 4 + 10 * left, P.tealHi, 0.5, 1);
 }
 
+// ── Взгляд Смотрителя ───────────────────────────────────────────────────
+// Классы интерактивного: говорить (молочный), взять/осмотреть (тёплый), сдвинуть во времени
+// (цвет будущей фазы), враги (малиновый). У цели сдвига — призрак её другого состояния.
+const isTalk = (o) => o.kind === 'npc' || o.kind === 'ghostNpc';
+const canUse = (g, o) => o.onInteract && !o.hidden && !o.carried && (!o.canInteract || o.canInteract(g)) && !(o.def.auraOnly && !o.lit);
+const canShift = (o) => o.tl?.switchable && !o.hidden && !o.carried;
+function drawGaze(g, ctx, p, cx, cy) {
+  const k = g.gazeK;
+  const near = (o) => Math.abs(o.x - p.x) < W && Math.abs(o.y - p.y) < H;
+  for (const o of g.props) {
+    if (!near(o) || !visible(o.x, o.y, 64)) continue;
+    if (canUse(g, o)) lightUpProp(g, ctx, o, isTalk(o) ? '#ece4cf' : WARM, 0.85 * k);
+    else if (canShift(o)) {
+      lightUpProp(g, ctx, o, PHASE_COLOR[nextPhaseOf(o.tl)], 0.7 * k);
+      const [ox, oy] = o.def.flat ? propCenter(o) : [o.x, o.y];
+      ring(ctx, ox, oy, 7 + (o.def.foot?.w ?? 8) / 2, PHASE_COLOR[nextPhaseOf(o.tl)], 0.4);
+    }
+  }
+  for (const e of g.enemies) if (!e.dead && e.spawn <= 0 && visible(e.x, e.y, 40)) lightUpEnemy(g, ctx, e, P.crimson);
+  // призрак другого состояния у цели — как линза: смотри, что будет, до траты заряда
+  const t = p.shiftTarget;
+  if (t && t.type !== 'projectile') {
+    const o = t.obj;
+    const other = nextPhaseOf(o.tl);
+    const a = (0.62 + 0.15 * Math.sin(g.time * 6)) * k;
+    ctx.globalAlpha = a;
+    if (t.type === 'enemy') drawEnemyC(ctx, o.kind, o.x, o.y, { ...enemyOpts(o), phase: other });
+    else if (o.def.cache && !o.nocache) blit(ctx, propEntry(g, o, other), o.x, o.y);
+    else o.def.draw(ctx, { ...o, tl: { ...o.tl, phase: other } }, g);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// Подписи взгляда: что можно сделать с каждым объектом (ближние — первыми).
+function gazeTags(g, p, cx, cy) {
+  const out = [];
+  for (const o of g.props) {
+    const use = canUse(g, o);
+    if (!use && !canShift(o)) continue;
+    if (o === p.shiftTarget?.obj && !use) continue; // у цели сдвига своя табличка
+    const [mx] = propCenter(o);
+    // у цели сдвига сверху табличка Q — подпись действия уходит под объект
+    const y = o === p.shiftTarget?.obj ? (o.def.flat ? o.y + o.h : o.y) + 12 : propTop(o);
+    if (mx < cx - 8 || mx > cx + W + 8 || y < cy - 8 || y > cy + H + 8) continue;
+    const text = use ? o.prompt || 'Осмотреть' : `${o.name || o.def.name || 'Объект'} — ${nextPhaseOf(o.tl) === PAST ? 'в прошлое' : 'в настоящее'}`;
+    out.push({ x: (mx - cx) / W, y: (y - cy) / H, text, kind: use ? (isTalk(o) ? 'talk' : 'use') : 'time', d: Math.hypot(mx - p.x, y - p.y) });
+  }
+  return out.sort((a, b) => a.d - b.d).slice(0, 12);
+}
+
 // ── нити причин (П3) ─────────────────────────────────────────────────────
 // Пока герой целится сдвигом, видна цепочка цели: тонкая янтарная нить с провисом; натянутая
 // (причина работает) — яркая, с бегущими бусинами. Без прицела — только натянутые, бледно.
@@ -594,7 +644,7 @@ function drawThreads(g, ctx, p) {
     const [x1, y1] = threadAnchor(t.to);
     // рядом с героем нить видна и без прицела
     const near = Math.min(Math.hypot(p.x - x0, p.y - y0), Math.hypot(p.x - x1, p.y - y1)) < 80;
-    const hot = chain?.has(key(t)) || near;
+    const hot = chain?.has(key(t)) || near || g.gazeK > 0.5;
     if (!hot && !t.on) continue;
     const len = Math.hypot(x1 - x0, y1 - y0);
     const sag = Math.min(18, len * 0.12);
@@ -719,7 +769,8 @@ function plates(g, p, cx, cy) {
     }
     return pl;
   };
-  const it = g.interactTarget || g.interactNear;
+  // во взгляде подписи уже висят над всем — табличка взаимодействия не нужна
+  const it = g.gazeK > 0.5 ? null : g.interactTarget || g.interactNear;
   if (it) {
     const [mx] = propCenter(it);
     const pl = at(it, mx, propTop(it));
@@ -1101,6 +1152,11 @@ export function renderWorld(g, ctx) {
   drawRain(g, ctx);
   drawLeaves(g, ctx);
   drawVignette(g, ctx);
+  // Взгляд Смотрителя: мир гаснет в холодный тон, интерактивное подсвечивается поверх
+  if (g.gazeK > 0) {
+    ctx.fillStyle = `rgba(6,10,24,${0.5 * g.gazeK})`;
+    ctx.fillRect(0, 0, W, H);
+  }
   sec('свет');
 
   // поверх света: метки, полоски здоровья, цифры — одинаковы во всех профилях
@@ -1118,11 +1174,13 @@ export function renderWorld(g, ctx) {
   const p = g.player;
   // как в Diablo: на земле под объектом маркеров нет — светится сам объект,
   // а имя и действие пишутся табличкой над ним (HTML-слой, src/ui/overlay.js)
+  if (p && !p.dead && !g.cinematic && g.gazeK > 0) drawGaze(g, ctx, p, cx, cy);
   if (p && !p.dead && !g.cinematic) drawThreads(g, ctx, p);
   if (p?.echoRec) drawEchoRec(g, ctx, p);
   drawNodeRunes(g, ctx);
   if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
   g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
+  g.ui.setTags?.(p && !p.dead && !g.cinematic && !g.ui.mode && g.gazeK > 0.5 ? gazeTags(g, p, cx, cy) : []);
   // реплики призраков в сценах прошлого
   g.ui.setBarks?.(!g.ui.mode ? (g.barkList || []).map((b) => ({ x: (b.x - cx) / W, y: (b.y - cy) / H, who: b.who, text: b.text })) : []);
   for (const t of g.texts) {

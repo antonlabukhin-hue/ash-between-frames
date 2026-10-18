@@ -712,3 +712,22 @@ body { font-family: var(--font-body); font-weight: 500; }
 }
 .hint .ghost { visibility: hidden; }
 @media (pointer: coarse) { .hint { max-width: 52%; bottom: calc(var(--px) * 4); } }
+
+/* Взгляд Смотрителя: кнопка (удерживать) и подписи над всем интерактивным */
+.tbtn.gaze { width: calc(44px * var(--bs, 1)); height: calc(44px * var(--bs, 1)); left: calc(4% + 4px); top: calc(18% + 40px); font-size: calc(18px * var(--bs, 1)); border-color: rgba(236, 228, 207, 0.6); }
+.gtag {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 1px calc(var(--px) * 2.5);
+  background: rgba(6, 6, 12, 0.72);
+  border-bottom: 1px solid currentColor;
+  white-space: nowrap;
+  font-size: max(11px, calc(var(--px) * 4.6));
+  line-height: 1.2;
+  pointer-events: none;
+  z-index: 3;
+}
+.gtag.talk { color: var(--milk); }
+.gtag.use { color: #ffe9b0; }
+.gtag.time { color: var(--amber-hi); }
+.gtag.hidden { display: none; }

@@ -64,6 +64,7 @@ export function createUI(root, { audio }) {
     ui.setPrompt(null);
     ui.setPlates([]);
     ui.setBarks?.([]);
+    ui.setTags?.([]);
     if (all) {
       ui.caption(null);
       toast.classList.add('off');
@@ -169,6 +170,28 @@ export function createUI(root, { audio }) {
       elp.style.left = `${(pl.x * 100).toFixed(2)}%`;
       elp.style.top = `${(pl.y * 100).toFixed(2)}%`;
     }
+  };
+
+  // Подписи «Взгляда Смотрителя»: над каждым интерактивным объектом — что с ним можно сделать.
+  const tagEls = Array.from({ length: 12 }, () => el('div', 'gtag passive hidden', root));
+  const tagKeys = tagEls.map(() => '');
+  ui.setTags = (list) => {
+    tagEls.forEach((elt, i) => {
+      const t = list[i];
+      if (!t) {
+        if (tagKeys[i]) elt.className = 'gtag passive hidden';
+        tagKeys[i] = '';
+        return;
+      }
+      const key = t.kind + t.text;
+      if (key !== tagKeys[i]) {
+        tagKeys[i] = key;
+        elt.textContent = t.text;
+        elt.className = `gtag passive ${t.kind}`;
+      }
+      elt.style.left = `${(t.x * 100).toFixed(2)}%`;
+      elt.style.top = `${(t.y * 100).toFixed(2)}%`;
+    });
   };
 
   // Реплики сцен прошлого: короткий текст над говорящим призраком.
