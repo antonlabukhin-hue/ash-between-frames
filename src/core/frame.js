@@ -7,8 +7,8 @@
 // близка к цели (±30). Иначе — дробный «вписанный» масштаб без пустых полей: герой и
 // враги должны быть крупными и читаемыми (около 1/8 высоты кадра).
 
-// Плотность сетки: 2 — «32 бита» (по умолчанию). Для пробы плотнее: ?rs=3 или ?rs=4
-// («64 бита» — вдвое больше пикселей на ту же фигуру); выбор запоминается.
+// Плотность сетки: 4 — «64 бита» (по умолчанию, вдвое больше пикселей на ту же фигуру).
+// ?rs=2 — прежние «32 бита», ?rs=3 — середина; выбор запоминается.
 function pickRS() {
   try {
     const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('rs') : null;
@@ -17,9 +17,9 @@ function pickRS() {
       return +q;
     }
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem('abf-rs') : null;
-    return v && ['2', '3', '4'].includes(v) ? +v : 2;
+    return v && ['2', '3', '4'].includes(v) ? +v : 4;
   } catch {
-    return 2;
+    return 4;
   }
 }
 export const RS = pickRS();

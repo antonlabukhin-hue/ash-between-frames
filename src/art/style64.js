@@ -1,5 +1,5 @@
 // Стиль персонажей: «64 бита» (вариант C, src/art/chars64.js и npcs64.js) или прежние 32-битные кадры.
-// Пока на согласовании — включается флагом ?npc=64 (запоминается); ?npc=32 — вернуть прежние.
+// По умолчанию — «64 бита»; ?npc=32 — вернуть прежние кадры, ?npc=64 — снова новые (запоминается).
 function pick() {
   try {
     const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('npc') : null;
@@ -7,9 +7,9 @@ function pick() {
       localStorage.setItem('abf-npc', q);
       return q === '64';
     }
-    return typeof localStorage !== 'undefined' && localStorage.getItem('abf-npc') === '64';
+    return typeof localStorage === 'undefined' || localStorage.getItem('abf-npc') !== '32';
   } catch {
-    return false;
+    return true;
   }
 }
 export const ART64 = pick();

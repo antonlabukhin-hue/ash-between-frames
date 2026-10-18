@@ -26,14 +26,19 @@ describe('Подбор кадра: 32-битная сетка', () => {
     if (f.exact) expect(Number.isInteger(f.scale)).toBe(true);
   });
   it('1080p — кадр 384×216 (герой крупный), дробный ×2,5 без полей', () => {
-    expect(frameSize(1920, 1080)).toMatchObject({ w: 384, h: 216, exact: false });
-    expect(frameSize(1920, 1080).scale).toBeCloseTo(2.5, 5);
+    expect(frameSize(1920, 1080, 2)).toMatchObject({ w: 384, h: 216, exact: false });
+    expect(frameSize(1920, 1080, 2).scale).toBeCloseTo(2.5, 5);
   });
   it('1440p — целый ×3 при высоте 240', () => {
-    expect(frameSize(2560, 1440)).toMatchObject({ scale: 3, h: 240, exact: true });
+    expect(frameSize(2560, 1440, 2)).toMatchObject({ scale: 3, h: 240, exact: true });
   });
   it('телефон 844×390 @3 заполняется целым ×3', () => {
-    expect(frameSize(2532, 1170)).toMatchObject({ scale: 3, w: 422, exact: true });
+    expect(frameSize(2532, 1170, 2)).toMatchObject({ scale: 3, w: 422, exact: true });
+  });
+  it('64 бита: 1080p — тот же кадр 384×216, холст вчетверо плотнее', () => {
+    const f = frameSize(1920, 1080, 4);
+    expect(f).toMatchObject({ w: 384, h: 216, rs: 4 });
+    expect(f.scale).toBeCloseTo(1.25, 5);
   });
   it('неудобный размер — дробный масштаб без полей', () => {
     const f = frameSize(1152, 648);
