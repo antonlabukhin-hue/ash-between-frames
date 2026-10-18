@@ -34,15 +34,17 @@ test('смена состояния: мост проходим только в �
     await A.shot('road');
     const g = A.game;
     const p = g.player;
-    // провал — ряды 18–21 поперёк дороги, мост над ним
+    // провал поперёк дороги, мост над ним (положение — от моста: карта бывает кодовой и под рисованный пол)
+    const br = g.props.find((o) => o.kind === 'bridge');
+    const below = br.y + br.h;
     p.x = 240;
-    p.y = 23 * 16 + 6;
+    p.y = below + 10;
     A.input.inject('up', true);
     await A.sleep(450);
     A.input.inject('up', false);
     await A.sleep(800);
-    const fell = { y: p.y, hp: p.hp };
-    p.y = 22 * 16 + 4;
+    const fell = { y: p.y, hp: p.hp, edge: below - 6 };
+    p.y = below + 2;
     p.aim = -Math.PI / 2;
     await A.sleep(100);
     A.input.tap('shift');
@@ -51,9 +53,9 @@ test('смена состояния: мост проходим только в �
     A.input.inject('up', true);
     await A.sleep(1300);
     A.input.inject('up', false);
-    return { fell, phase, crossed: p.y < 17 * 16, charges: p.charges.n };
+    return { fell, phase, crossed: p.y < br.y, charges: p.charges.n };
   });
-  expect(r.fell.y).toBeGreaterThan(22 * 16);
+  expect(r.fell.y).toBeGreaterThan(r.fell.edge);
   expect(r.fell.hp).toBe(90);
   expect(r.phase).toBe('past');
   expect(r.crossed).toBe(true);

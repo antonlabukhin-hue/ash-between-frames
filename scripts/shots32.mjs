@@ -23,6 +23,10 @@ const SHOTS = {
   'road-gap': ['road', 'g.player.x = 240; g.player.y = 400; g.player.aim = -Math.PI / 2; g.player.dir = "up";'],
   'road-gate': ['road', "g.player.x = 240; g.player.y = 150; g.player.aim = -Math.PI / 2; g.player.dir = 'up'; g.spawnWave([{kind:'hollow',x:210,y:170},{kind:'framer',x:275,y:180}]);"],
   'road-fight': ['road', "g.player.x = 240; g.player.y = 540; g.player.dir = 'up'; g.spawnWave([{kind:'hollow',x:205,y:500},{kind:'ringer',x:280,y:490},{kind:'framer',x:260,y:560}]);"],
+  // тракт с рисованным полом (карта под картинку: стена до ряда 11, провал 21–25)
+  'art-start': ['road', "g.player.x = 232; g.player.y = 600; g.player.dir = 'up'; g.player.aim = -Math.PI / 2;"],
+  'art-gap': ['road', "g.player.x = 240; g.player.y = 450; g.player.dir = 'up'; g.player.aim = -Math.PI / 2;"],
+  'art-gate': ['road', "g.player.x = 240; g.player.y = 230; g.player.dir = 'up'; g.player.aim = -Math.PI / 2; g.spawnWave([{kind:'hollow',x:205,y:250},{kind:'framer',x:280,y:260}]);"],
   square: ['square', 'g.player.x = 240; g.player.y = 300; g.player.aim = -Math.PI / 2;'],
   belfry: ['belfry', 'g.player.x = 256; g.player.y = 260; if (g.boss) g.boss.cinematic = false;'],
   tornRoad: ['tornRoad', ''],
