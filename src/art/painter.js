@@ -34,6 +34,13 @@ export function createPainter(w, h) {
       d[o + 3] = Math.max(d[o + 3], a);
     }
   };
+  // сделать пиксель прозрачным (дыры пустоты, небо)
+  p.clear = (x, y) => {
+    x |= 0;
+    y |= 0;
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+    d[(y * w + x) * 4 + 3] = 0;
+  };
   p.rect = (x, y, rw, rh, c, a) => {
     for (let j = 0; j < rh; j++) for (let i = 0; i < rw; i++) p.set(x + i, y + j, c, a);
   };

@@ -2,14 +2,35 @@
 import { createAtlas, blit } from './atlas.js';
 import { drawHero, drawHollow, drawFramer, drawRinger, drawShadow, drawEater, drawMel } from './sprites.js';
 import { P } from './palette.js';
+import { createOverrides, heroOverrideKey, enemyOverrideKey } from './overrides.js';
 
 export const atlas = createAtlas({ maxPages: 3 });
 const OUTLINE = '#05060c';
 const TAU = Math.PI * 2;
 
+// Ручные PNG-кадры (public/sprites); после загрузки атлас пересобирается.
+export const overrides = createOverrides();
+export function loadSpriteOverrides(base) {
+  return overrides.load(base, () => atlas.reset());
+}
+
 // Выводит кадр; variant: null — обычный, иначе цвет силуэта (вспышка, двойной контур, шлейф).
-function put(ctx, key, w, h, ax, ay, draw, x, y, variant, outline = true) {
-  const base = atlas.sprite(key, w, h, ax, ay, draw, { outline: outline ? OUTLINE : null });
+// ov — смысловой ключ ручного кадра: если он есть в манифесте, кодовый кадр не рисуется.
+function put(ctx, key, w, h, ax, ay, draw, x, y, variant, outline = true, ov = null, flip = false) {
+  const f = ov ? overrides.get(ov) : null;
+  let base;
+  if (f) {
+    key = `ov|${ov}|${flip ? 'm' : ''}`;
+    base = atlas.sprite(key, f.w, f.h, f.ax, f.ay, (c, bx, by) => {
+      c.save();
+      if (flip) {
+        c.translate(bx, 0);
+        c.scale(-1, 1);
+        c.drawImage(f.img, f.x, f.y, f.w, f.h, -(f.w - f.ax), by - f.ay, f.w, f.h);
+      } else c.drawImage(f.img, f.x, f.y, f.w, f.h, bx - f.ax, by - f.ay, f.w, f.h);
+      c.restore();
+    }, { outline: f.outline ? OUTLINE : null });
+  } else base = atlas.sprite(key, w, h, ax, ay, draw, { outline: outline ? OUTLINE : null });
   blit(ctx, variant ? atlas.tinted(key, base, variant) : base, x, y);
 }
 
@@ -30,15 +51,15 @@ export function drawHeroC(ctx, x, y, o, variant = null) {
       dir: o.dir, flip: o.flip, walk: q.walk / 6, sway: q.sway * 2.5, aim: (q.aim * Math.PI) / 4,
       swing: q.swing >= 0 ? q.swing * 0.04 : null, swingStep: o.swingStep, glow: o.glow, charges: o.charges ?? 3,
       moving: o.moving, t: q.hem * 0.35, noShadow: true,
-    }), x, y, variant);
+    }), x, y, variant, true, heroOverrideKey(o, q), o.dir === 'side' && o.flip);
 }
 
 // ── враги ─────────────────────────────────────────────────────────────
 const ENEMY = {
-  hollow: { w: 24, h: 34, ax: 12, ay: 30, fn: drawHollow, q: (o) => ({ walk: Math.floor((o.walk || 0) * 4) / 4, t: (Math.floor((o.t || 0) * 12) % 4) / 12, windup: o.windup, lunge: o.lunge }) },
-  framer: { w: 16, h: 18, ax: 8, ay: 15, fn: drawFramer, q: (o) => ({ t: (Math.floor((o.t || 0) * 10) & 1) / 10, look: o.look || 0 }) },
-  ringer: { w: 22, h: 30, ax: 11, ay: 27, fn: drawRinger, q: (o) => ({ t: o.charge ? (Math.floor((o.t || 0) * 30) & 1) / 30 + 0.05 : 0, charge: o.charge }) },
-  eater: { w: 28, h: 26, ax: 14, ay: 23, fn: drawEater, q: (o) => ({ t: (Math.floor((o.t || 0) * 8) % 10) / 8, windup: o.windup }) },
+  hollow: { w: 24, h: 34, ax: 12, ay: 30, fn: drawHollow, label: (q) => (q.lunge ? 'lunge' : q.windup ? 'windup' : `walk${Math.round(q.walk * 4)}`), q: (o) => ({ walk: Math.floor((o.walk || 0) * 4) / 4, t: (Math.floor((o.t || 0) * 12) % 4) / 12, windup: o.windup, lunge: o.lunge }) },
+  framer: { w: 16, h: 18, ax: 8, ay: 15, fn: drawFramer, label: (q) => `f${Math.round(q.t * 10)}${q.look ? `l${q.look}` : ''}`, q: (o) => ({ t: (Math.floor((o.t || 0) * 10) & 1) / 10, look: o.look || 0 }) },
+  ringer: { w: 22, h: 30, ax: 11, ay: 27, fn: drawRinger, label: (q) => (q.charge ? `charge${Math.round((q.t - 0.05) * 30)}` : 'idle'), q: (o) => ({ t: o.charge ? (Math.floor((o.t || 0) * 30) & 1) / 30 + 0.05 : 0, charge: o.charge }) },
+  eater: { w: 28, h: 26, ax: 14, ay: 23, fn: drawEater, label: (q) => (q.windup ? 'bite' : `f${Math.round(q.t * 8)}`), q: (o) => ({ t: (Math.floor((o.t || 0) * 8) % 10) / 8, windup: o.windup }) },
 };
 
 export function drawEnemyC(ctx, kind, x, y, o, variant = null) {
@@ -46,7 +67,7 @@ export function drawEnemyC(ctx, kind, x, y, o, variant = null) {
   const d = ENEMY[kind];
   const q = d.q(o);
   const key = `${kind}|${o.phase}|${JSON.stringify(q)}`;
-  put(ctx, key, d.w, d.h, d.ax, d.ay, (c, ax, ay) => d.fn(c, ax, ay, { ...q, phase: o.phase, noShadow: true }), x, y, variant);
+  put(ctx, key, d.w, d.h, d.ax, d.ay, (c, ax, ay) => d.fn(c, ax, ay, { ...q, phase: o.phase, noShadow: true }), x, y, variant, true, enemyOverrideKey(kind, o.phase, d.label(q)));
 }
 
 function drawShadowC(ctx, x, y, o, variant) {
@@ -55,14 +76,45 @@ function drawShadowC(ctx, x, y, o, variant) {
   const f = Math.floor(((o.t || 0) * speed) / (TAU / n)) % n;
   const t = (f * (TAU / n)) / speed;
   const key = `shadow|${o.phase}|${f}|${o.shield ? 1 : 0}|${o.layer || ''}`;
-  put(ctx, key, 44, 46, 22, 42, (c, ax, ay) => drawShadow(c, ax, ay, { phase: o.phase, t, shield: o.shield, layer: o.layer, noShadow: true }), x, y, variant, !o.layer);
+  put(ctx, key, 44, 46, 22, 42, (c, ax, ay) => drawShadow(c, ax, ay, { phase: o.phase, t, shield: o.shield, layer: o.layer, noShadow: true }), x, y, variant, !o.layer, enemyOverrideKey('shadow', o.phase, `f${f}${o.layer ? 'front' : ''}`));
 }
 
 export function drawMelC(ctx, x, y, o, variant = null) {
   const f = Math.floor((o.t || 0) * 4) % 16;
   const key = `mel|${o.version || 'w'}|${f}|${o.windup ? 1 : 0}`;
-  put(ctx, key, 76, 84, 38, 80, (c, ax, ay) => drawMel(c, ax, ay, { t: f / 4, version: o.version, windup: o.windup, noShadow: true }), x, y, variant);
+  put(ctx, key, 76, 84, 38, 80, (c, ax, ay) => drawMel(c, ax, ay, { t: f / 4, version: o.version, windup: o.windup, noShadow: true }), x, y, variant, true, `mel/${o.version || 'w'}/f${f - (f % 4)}`);
 }
 
 export const atlasStats = () => ({ frames: atlas.count(), pages: atlas.pages.length, bytes: atlas.memory(), baked: atlas.stats.baked });
 export { P };
+
+// Описание всех стандартных кадров для выгрузки шаблонов художнику (scripts/export-sprites.mjs).
+export function exportFrameSpecs() {
+  const specs = [];
+  for (const dir of ['down', 'up', 'side']) {
+    for (let w = 0; w < 6; w++) specs.push({ ov: `hero/${dir}/walk${w}`, w: 44, h: 44, ax: 22, ay: 38, draw: (c, ax, ay) => drawHero(c, ax, ay, { dir, walk: w / 6, moving: true, aim: Math.PI / 2, charges: 3, noShadow: true }) });
+    for (let st = 1; st <= 3; st++) for (let sw = 0; sw < 5; sw++) specs.push({ ov: `hero/${dir}/swing${st}_${sw}`, w: 44, h: 44, ax: 22, ay: 38, draw: (c, ax, ay) => drawHero(c, ax, ay, { dir, swing: sw * 0.04, swingStep: st, aim: dir === 'up' ? -Math.PI / 2 : dir === 'side' ? 0 : Math.PI / 2, charges: 3, noShadow: true }) });
+  }
+  for (const phase of ['present', 'past']) {
+    for (let w = 0; w < 4; w++) specs.push({ ov: enemyOverrideKey('hollow', phase, `walk${w}`), ...ENEMY.hollow, draw: (c, ax, ay) => drawHollow(c, ax, ay, { phase, walk: w / 4, noShadow: true }) });
+    specs.push({ ov: enemyOverrideKey('hollow', phase, 'windup'), ...ENEMY.hollow, draw: (c, ax, ay) => drawHollow(c, ax, ay, { phase, windup: true, noShadow: true }) });
+    specs.push({ ov: enemyOverrideKey('hollow', phase, 'lunge'), ...ENEMY.hollow, draw: (c, ax, ay) => drawHollow(c, ax, ay, { phase, lunge: true, noShadow: true }) });
+    for (let f = 0; f < 2; f++) specs.push({ ov: enemyOverrideKey('framer', phase, `f${f}`), ...ENEMY.framer, draw: (c, ax, ay) => drawFramer(c, ax, ay, { phase, t: f / 10, noShadow: true }) });
+    specs.push({ ov: enemyOverrideKey('ringer', phase, 'idle'), ...ENEMY.ringer, draw: (c, ax, ay) => drawRinger(c, ax, ay, { phase, noShadow: true }) });
+    for (let f = 0; f < 2; f++) specs.push({ ov: enemyOverrideKey('ringer', phase, `charge${f}`), ...ENEMY.ringer, draw: (c, ax, ay) => drawRinger(c, ax, ay, { phase, charge: true, t: f / 30 + 0.05, noShadow: true }) });
+  }
+  for (const v of ['w', 'imprint', 'scar']) for (let f = 0; f < 16; f += 4) specs.push({ ov: `mel/${v}/f${f}`, w: 76, h: 84, ax: 38, ay: 80, draw: (c, ax, ay) => drawMel(c, ax, ay, { t: f / 4, version: v === 'w' ? undefined : v, noShadow: true }) });
+  return specs;
+}
+
+// Упаковать стандартные кадры в один PNG-лист с манифестом (контур уже запечён).
+export function exportSheet() {
+  const ex = createAtlas({ pageSize: 1024, maxPages: 1 });
+  const frames = {};
+  for (const sp of exportFrameSpecs()) {
+    const e = ex.sprite(sp.ov, sp.w, sp.h, sp.ax, sp.ay, sp.draw, { outline: OUTLINE });
+    frames[sp.ov] = [e.sx, e.sy, e.w, e.h, e.ax, e.ay];
+  }
+  const page = ex.pages[0].canvas;
+  return { png: page.toDataURL('image/png'), manifest: { version: 1, sheets: [{ image: 'characters.png', outline: false, frames }] } };
+}

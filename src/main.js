@@ -12,11 +12,12 @@ import { renderWorld } from './render.js';
 import { drawTitle } from './scenes/title.js';
 import { createTouch } from './mobile/touch.js';
 import { ROOMS, CHAPTER1 } from './scenes/rooms.js';
+import { setArtVariant, getArtVariant } from './scenes/chapter1.js';
 import { drawSpriteSheet } from './scenes/spritesheet.js';
 import { resolveProfile, createAutoTuner, tuneStep, PROFILES } from './core/quality.js';
 import { createPerf, instrument, recordFrame, summary, setOverlay, showOverlay } from './core/perf.js';
 import { frameStats, lightLayerBytes, setCallProbe } from './render.js';
-import { atlasStats, atlas } from './art/spritecache.js';
+import { atlasStats, atlas, loadSpriteOverrides, exportSheet } from './art/spritecache.js';
 import { lightCacheBytes } from './art/lightmask.js';
 import { W, H } from './core/renderer.js';
 
@@ -404,10 +405,23 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     toggleOverlay();
   }
+  // F4 — сравнение прежней и новой художественной версии эталонной комнаты
+  if (e.code === 'F4' && __DEBUG__ && game.room?.id === 'square') {
+    e.preventDefault();
+    const next = getArtVariant() === 'current' ? 'target' : 'current';
+    setArtVariant(next);
+    const { x, y } = game.player;
+    game.loadRoom('square');
+    game.player.x = x;
+    game.player.y = y;
+    ui.toast(next === 'current' ? 'Арт: прежняя версия (current)' : 'Арт: целевая версия (target)', 2);
+  }
 });
 
 titleMenu();
 requestAnimationFrame(frame);
+// ручные PNG-спрайты (public/sprites), если есть — заменяют кодовые кадры
+loadSpriteOverrides(import.meta.env.BASE_URL);
 if (save.settings.perfOverlay || new URLSearchParams(location.search).has('debug')) toggleOverlay(true);
 
 if (__DEBUG__) {
@@ -429,7 +443,7 @@ if (__DEBUG__) {
       await sleep(120);
     }
   };
-  window.__abf = { game, save, ui, input, rooms: ROOMS, startGame, shot, skip, sleep, perf, summary: () => summary(perf), frameStats, PROFILES, renderer, atlas };
+  window.__abf = { game, save, ui, input, rooms: ROOMS, startGame, shot, skip, sleep, perf, summary: () => summary(perf), frameStats, PROFILES, renderer, atlas, setArtVariant, exportSheet };
   const q = new URLSearchParams(location.search);
   if (q.get('room')) startGame(q.get('room'));
   if (q.has('sprites')) {
