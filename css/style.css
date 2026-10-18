@@ -443,3 +443,28 @@ select {
   color: var(--milk);
   border: 1px solid #3a3b47;
 }
+
+/* ── художественная полировка интерфейса (docs/ART_TARGET.md §6) ── */
+/* подсказка — компактная строка слева под HUD, центр кадра свободен */
+.hint {
+  left: calc(var(--px) * 8);
+  top: calc(var(--px) * 52);
+  transform: none;
+  max-width: 44%;
+  padding: calc(var(--px) * 2) calc(var(--px) * 4);
+  background: rgba(5, 6, 12, 0.72);
+  border-left: calc(var(--px) * 1) solid var(--teal);
+  font-size: max(11px, calc(var(--px) * 4.8));
+}
+/* текстовая плашка взаимодействия заменена пиктограммой на холсте */
+.prompt { display: none !important; }
+/* меню: без рамок на пунктах, выбор — стрелкой и цветом */
+.btn, .btn.focus, .btn:hover { border-color: transparent; background: transparent; }
+.btn.focus, .btn:hover { color: var(--amber-hi); }
+.btn.focus::before { content: '▸ '; color: var(--amber); }
+.btn:not(.focus)::before { content: '  '; white-space: pre; }
+.menu .panel { border: none; box-shadow: 0 0 0 calc(var(--px) * 1) rgba(176, 138, 58, 0.35); }
+.menu.title .panel { background: linear-gradient(90deg, rgba(5, 6, 12, 0.78), rgba(5, 6, 12, 0)); box-shadow: none; }
+.choices { border: none; box-shadow: 0 0 0 calc(var(--px) * 1) rgba(176, 138, 58, 0.5); }
+.dialogue { border-color: #2a2632; }
+.toast { background: rgba(5, 6, 12, 0.6); }

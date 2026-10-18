@@ -15,7 +15,7 @@ import { hash2 } from './core/math.js';
 import { atlas, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js';
 import { blit } from './art/atlas.js';
 import { lightMask } from './art/lightmask.js';
-import { islandRows, islandScale } from './world/memory.js';
+import { islandRows, islandScale, inIslands } from './world/memory.js';
 
 const OUTLINE = '#05060c';
 let lightCanvas = null;
@@ -370,6 +370,11 @@ function drawFxItem(ctx, f) {
     ctx.globalAlpha = k;
     ring(ctx, f.x, f.y, r, f.c, f.squash);
     ctx.globalAlpha = 1;
+  } else if (f.kind === 'flash') {
+    // вспышка контакта: 2 кадра звезды
+    const fr = k > 0.5 ? 0 : 1;
+    const e = atlas.sprite(`flash|${fr}|${f.c}`, 13, 13, 6, 6, (bc, ax, ay) => paintFlash(bc, ax, ay, fr, f.c));
+    blit(ctx, e, f.x, f.y);
   } else if (f.kind === 'slash') {
     // серп из атласа: 32 направления
     const aq = ((Math.round(f.angle / (Math.PI / 16)) % 32) + 32) % 32;
@@ -411,51 +416,120 @@ function drawFxItem(ctx, f) {
   }
 }
 
+// Дуга удара: белая кромка, цветное тело, тёмная внутренняя тень; к середине толще.
 function paintSlash(ctx, x, y, angle, span, radius, c) {
-  const steps = 14;
+  const steps = 18;
   for (let i = 0; i <= steps; i++) {
     const a = angle - span / 2 + (span * i) / steps;
     const w = Math.sin((i / steps) * Math.PI);
-    for (let d = 0; d < 3 + w * 3; d++) {
+    const th = 2 + Math.round(w * 5);
+    for (let d = 0; d < th; d++) {
       const rr = radius - d;
-      px(ctx, x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.75, 1, 1, d < 2 ? P.milk : c);
+      const col = d === 0 ? '#ffffff' : d < th - 1 ? c : P.slate;
+      px(ctx, x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.75, 1, 1, col);
     }
   }
 }
 
+// Цель сдвига: ступенчатый эллипс под ногами и песочные часы цвета будущей фазы.
 function drawTargetMarker(g, ctx, tgt, p) {
-  const x = Math.round(tgt.x);
-  const y = Math.round(tgt.y);
-  const tl = tgt.obj.tl;
+  const o = tgt.obj;
+  const tl = o.tl;
   const nextPhase = isShifted(tl) ? tl.base : tl.phase === PAST ? 'present' : 'past';
   const c = PHASE_COLOR[nextPhase];
-  const s = 9 + Math.round(Math.sin(g.time * 8));
-  for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-    px(ctx, x + dx * s - (dx > 0 ? 2 : 0), y + dy * s - (dy > 0 ? 0 : 0), 3, 1, c);
-    px(ctx, x + dx * s - (dx > 0 ? 0 : 0), y + dy * s - (dy > 0 ? 2 : 0), 1, 3, c);
+  let fx = tgt.x;
+  let fy = tgt.y;
+  let top = tgt.y - 14;
+  let rr = 8;
+  if (tgt.type === 'enemy') {
+    fx = o.x;
+    fy = o.y;
+    top = o.y - (o.hitY ?? 9) - 20;
+    rr = (o.r ?? 5) + 5;
+  } else if (tgt.type === 'prop' && o.def && !o.def.flat) {
+    fx = o.x;
+    fy = o.y;
+    top = o.y - ((typeof o.markY === 'function' ? o.markY(o) : o.markY) ?? o.def.cache?.ay ?? 30) - 6;
+    rr = Math.max(8, (o.def.foot?.w ?? 10) / 2 + 4);
   }
-  // стоимость
+  const pulse = Math.floor(g.time * 4) % 2;
+  ring(ctx, fx, fy - 1, rr + pulse, c, 0.42);
+  const pr = p.channel && p.channel.target.obj === o ? channelProgress(p.channel) : 0;
   const cost = isShifted(tl) || p.echo > 0 || g.freeShift ? 0 : tl.cost;
-  for (let i = 0; i < cost; i++) px(ctx, x - 1 + i * 3, y - s - 4, 2, 2, P.teal);
-  if (p.channel && p.channel.target.obj === tgt.obj) {
-    const pr = channelProgress(p.channel);
-    const n = Math.floor(pr * 24);
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + (i / 24) * Math.PI * 2;
-      px(ctx, x + Math.cos(a) * (s + 3), y + Math.sin(a) * (s + 3), 1, 1, P.milk);
-    }
+  const key = `hg|${c}|${Math.floor(pr * 4)}|${cost}`;
+  const e = atlas.sprite(key, 9, 14, 4, 0, (bc, ax) => paintHourglass(bc, ax, 0, c, pr, cost));
+  blit(ctx, e, fx, Math.round(top) - pulse);
+}
+
+function paintHourglass(ctx, x, y, c, pr, cost) {
+  const rows = [5, 5, 3, 1, 3, 5, 5];
+  rows.forEach((w, j) => px(ctx, x - (w >> 1) - 1, y + j, w + 2, 1, P.ink));
+  rows.forEach((w, j) => {
+    const sand = j < 3 ? pr < 1 - j / 3 : pr >= (6 - j) / 3;
+    px(ctx, x - (w >> 1), y + j, w, 1, sand ? c : P.slate);
+  });
+  px(ctx, x - 3, y, 7, 1, c);
+  px(ctx, x - 3, y + 6, 7, 1, c);
+  for (let i = 0; i < cost; i++) px(ctx, x - 1 + i * 2 - (cost - 1), y + 9, 1, 2, P.teal);
+}
+
+function paintFlash(ctx, x, y, fr, c) {
+  const L = fr === 0 ? 6 : 4;
+  px(ctx, x - L, y, L * 2 + 1, 1, c);
+  px(ctx, x, y - L, 1, L * 2 + 1, c);
+  px(ctx, x - 1, y - 1, 3, 3, '#ffffff');
+  if (fr === 0) {
+    px(ctx, x - 3, y - 3, 1, 1, c);
+    px(ctx, x + 3, y - 3, 1, 1, c);
+    px(ctx, x - 3, y + 3, 1, 1, c);
+    px(ctx, x + 3, y + 3, 1, 1, c);
   }
+}
+
+// Взаимодействие: пиктограмма действия в пузыре и клавиша под ним.
+const ICON = {
+  eye: ['0111110', '1100011', '1011101', '1100011', '0111110'],
+  talk: ['1111111', '1000001', '1010101', '1000001', '1111011', '0000110'],
+  hand: ['0010100', '0110110', '1111110', '1111110', '0111100'],
+  drop: ['0001000', '0011100', '0111110', '0111110', '0011100'],
+  fire: ['0010000', '0011000', '0111100', '1111110', '0111100'],
+  map: ['1111111', '1001001', '1010101', '1001001', '1111111'],
+};
+
+function iconFor(obj) {
+  if (obj.icon) return obj.icon;
+  const t = obj.prompt || '';
+  if (/Поговор|Погладить/.test(t)) return 'talk';
+  if (/Осмотр|Ящик/.test(t)) return 'eye';
+  if (/Напи/.test(t)) return 'drop';
+  if (/Печь/.test(t)) return 'fire';
+  if (/Стол/.test(t)) return 'map';
+  return 'hand';
 }
 
 function drawInteractMarker(g, ctx, obj) {
   const [cx, cy] = propCenter(obj);
-  const top = obj.def.flat ? cy - 6 : obj.y - (obj.markY ?? 30);
-  const bob = Math.round(Math.sin(g.time * 5));
-  px(ctx, cx - 3, top - 6 + bob, 7, 7, P.ink);
-  px(ctx, cx - 2, top - 5 + bob, 5, 5, P.amber);
-  px(ctx, cx - 1, top - 4 + bob, 3, 1, P.ink);
-  px(ctx, cx - 1, top - 2 + bob, 3, 1, P.ink);
-  px(ctx, cx - 1, top - 4 + bob, 1, 3, P.ink);
+  const my = typeof obj.markY === 'function' ? obj.markY(obj) : obj.markY;
+  const top = obj.def.flat ? cy - 8 : obj.y - (my ?? 30);
+  const bob = Math.floor(g.time * 3) % 2;
+  const label = g.input.device === 'pad' ? 'B' : g.input.device === 'touch' ? '' : 'E';
+  const icon = iconFor(obj);
+  const e = atlas.sprite(`ia|${icon}|${label}`, 13, 20, 6, 0, (bc, ax) => paintBubble(bc, ax, icon, label));
+  blit(ctx, e, cx, top - 14 - bob);
+}
+
+function paintBubble(ctx, x, icon, label) {
+  px(ctx, x - 6, 0, 13, 10, P.ink);
+  px(ctx, x - 5, 1, 11, 8, '#1c1a26');
+  px(ctx, x - 5, 1, 11, 1, P.amber1);
+  px(ctx, x - 1, 10, 3, 1, P.ink);
+  px(ctx, x, 11, 1, 1, P.ink);
+  ICON[icon].forEach((row, j) => [...row].forEach((v, i) => v === '1' && px(ctx, x - 3 + i, 2 + j, 1, 1, P.amberHi)));
+  if (label) {
+    px(ctx, x - 3, 13, 7, 7, P.ink);
+    px(ctx, x - 2, 14, 5, 5, P.ash1);
+    drawDigits(ctx, x - 1, 14, label, P.milk);
+  }
 }
 
 
@@ -684,12 +758,19 @@ function drawHeroSprite(g, ctx, p) {
   const blink = p.invuln > 0 && p.dodge <= 0 && Math.floor(g.time * 20) % 2 === 0;
   if (blink) return;
   shadow(ctx, p.x, p.y, 12);
-  if (p.dodge > 0) {
-    // шлейф рывка — силуэт того же кадра
-    ctx.globalAlpha = 0.5;
-    drawHeroC(ctx, p.x - p.dodgeDir[0] * 8, p.y - p.dodgeDir[1] * 6, o, P.blueLo);
+  // пиксельный шлейф уклонения: три силуэта по следу
+  if (p.trail?.length) {
+    p.trail.forEach((tp, i) => {
+      ctx.globalAlpha = 0.18 + i * 0.14;
+      drawHeroC(ctx, tp.x, tp.y, o, i === p.trail.length - 1 ? P.tealHi : P.blueLo);
+    });
     ctx.globalAlpha = 1;
   }
+  // контрсвет: тёплый в острове памяти, холодный стальной в Шраме
+  const warm = g.memIslands?.length && inIslands(g.memIslands, p.x, p.y);
+  ctx.globalAlpha = 0.85;
+  drawHeroC(ctx, p.x - 1, p.y - 1, o, warm ? P.amber : '#7b88a3');
+  ctx.globalAlpha = 1;
   if (p.doubleOutline > 0) {
     // двойной контур при смене состояния
     drawHeroC(ctx, p.x - 2, p.y, o, P.amber);

@@ -417,7 +417,7 @@ export const square = {
     g.islandState = new Map();
     g.memIslands = [];
     const [cx, cy] = G16.center;
-    const statue = g.addProp('statue16', cx, cy + 10, { prompt: 'Осмотреть постамент', icon: 'eye', markY: 64 });
+    const statue = g.addProp('statue16', cx, cy + 10, { prompt: 'Осмотреть постамент', icon: 'eye', markY: (o) => (o.tl.phase === PAST ? 68 : 34) });
     g.statue = statue;
     statue.onInteract = async () => {
       if (statue.tl.phase === PAST) {

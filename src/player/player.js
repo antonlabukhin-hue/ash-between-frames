@@ -199,6 +199,7 @@ function attackHits(g, p) {
     const res = g.damageEnemy(e, dmg, { kx: nx * (sw.step === 3 ? 180 : 110), ky: ny * 90, perfect: sw.perfect });
     if (res < 0) continue;
     g.audio.sfx.hit(sw.perfect);
+    g.fx.push({ kind: 'flash', x: Math.round(ex), y: Math.round(ey), life: 0.1, max: 0.1, c: sw.perfect ? P.amberHi : P.milk });
     g.hitstop(sw.perfect ? 0.07 : 0.035);
     g.shake(sw.perfect ? 2 : 1, 0.1);
     burst(g, ex, ey, sw.perfect ? [P.amberHi, P.milk] : [P.milk, P.ash4], 6, 70);
@@ -448,6 +449,13 @@ export function updatePlayer(g, p, dt) {
   p.moving = Math.hypot(mv.x, mv.y) > 0.1;
   if (p.moving) p.walk = (p.walk + dt * 2.6) % 1;
   p.sway += ((-mv.x * 2.5 - (p.dodge > 0 ? p.dodgeDir[0] * 3 : 0)) - p.sway) * Math.min(1, dt * 6);
+
+  // шлейф уклонения: последние 3 позиции
+  if (p.dodge > 0) {
+    p.trail = p.trail || [];
+    if (g.frame % 2 === 0) p.trail.push({ x: p.x, y: p.y });
+    if (p.trail.length > 3) p.trail.shift();
+  } else if (p.trail?.length && g.frame % 3 === 0) p.trail = p.trail.slice(1);
 
   // история для Эха
   p.history.push({ x: p.x, y: p.y, aim: p.aim });

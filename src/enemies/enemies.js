@@ -107,7 +107,9 @@ export function isPhased(g, e) {
 export function killEnemy(g, e) {
   if (e.dead) return;
   e.dead = true;
-  burst(g, e.x, e.y - 8, e.def.colors, e.def.elite ? 50 : 18, e.def.elite ? 90 : 55, { size: 2, life: 0.9 });
+  // крупные квадраты разрушения и мелкая пыль
+  burst(g, e.x, e.y - 8, e.def.colors, e.def.elite ? 24 : 8, e.def.elite ? 80 : 50, { size: 3, life: 0.9, grav: 60 });
+  burst(g, e.x, e.y - 8, e.def.colors, e.def.elite ? 20 : 8, e.def.elite ? 100 : 70, { size: 1, life: 0.6 });
   g.audio.sfx.enemyDie();
   g.save.stats.kills++;
   const ash = e.def.ash ?? 0;

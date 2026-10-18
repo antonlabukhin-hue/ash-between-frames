@@ -17,7 +17,7 @@ import { drawSpriteSheet } from './scenes/spritesheet.js';
 import { resolveProfile, createAutoTuner, tuneStep, PROFILES } from './core/quality.js';
 import { createPerf, instrument, recordFrame, summary, setOverlay, showOverlay } from './core/perf.js';
 import { frameStats, lightLayerBytes, setCallProbe } from './render.js';
-import { atlasStats, atlas } from './art/spritecache.js';
+import { atlasStats, atlas, loadSpriteOverrides, exportSheet } from './art/spritecache.js';
 import { lightCacheBytes } from './art/lightmask.js';
 import { W, H } from './core/renderer.js';
 
@@ -420,6 +420,8 @@ window.addEventListener('keydown', (e) => {
 
 titleMenu();
 requestAnimationFrame(frame);
+// ручные PNG-спрайты (public/sprites), если есть — заменяют кодовые кадры
+loadSpriteOverrides(import.meta.env.BASE_URL);
 if (save.settings.perfOverlay || new URLSearchParams(location.search).has('debug')) toggleOverlay(true);
 
 if (__DEBUG__) {
@@ -441,7 +443,7 @@ if (__DEBUG__) {
       await sleep(120);
     }
   };
-  window.__abf = { game, save, ui, input, rooms: ROOMS, startGame, shot, skip, sleep, perf, summary: () => summary(perf), frameStats, PROFILES, renderer, atlas, setArtVariant };
+  window.__abf = { game, save, ui, input, rooms: ROOMS, startGame, shot, skip, sleep, perf, summary: () => summary(perf), frameStats, PROFILES, renderer, atlas, setArtVariant, exportSheet };
   const q = new URLSearchParams(location.search);
   if (q.get('room')) startGame(q.get('room'));
   if (q.has('sprites')) {
