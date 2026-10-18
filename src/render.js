@@ -453,7 +453,23 @@ function drawTargetMarker(g, ctx, tgt, p) {
     rr = Math.max(8, (o.def.foot?.w ?? 10) / 2 + 4);
   }
   const pulse = Math.floor(g.time * 4) % 2;
-  ring(ctx, fx, fy - 1, rr + pulse, c, 0.42);
+  // форма метки говорит, что выбрано: враг — эллипс, объект — ромб на земле, снаряд — кольцо вокруг
+  if (tgt.type === 'enemy') ring(ctx, fx, fy - 1, rr + pulse, c, 0.42);
+  else if (tgt.type === 'projectile') {
+    ring(ctx, fx, fy, 6 + pulse, c, 1);
+    return;
+  } else {
+    const R = rr + 2 + pulse;
+    const h = Math.round(R * 0.45);
+    ctx.fillStyle = c;
+    for (let i = 0; i <= R; i++) {
+      const dy = Math.round((h * (R - i)) / R);
+      ctx.fillRect(Math.round(fx - i), Math.round(fy - 1 - dy), 1, 1);
+      ctx.fillRect(Math.round(fx + i), Math.round(fy - 1 - dy), 1, 1);
+      ctx.fillRect(Math.round(fx - i), Math.round(fy - 1 + dy), 1, 1);
+      ctx.fillRect(Math.round(fx + i), Math.round(fy - 1 + dy), 1, 1);
+    }
+  }
   const pr = p.channel && p.channel.target.obj === o ? channelProgress(p.channel) : 0;
   const cost = isShifted(tl) || p.echo > 0 || g.freeShift ? 0 : tl.cost;
   const key = `hg|${c}|${Math.floor(pr * 4)}|${cost}`;
@@ -700,6 +716,12 @@ export function renderWorld(g, ctx) {
   if (p && !p.dead && !g.cinematic) {
     if (p.shiftTarget) drawTargetMarker(g, ctx, p.shiftTarget, p);
     if (g.interactTarget) drawInteractMarker(g, ctx, g.interactTarget);
+    else if (g.interactNear) {
+      // рядом, но ещё вне радиуса — тот же значок, приглушённый
+      ctx.globalAlpha = 0.45;
+      drawInteractMarker(g, ctx, g.interactNear);
+      ctx.globalAlpha = 1;
+    }
   }
   for (const t of g.texts) {
     const k = Math.min(1, (t.life / t.max) * 2);

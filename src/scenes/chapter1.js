@@ -131,13 +131,18 @@ export const road = {
     if (!g.flags.introSeen) {
       g.cinematic = true;
       ui.fade(true);
-      await g.wait(0.8);
+      // любое нажатие (Enter, пробел, E, удар, тап) ускоряет вступление:
+      // первое — показывает цитату полностью, второе — закрывает её
+      const skipped = await g.waitSkip(0.8);
       g.audio.sfx.bell(196);
-      await g.wait(1.4);
-      ui.caption('«Если событие никто не помнит,\nпроизошло ли оно?»');
-      await g.wait(4);
+      if (!skipped) await g.waitSkip(1.4);
+      ui.caption('«Если событие никто не помнит,\nпроизошло ли оно?»', { cont: true });
+      if (await g.waitSkip(4)) {
+        ui.captionFull();
+        await g.waitSkip(6);
+      }
       ui.caption(null);
-      await g.wait(1.2);
+      await g.waitSkip(0.6);
       g.flags.introSeen = true;
       g.cinematic = false;
       await ui.fade(false);
@@ -145,7 +150,7 @@ export const road = {
     g.hint(`${key(g, 'move')} — идти по дороге`, 5);
     await g.waitUntil(() => p.x > T(6));
     if (!g.flags.signRead) {
-      g.hint(`${key(g, 'interact')} — осмотреть указатель`, 6);
+      g.hint(`Подойди к янтарному значку у указателя — ${key(g, 'interact')} осмотреть`, 8);
       await g.waitUntil(() => g.flags.signRead);
     }
     if (!g.flags.signShifted) {
@@ -179,7 +184,8 @@ export const road = {
     const h = g.spawnEnemy('hollow', T(48), T(7), { spawn: 1 });
     await g.wait(0.3);
     await g.say([TIK('Пустокожий. У него стёрли имя, осталась только обида.')]);
-    g.hint(`${key(g, 'attack')} — удар. Нажимай снова, когда клинок вспыхнет янтарём, — это точный удар.`, 7);
+    if (g.input.device === 'touch') g.hint('Тап по экрану — удар в точку тапа, свайп — уклонение. Бей снова, когда клинок вспыхнет янтарём.', 8);
+    else g.hint(`${key(g, 'attack')} — удар. Нажимай снова, когда клинок вспыхнет янтарём, — это точный удар.`, 7);
     let dodgeHinted = false;
     let shiftHinted = false;
     const t0 = g.time;

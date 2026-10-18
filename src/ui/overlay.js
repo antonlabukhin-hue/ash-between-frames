@@ -49,6 +49,21 @@ export function createUI(root, { audio }) {
     timers[key] = setTimeout(fn, ms);
   };
 
+  ui.hideBanner = () => {
+    clearTimeout(timers.banner);
+    banner.classList.remove('show');
+  };
+  // Перед модальным окном убираем временные слои: под выбором и диалогом не должно быть старого текста.
+  ui.clearTransient = (all = true) => {
+    ui.clearHint();
+    ui.hideBanner();
+    ui.setPrompt(null);
+    if (all) {
+      ui.caption(null);
+      toast.classList.add('off');
+    }
+  };
+
   ui.banner = (t, s = '', dur = 3.2) => {
     banner.innerHTML = `<div class="t">${esc(t)}</div>${s ? `<div class="s">${esc(s)}</div>` : ''}`;
     banner.classList.add('show');
@@ -83,13 +98,16 @@ export function createUI(root, { audio }) {
     if (text === promptText) return;
     promptText = text;
     prompt.classList.toggle('hidden', !text);
-    if (text) prompt.textContent = text;
+    if (text) prompt.textContent = text; // переносы строк — white-space: pre-line
   };
 
-  ui.caption = (text) => {
-    if (text) caption.innerHTML = esc(text).replace(/\n/g, '<br>');
+  ui.caption = (text, o = {}) => {
+    caption.classList.remove('instant');
+    if (text) caption.innerHTML = `<div>${esc(text).replace(/\n/g, '<br>')}${o.cont ? '<div class="cont">нажмите, чтобы продолжить</div>' : ''}</div>`;
     caption.classList.toggle('show', !!text);
   };
+  ui.captionFull = () => caption.classList.add('instant');
+  ui.captionShown = () => caption.classList.contains('show');
 
   ui.setBoss = (name, sub = '') => {
     bossname.classList.toggle('hidden', !name);
@@ -113,6 +131,7 @@ export function createUI(root, { audio }) {
   ui.dialogue = (lines) =>
     new Promise((resolve) => {
       closeDialogue();
+      ui.clearTransient(false);
       const box = el('div', 'dialogue', root);
       const pc = el('canvas', 'portrait', box);
       pc.width = 32;
@@ -175,10 +194,13 @@ export function createUI(root, { audio }) {
   ui.choice = (promptText_, options) =>
     new Promise((resolve) => {
       closeChoice();
+      ui.clearTransient(true);
+      const dim = el('div', 'modal-dim', root);
       const box = el('div', 'choices', root);
-      el('div', 'prompt', box, esc(promptText_));
+      box.dim = dim;
+      el('div', 'cprompt', box, esc(promptText_));
       const items = options.map((o, i) => {
-        const b = el('button', 'btn', box, `${esc(o.text)}${o.sub ? `<span class="sub">${esc(o.sub)}</span>` : ''}`);
+        const b = el('button', `btn${o.disabled ? ' locked' : ''}`, box, `<span class="t">${esc(o.text)}</span>${o.sub ? `<span class="sub">${esc(o.sub)}</span>` : ''}`);
         b.disabled = !!o.disabled;
         b.addEventListener('click', () => {
           if (b.disabled) return;
@@ -197,7 +219,10 @@ export function createUI(root, { audio }) {
     });
 
   function closeChoice() {
-    if (choice) choice.box.remove();
+    if (choice) {
+      choice.box.dim?.remove();
+      choice.box.remove();
+    }
     choice = null;
     if (ui.mode === 'choice') ui.mode = menuEl ? 'menu' : null;
   }

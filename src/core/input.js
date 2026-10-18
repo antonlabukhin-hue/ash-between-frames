@@ -59,6 +59,10 @@ export function createInput(renderer) {
   canvas.addEventListener('mousedown', (e) => {
     st.device = 'kb';
     st.mouse.active = true;
+    const [mx, my] = renderer.toCanvas(e.clientX, e.clientY);
+    st.mouse.x = mx;
+    st.mouse.y = my;
+    st.mouse.moved = performance.now();
     if (e.button === 0) {
       press('attack');
       down.add('attack');
