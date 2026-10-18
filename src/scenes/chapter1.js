@@ -922,6 +922,10 @@ export const shadowArena = {
     for (const [x, y] of [[6, 5], [19, 5], [6, 12], [19, 12]]) g.addProp('pillar', T(x), TOP(y + 1), { tall: 44 });
     for (const [x, y] of [[2, 2], [23, 2], [2, 15], [23, 15], [10, 2], [15, 2]]) g.addProp('candles', T(x), TOP(y + 1));
   },
+  // карта 4.6: урон от звуковой волны или ноты закрывает «Песню звонаря»
+  onHeroHurt(g, kind) {
+    if (kind === 'ring' || kind === 'note') g.shadowWaveHit = true;
+  },
   update(g) {
     const s = g.shadowBoss;
     if (s) g.bossBar = s.dead ? null : { hp: Math.max(0, s.hp), max: s.maxHp };
@@ -935,6 +939,7 @@ export const shadowArena = {
     g.audio.sfx.bell(330);
     const s = g.spawnEnemy('shadow', T(13), T(6), { spawn: 1.4 });
     g.shadowBoss = s;
+    g.shadowWaveHit = false;
     g.ui.setBoss('Звонкая Тень', 'элитный враг');
     await g.wait(1.6);
     await g.say([NOTE('Вытянутое существо без лица. Вокруг него звенит кольцо колокольчиков — и этот звон держит его, как броня.')]);
@@ -945,6 +950,12 @@ export const shadowArena = {
     g.voidZones = [];
     g.enemies.forEach((e) => killEnemy(g, e));
     await g.wait(1.2);
+    // ни разу не задела волна — Тень оставляет обрывок мелодии
+    if (!g.shadowWaveHit && !g.hasMemory('ringerSong')) {
+      await g.say([NOTE('Тень рассыпается, но звон ещё висит в воздухе: четыре удара, пауза, два. Это не броня — это песня.')]);
+      g.remember('ringerSong');
+      await g.wait(1.5);
+    } else if (g.shadowWaveHit) g.toast('Звон рассыпался — волна задела тебя', 2.5);
     g.save.upgrades.quickSeam = true;
     g.flags.shadowDone = true;
     unlockAbility(g, 2);
