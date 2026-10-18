@@ -297,6 +297,21 @@ async function enterPhase3(g, boss) {
   g.audio.sfx.bell(98);
   await g.wait(0.8);
   await g.say([{ who: 'Брат Мел', text: 'Я звонил для них. Потом я звонил вместо них. Теперь я звоню, потому что иначе меня не будет.', portrait: 'mel', style: 'scar' }]);
+  // карта 4.8: «Песня звонаря» напоминает Мелу, зачем он звонил — третья фаза короче
+  if (g.hasMemory('ringerSong')) {
+    const MEL = (t) => ({ who: 'Брат Мел', text: t, portrait: 'mel' });
+    await g.present('Показать Мелу воспоминание?', {
+      ringerSong: async (gg) => {
+        await gg.say([
+          MEL('Четыре удара, пауза, два… Это же праздничный звон. Я звал их на площадь.'),
+          MEL('Не в пустоту. К людям. Как я мог забыть…'),
+        ]);
+        boss.volleysNeeded = 1;
+        gg.flags.melSong = true;
+        gg.persist();
+      },
+    }, 'Это не моя память. Звони или уходи.', 'Брат Мел');
+  }
   boss.cinematic = false;
   g.freeShift = true;
   boss.volley = 0;
@@ -390,7 +405,7 @@ function updateBoss(g, boss, dt) {
         boss.volleyLive = false;
         boss.volley++;
         boss.volleyT = 1.2;
-        if (boss.volley >= 3) {
+        if (boss.volley >= (boss.volleysNeeded ?? 3)) {
           boss.exposed = 7;
           g.toast('Колокол треснул — Мел беззащитен!');
           g.audio.sfx.bell(110, true);

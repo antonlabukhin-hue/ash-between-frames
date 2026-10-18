@@ -177,7 +177,15 @@ export const road = {
       ],
     });
     sign.onInteract = async () => {
-      await g.say([NOTE('Указатель: «КОЛОКОЛЬНЫЕ ВО…» Последние буквы дрожат и меняются каждый кадр, будто их кто-то стирает.')]);
+      // секрет 4.1: в прошлом на указателе видна вторая стрелка — тропа к мельнице (вылазка в руины)
+      if (sign.tl.phase === PAST) {
+        await g.say([NOTE('В прошлом указатель цел: «КОЛОКОЛЬНЫЕ ВОРОТА →». А ниже — вторая стрелка, которой в Шраме нет: «← К МЕЛЬНИЦЕ».')]);
+        if (!g.flags.millPath) {
+          g.flags.millPath = true;
+          g.toast('Тропа к мельнице — откроется в вылазках', 3);
+          g.persist();
+        }
+      } else await g.say([NOTE('Указатель: «КОЛОКОЛЬНЫЕ ВО…» Последние буквы дрожат и меняются каждый кадр, будто их кто-то стирает.')]);
       g.flags.signRead = true;
     };
     sign.onShift = (gg, s, phase) => {
@@ -317,6 +325,8 @@ export const tornRoad = {
     for (const [x, y] of [[5, 3], [26, 15], [4, 15]]) g.addProp('pillar', T(x), TOP(y + 1), { tall: 30, broken: true });
     for (const [x, y] of [[2, 2], [29, 15], [11, 16]]) g.addProp('deadTree', T(x), TOP(y + 1));
     if (!g.flags.nameScrap) g.spawnPickup('scrap', T(29), T(1), { vx: 0, vy: 0 });
+    // квест «Имя пса» (карта 4.10): первый обрывок — жетон у разбитой колонны
+    if (!g.hasMemory('dogTag') && !g.save.spentMemories?.includes('dogTag') && !g.flags.dogNamed) g.spawnPickup('scrap', T(3), T(15), { vx: 0, vy: 0, memory: 'dogTag' });
   },
   update(g) {
     eraseEnemiesInPits(g);
@@ -585,11 +595,25 @@ export const square = {
     g.stillOne = g.addProp('ghostNpc', 404, 252, { drawFn: drawStillOne });
     // переносной свет (П2): фонарь привратника у входа; в его ореоле — привратник и стёртая надпись
     g.addProp('handLantern', 212, 330);
-    const keeper = g.addProp('ghostNpc', 272, 104, { drawFn: drawGhost, drawOpts: { hat: true }, inAura: true, hidden: true, prompt: 'Окликнуть привратника', markY: 28 });
+    const keeper = g.addProp('ghostNpc', 272, 104, { drawFn: drawGhost, drawOpts: { hat: true }, inAura: 'handLantern', hidden: true, prompt: 'Окликнуть привратника', markY: 28 });
     keeper.onInteract = async () => {
       const KEEP = (t) => ({ who: 'Привратник Ведан', text: t });
-      if (g.flags.keeperMet) {
+      if (g.flags.keeperOpened) {
         await g.say([KEEP('Колокол молчит — ворота стоят. Ищи, кто звонил последним.')]);
+        return;
+      }
+      if (g.flags.keeperMet) {
+        if (!g.flags.squareDone) {
+          await g.say([KEEP('Пока по площади бродят стёртые, засов не сдвинуть. Уйми их, Смотритель.')]);
+          return;
+        }
+        await g.say([
+          KEEP('Звона нет. Но свет — есть, и ты его принёс.'),
+          KEEP('Ради света открою. Последний раз.'),
+        ]);
+        g.flags.keeperOpened = true;
+        g.persist();
+        g.audio.sfx.chest();
         return;
       }
       await g.say([
@@ -597,7 +621,12 @@ export const square = {
         KEEP('Я открывал ворота по звону. Звон — ворота. Тишина — засов.'),
         KEEP('В последний вечер звонил Мел. Звонил и звонил, пока площадь не опустела.'),
         KEEP('Мальчишка в латунной кепке пробежал мимо меня наверх. Я его не остановил.'),
+        ...(g.flags.squareDone ? [KEEP('Свет есть — открою ворота. Звона нет, но для Смотрителя можно.')] : [KEEP('Уйми тех, кто бродит по площади, — и я открою ворота.')]),
       ]);
+      if (g.flags.squareDone) {
+        g.flags.keeperOpened = true;
+        g.audio.sfx.chest();
+      }
       g.flags.keeperMet = true;
       g.persist();
     };
@@ -605,6 +634,18 @@ export const square = {
     carved.onInteract = async () => {
       await g.say([NOTE('Строки проступают в свете: «Звонарь — Мел. Привратник — Ведан. Хлеб — у Мары. Мальчик в кепке — …». Имя сколото.')]);
       g.flags.carvedRead = true;
+    };
+    const vault = g.addProp('hatch', 230, 160, { w: 20, h: 14, prompt: 'Поднять плиту тайника' });
+    vault.tl.switchable = false;
+    g.squareVault = vault;
+    vault.canInteract = () => !g.flags.vaultTaken && vault.tl.phase === PAST;
+    vault.onInteract = async () => {
+      g.flags.vaultTaken = true;
+      g.audio.sfx.chest();
+      for (let i = 0; i < 6; i++) g.spawnPickup('ash', vault.x + 10, vault.y + 8);
+      g.spawnPickup('shard', vault.x + 10, vault.y + 10);
+      await g.say([NOTE('Под плитой — жестяная коробка: латунная кепка, детская, и записка «Не забудь, где спрятал. М.»')]);
+      g.persist();
     };
     g.addProp('candles', cx - 22, cy + 16);
     g.addProp('candles', cx + 22, cy + 16);
@@ -640,6 +681,12 @@ export const square = {
   },
   memorySources: (g) => (artVariant === 'current' ? [] : memorySources(g)),
   update(g, dt) {
+    // плита тайника проступает, только когда её накрывают ореолы двух фонарей
+    const v = g.squareVault;
+    if (v) {
+      const n = g.memIslands.filter((i) => g.lanterns?.some((l) => l.id === i.id) && inIslands([i], v.x + 10, v.y + 7)).length;
+      v.tl.phase = n >= 2 && !g.flags.vaultTaken ? PAST : PRESENT;
+    }
     if (g.squareWaves && g.lanterns) g.squareLit = g.lanterns.filter((l) => l.tl.phase === PAST).length;
   },
   async script(g) {
@@ -647,7 +694,8 @@ export const square = {
       g.statue.tl.phase = PAST;
       g.statue.onShift(g, g.statue, PAST);
       g.lanterns.forEach((l) => (l.tl.phase = PAST));
-      g.openExits(true);
+      if (g.flags.keeperOpened) g.openExits(true);
+      else await keeperGate(g);
       return;
     }
     g.hint(`${key(g, 'interact')} — осмотреть пустой постамент`, 6);
@@ -688,18 +736,9 @@ export const square = {
     g.flags.squareDone = true;
     unlockAbility(g, 1);
     g.persist();
-    // тайник за лавкой
-    const cache = g.addProp('chest', 52, 130, { prompt: 'Открыть тайник', icon: 'hand' });
-    cache.onInteract = () => {
-      cache.open = true;
-      cache.onInteract = null;
-      g.audio.sfx.chest();
-      for (let i = 0; i < 5; i++) g.spawnPickup('ash', cache.x, cache.y + 4);
-      g.spawnPickup('shard', cache.x, cache.y + 6);
-    };
     await g.wait(0.5);
     await boyTalk(g);
-    g.openExits();
+    await keeperGate(g);
   },
 };
 
@@ -724,6 +763,15 @@ function drawStump(ctx, x, y, flip) {
   ctx.fillRect(x - 11, y - 6, 22, 1);
   ctx.fillStyle = '#86163a';
   ctx.fillRect(x - 2 * f, y - 20, 1, 4);
+}
+
+// Ворота к лестнице открывает призрак привратника — он виден только в свете своего фонаря.
+async function keeperGate(g) {
+  if (!g.flags.keeperOpened) {
+    g.hint('Ворота заперты. Их открывал привратник — по звону. Принеси ему свет: его фонарь у входа на площадь.', 7);
+    await g.waitUntil(() => g.flags.keeperOpened);
+  }
+  g.openExits();
 }
 
 async function boyTalk(g) {
@@ -775,10 +823,11 @@ export const stairs = {
     // пролёты: существуют попеременно в прошлом и настоящем
     const spans = [[39, PAST], [28, PRESENT], [17, PAST], [6, PRESENT]];
     g.stairProps = spans.map(([y, exists]) => g.addProp('stair', TOP(5), TOP(y), { w: 64, h: 64, exists, noRift: false }));
-    // Эхо (П4): верхний пролёт держит плита-противовес, которая есть только в прошлом —
-    // на неё может встать лишь Эхо. Пока тень стоит на плите, пролёт разложен.
+    // Эхо (П4): верхний пролёт держит плита-противовес на нижней площадке. Плита есть только
+    // в прошлом — на неё встаёт лишь Эхо. Одна запись решает две задачи: тень держит плиту
+    // и повторяет сдвиг среднего пролёта, продлевая его, пока герой поднимается.
     const top = g.stairProps[3];
-    const plate = g.addProp('weightPlate', TOP(10), TOP(12), { w: 16, h: 16, echoOnly: true });
+    const plate = g.addProp('weightPlate', TOP(10), TOP(23), { w: 16, h: 16, echoOnly: true });
     g.link(plate, top, { to: top.exists });
     g.stairPlate = plate;
     g.stairStreak = 0;
@@ -809,13 +858,13 @@ export const stairs = {
     // Эхо открывается на верхней площадке, у плиты-противовеса
     if (!g.flags.echoUnlocked) {
       (async () => {
-        await g.waitUntil(() => g.player.y < TOP(17));
+        await g.waitUntil(() => g.player.y < TOP(28));
         g.flags.echoUnlocked = true;
         g.persist();
         g.toast('Браслет помнит твои шаги');
         g.hint(`${key(g, 'echo')} — записать Эхо: до 5 секунд твоих действий. Тень повторит их в прошлом и задержится на месте. Ещё раз ${key(g, 'echo')} — закончить запись.`, 9);
         await g.wait(9.5);
-        g.hint('Плита у края есть только в прошлом. Встать на неё может лишь Эхо — пока тень держит вес, верхний пролёт разложен.', 8);
+        g.hint(`Плита у края есть только в прошлом — встать на неё может лишь Эхо, и тогда разложен верхний пролёт. Тень повторит и твой ${key(g, 'shift')}.`, 8);
       })();
     }
     g.hint(`Наступай на ту версию лестницы, что существует. ${key(g, 'shift')} у пролёта — вызвать его. Пролёт держится недолго.`, 8);
@@ -875,6 +924,10 @@ export const shadowArena = {
     for (const [x, y] of [[6, 5], [19, 5], [6, 12], [19, 12]]) g.addProp('pillar', T(x), TOP(y + 1), { tall: 44 });
     for (const [x, y] of [[2, 2], [23, 2], [2, 15], [23, 15], [10, 2], [15, 2]]) g.addProp('candles', T(x), TOP(y + 1));
   },
+  // карта 4.6: урон от звуковой волны или ноты закрывает «Песню звонаря»
+  onHeroHurt(g, kind) {
+    if (kind === 'ring' || kind === 'note') g.shadowWaveHit = true;
+  },
   update(g) {
     const s = g.shadowBoss;
     if (s) g.bossBar = s.dead ? null : { hp: Math.max(0, s.hp), max: s.maxHp };
@@ -888,6 +941,7 @@ export const shadowArena = {
     g.audio.sfx.bell(330);
     const s = g.spawnEnemy('shadow', T(13), T(6), { spawn: 1.4 });
     g.shadowBoss = s;
+    g.shadowWaveHit = false;
     g.ui.setBoss('Звонкая Тень', 'элитный враг');
     await g.wait(1.6);
     await g.say([NOTE('Вытянутое существо без лица. Вокруг него звенит кольцо колокольчиков — и этот звон держит его, как броня.')]);
@@ -898,6 +952,12 @@ export const shadowArena = {
     g.voidZones = [];
     g.enemies.forEach((e) => killEnemy(g, e));
     await g.wait(1.2);
+    // ни разу не задела волна — Тень оставляет обрывок мелодии
+    if (!g.shadowWaveHit && !g.hasMemory('ringerSong')) {
+      await g.say([NOTE('Тень рассыпается, но звон ещё висит в воздухе: четыре удара, пауза, два. Это не броня — это песня.')]);
+      g.remember('ringerSong');
+      await g.wait(1.5);
+    } else if (g.shadowWaveHit) g.toast('Звон рассыпался — волна задела тебя', 2.5);
     g.save.upgrades.quickSeam = true;
     g.flags.shadowDone = true;
     unlockAbility(g, 2);

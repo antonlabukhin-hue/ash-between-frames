@@ -235,7 +235,9 @@ export function createGame({ input, audio, ui, storage, save }) {
       } else if (ev.type === 'shift') {
         const t = ev.target;
         if (t.obj && !t.obj.dead && !t.obj.removed && t.obj.tl?.switchable) {
-          applyShift(g, t, { free: true, byShade: true });
+          // тень не отменяет сдвиг: уже сдвинутое она продлевает, иначе — сдвигает сама
+          if (isShifted(t.obj.tl)) t.obj.tl.left = Math.max(t.obj.tl.left, t.obj.tl.hold);
+          else applyShift(g, t, { free: true, byShade: true });
           ringFx(g, sh.x, sh.y - 10, 2, 18, P.teal, 0.3);
         }
       }
@@ -593,8 +595,9 @@ export function createGame({ input, audio, ui, storage, save }) {
         } else if (pk.kind === 'heal') g.heal(pk.amount ?? 40);
         else if (pk.kind === 'fragment') g.giveFragment(pk.id);
         else if (pk.kind === 'scrap') {
-          g.flags.nameScrap = true;
-          g.remember('nameScrap');
+          const m = pk.memory ?? 'nameScrap';
+          if (m === 'nameScrap') g.flags.nameScrap = true;
+          g.remember(m);
         }
         pk.onTake?.(g);
       }
@@ -612,7 +615,10 @@ export function createGame({ input, audio, ui, storage, save }) {
     g.memIslands = updateIslands(g.islandState, extra ? [...auraSources(g.props), ...extra] : auraSources(g.props), dt);
     for (const pr of g.props) {
       // призраки ореола видны только в острове, стёртые надписи — читаются только там
-      if (pr.inAura) pr.hidden = !inIslands(g.memIslands, pr.x, pr.y - 4);
+      if (pr.inAura) {
+        const own = typeof pr.inAura === 'string' ? g.memIslands.filter((i) => g.props.some((o) => o.id === i.id && o.kind === pr.inAura)) : g.memIslands;
+        pr.hidden = !inIslands(own, pr.x, pr.y - 4);
+      }
       if (pr.def.auraOnly) {
         const [ix, iy] = propCenter(pr);
         pr.lit = inIslands(g.memIslands, ix, iy);
@@ -638,6 +644,11 @@ export function createGame({ input, audio, ui, storage, save }) {
               e.stun = Math.max(e.stun, 0.4);
               hit = true;
             }
+          }
+          const pl = g.player;
+          if (pl && !pl.dead && pl.invuln <= 0 && dist(pl.x, pl.y, pr.x, pr.y) < pulse) {
+            g.hurtPlayer(5, pr.x, pr.y, 'zap');
+            hit = true;
           }
           if (hit || dist(g.player.x, g.player.y, pr.x, pr.y) < 140) audio.sfx.zap();
         }

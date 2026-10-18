@@ -311,7 +311,7 @@ export function hurtPlayer(g, amount, sx, sy, kind) {
   burst(g, p.x, p.y - 8, [P.milk, P.blue, P.crimson], 10, 60);
   addText(g, p.x, p.y - 24, `-${Math.round(amount)}`, P.crimsonHi);
   g.flags._tookDamage = true;
-  g.room?.def.onHeroHurt?.(g);
+  g.room?.def.onHeroHurt?.(g, kind);
   if (p.hp <= 0) g.killPlayer();
   return 'hit';
 }
