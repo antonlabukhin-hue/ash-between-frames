@@ -17,6 +17,7 @@ import { blit } from './art/atlas.js';
 import { softMask, glow } from './art/glow.js';
 import { drawWet, drawFog, drawRain, drawLeaves, drawVignette } from './art/atmo.js';
 import { drawArtOver } from './art/roomart.js';
+import { heatCost } from './timeline/heat.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 
 const OUTLINE = '#05060c';
@@ -645,7 +646,7 @@ function plates(g, p, cx, cy) {
     const next = nextPhaseOf(o.tl);
     pl.name = enemy ? o.def?.name || '' : o.name || o.def?.name || '';
     pl.tone = next === 'past' ? 'past' : 'present';
-    const cost = isShifted(o.tl) || p.echo > 0 || g.freeShift ? 0 : o.tl.cost;
+    const cost = heatCost(p.heat, g.time, isShifted(o.tl) || p.echo > 0 || g.freeShift ? 0 : o.tl.cost);
     pl.lines.push({ key: keyQ, text: next === 'past' ? 'в прошлое' : 'в настоящее', cost });
     if (p.channel && p.channel.target.obj === o) pl.progress = channelProgress(p.channel);
   }

@@ -2,6 +2,7 @@
 import { P, RAMP } from '../art/palette.js';
 import { px, disc, ring } from '../art/sprites.js';
 import { regenProgress } from '../timeline/charges.js';
+import { isOverheated } from '../timeline/heat.js';
 import { FRAGMENTS } from '../items/fragments.js';
 import { W, H, RS } from '../core/renderer.js';
 import { atlas } from '../art/spritecache.js';
@@ -58,7 +59,7 @@ function hudKey(g) {
   const ab = ABILITIES.map((a, i) => (isUnlocked(g.flags, i) ? Math.ceil(7 * cooldownLeft(p.abilities, i)) : 'x')).join('');
   return [
     W, Math.ceil(p.hp), p.maxHp, hpv < 0.3 ? Math.floor(t * 4) % 2 : 0,
-    c.n, c.max, Math.floor(regenProgress(c) * 12), ab,
+    c.n, c.max, Math.floor(regenProgress(c) * 12), ab, p.heat && isOverheated(p.heat, t) ? 1 + (Math.floor(t * 6) % 2) : 0,
     Math.round(p.rift * 30), p.rift >= 1 ? Math.floor(t * 6) % 2 : 0,
     p.echo > 0 ? 1 + (Math.floor(t * 10) % 2) : 0,
     g.save.fragments.join(','), g.save.ash, g.save.shards,
@@ -138,7 +139,9 @@ function paintHud(g, ctx) {
   const gy = 16;
   px(ctx, gx - 1, gy + 2, c.max * 9 + 1, 3, BZ[1]);
   px(ctx, gx - 1, gy + 2, c.max * 9 + 1, 1, BZ[2]);
-  const teal = [P.teal0, P.teal, P.tealHi];
+  // раскалённый браслет (перегрев) — самоцветы малиновые и мигают
+  const hot = p.heat && isOverheated(p.heat, t);
+  const teal = hot ? (Math.floor(t * 6) % 2 ? [P.crimson0, P.crimson, P.crimsonHi] : [P.crimson0, P.crimson1, P.crimson]) : [P.teal0, P.teal, P.tealHi];
   for (let i = 0; i < c.max; i++) {
     const k = i < c.n ? 1 : i === c.n ? regenProgress(c) : 0;
     gem(ctx, gx + i * 9, gy, teal, k);
