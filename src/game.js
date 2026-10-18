@@ -516,6 +516,7 @@ export function createGame({ input, audio, ui, storage, save }) {
       return;
     }
     const tok = g.scriptToken;
+    o.talked = true; // пузырь «…» над персонажем гаснет
     Promise.resolve(o.onInteract(g, o)).catch((err) => {
       if (live(tok)) console.error(err);
     });

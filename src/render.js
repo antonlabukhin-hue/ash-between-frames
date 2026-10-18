@@ -220,6 +220,20 @@ function propEntry(g, p, phase) {
   }, hdDraw ? { hd: true, crisp: p.def.crisp ?? true } : undefined);
 }
 
+// Контур и контровой свет живых фигур (Hades, Children of Morta): тёмная кромка вокруг и
+// светлый блик сверху-слева — фигура отделяется от фона того же тона. draw(dx, dy, tint).
+const EDGE = '#05060c';
+const rimOf = (g) => g.room?.def.rim ?? '#a9c0e8';
+function figureEdge(ctx, g, draw) {
+  // прозрачность — от текущей (отражения в лужах, призраки рисуются полупрозрачно)
+  const a0 = ctx.globalAlpha;
+  ctx.globalAlpha = a0 * 0.9;
+  for (const [dx, dy] of [[-0.5, 0], [0.5, 0], [0, 0.5], [0, -0.5]]) draw(dx, dy, EDGE);
+  ctx.globalAlpha = a0 * 0.6;
+  draw(-0.5, -0.5, rimOf(g));
+  ctx.globalAlpha = a0;
+}
+
 export function drawProp(g, ctx, p) {
   const c = p.def.cache;
   if (!c || p.nocache) {
@@ -228,6 +242,7 @@ export function drawProp(g, ctx, p) {
   }
   const tl = p.tl;
   const e = propEntry(g, p, tl.phase);
+  if (p.kind === 'npc' || p.kind === 'ghostNpc') figureEdge(ctx, g, (dx, dy, c) => blit(ctx, atlas.tinted(e.key, e, c), p.x + dx, p.y + dy));
   if (tl.flash > 0 && tl.switchable) {
     transition(g, ctx, e, propEntry(g, p, otherPhase(tl.phase)), p.x, p.y, tl, `p${p.id}`);
     return;
@@ -326,6 +341,7 @@ function drawEnemy(g, ctx, e) {
     drawEnemyC(ctx, e.kind, e.x + 1, e.y, o, c);
     drawEnemyC(ctx, e.kind, e.x, e.y - 1, o, c);
   }
+  if (!flash) figureEdge(ctx, g, (dx, dy, t) => drawEnemyC(ctx, e.kind, e.x + dx, e.y + dy, o, t));
   drawEnemyC(ctx, e.kind, e.x, e.y, o, flash ? '#ffffff' : null);
   if (e.kind === 'shadow') drawEnemyC(ctx, e.kind, e.x, e.y, { ...o, layer: 'front' }, flash ? '#ffffff' : null);
   if (e.burn > 0 && Math.floor(g.time * 12) % 2) px(ctx, e.x - 2 + Math.random() * 4, e.y - 18 - Math.random() * 6, 1, 2, P.amberHi);
@@ -616,6 +632,48 @@ function drawEchoRec(g, ctx, p) {
   ring(ctx, p.x, p.y, 4 + 10 * left, P.tealHi, 0.5, 1);
 }
 
+// ── значки действий (docs/GAME_RESEARCH.md 3.1) ─────────────────────────
+// Над персонажем, который ещё не говорил с героем, — молочный пузырь «…» (видно издалека).
+// Над тем, что можно взять или осмотреть, вблизи — ладонь. Всё — поверх света.
+const BUBBLE = ['.#######.', '#.......#', '#.#.#.#.#', '#.......#', '.###.###.', '....#....'];
+const HAND = ['.#.#.#.', '.#.#.#.', '##.#.#.', '#######', '#######', '.#####.', '..###..'];
+function pixIcon(ctx, rows, x, y, col, edge) {
+  const w = rows[0].length;
+  const ox = Math.round(x - w / 2);
+  const oy = Math.round(y - rows.length);
+  ctx.fillStyle = edge;
+  for (let r = 0; r < rows.length; r++) for (let c = 0; c < w; c++) if (rows[r][c] === '#') ctx.fillRect(ox + c - 0.5, oy + r, 2, 1.5);
+  ctx.fillStyle = col;
+  for (let r = 0; r < rows.length; r++) for (let c = 0; c < w; c++) if (rows[r][c] === '#') ctx.fillRect(ox + c, oy + r, 1, 1);
+}
+function drawActionIcons(g, ctx, p) {
+  const bob = Math.round(Math.sin(g.time * 3) * 1);
+  for (const o of g.props) {
+    if (o.hidden || !o.onInteract || (o.canInteract && !o.canInteract(g)) || !visible(o.x, o.y, 64)) continue;
+    if (o === g.interactTarget) continue; // у выбранного — табличка
+    const top = propTop(o) - 3 + bob;
+    const [mx] = propCenter(o);
+    if (isTalk(o)) {
+      if (!o.talked) pixIcon(ctx, BUBBLE, mx, top, '#ece4cf', '#0b0d1a');
+    } else if (Math.hypot(mx - p.x, o.y - p.y) < 90) {
+      ctx.globalAlpha = 0.85;
+      pixIcon(ctx, HAND, mx, top, '#ffe9b0', '#0b0d1a');
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+// Имена персонажей рядом с героем (без взгляда) — чтобы было ясно, кто есть кто.
+function nameTags(g, p, cx, cy) {
+  const out = [];
+  for (const o of g.props) {
+    if (!isTalk(o) || o.hidden || !o.name || o === g.interactTarget) continue;
+    if (Math.hypot(o.x - p.x, o.y - p.y) > 110) continue;
+    out.push({ x: (o.x - cx) / W, y: (propTop(o) - 10 - cy) / H, text: o.name, kind: 'talk', d: Math.hypot(o.x - p.x, o.y - p.y) });
+  }
+  return out.sort((a, b) => a.d - b.d).slice(0, 6);
+}
+
 // ── Взгляд Смотрителя ───────────────────────────────────────────────────
 // Классы интерактивного: говорить (молочный), взять/осмотреть (тёплый), сдвинуть во времени
 // (цвет будущей фазы), враги (малиновый). У цели сдвига — призрак её другого состояния.
@@ -660,7 +718,7 @@ function gazeTags(g, p, cx, cy) {
     // у цели сдвига сверху табличка Q — подпись действия уходит под объект
     const y = o === p.shiftTarget?.obj ? (o.def.flat ? o.y + o.h : o.y) + 12 : propTop(o);
     if (mx < cx - 8 || mx > cx + W + 8 || y < cy - 8 || y > cy + H + 8) continue;
-    const text = use ? o.prompt || 'Осмотреть' : `${o.name || o.def.name || 'Объект'} — ${nextPhaseOf(o.tl) === PAST ? 'в прошлое' : 'в настоящее'}`;
+    const text = use ? (isTalk(o) && o.name ? `${o.name} · ${(o.prompt || 'Поговорить').toLowerCase()}` : o.prompt || 'Осмотреть') : `${o.name || o.def.name || 'Объект'} — ${nextPhaseOf(o.tl) === PAST ? 'в прошлое' : 'в настоящее'}`;
     out.push({ x: (mx - cx) / W, y: (y - cy) / H, text, kind: use ? (isTalk(o) ? 'talk' : 'use') : 'time', d: Math.hypot(mx - p.x, y - p.y) });
   }
   return out.sort((a, b) => a.d - b.d).slice(0, 12);
@@ -808,12 +866,12 @@ function plates(g, p, cx, cy) {
     return pl;
   };
   // во взгляде подписи уже висят над всем — табличка взаимодействия не нужна
-  const it = g.gazeK > 0.5 ? null : g.interactTarget || g.interactNear;
+  // «подойди ближе» больше не пишем: объект рядом отмечен значком над ним (drawActionIcons)
+  const it = g.gazeK > 0.5 ? null : g.interactTarget;
   if (it) {
     const [mx] = propCenter(it);
     const pl = at(it, mx, propTop(it));
-    pl.dim = !g.interactTarget;
-    pl.lines.push(g.interactTarget ? { key: keyE, text: it.prompt || 'Осмотреть' } : { key: '', text: 'Подойди ближе' });
+    pl.lines.push({ key: keyE, text: it.prompt || 'Осмотреть' });
   }
   const t = p.shiftTarget;
   if (t && t.type !== 'projectile') {
@@ -1212,13 +1270,14 @@ export function renderWorld(g, ctx) {
   const p = g.player;
   // как в Diablo: на земле под объектом маркеров нет — светится сам объект,
   // а имя и действие пишутся табличкой над ним (HTML-слой, src/ui/overlay.js)
+  if (p && !p.dead && !g.cinematic) drawActionIcons(g, ctx, p);
   if (p && !p.dead && !g.cinematic && g.gazeK > 0) drawGaze(g, ctx, p, cx, cy);
   if (p && !p.dead && !g.cinematic) drawThreads(g, ctx, p);
   if (p?.echoRec) drawEchoRec(g, ctx, p);
   drawNodeRunes(g, ctx);
   if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
   g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
-  g.ui.setTags?.(p && !p.dead && !g.cinematic && !g.ui.mode && g.gazeK > 0.5 ? gazeTags(g, p, cx, cy) : []);
+  g.ui.setTags?.(p && !p.dead && !g.cinematic && !g.ui.mode ? (g.gazeK > 0.5 ? gazeTags(g, p, cx, cy) : nameTags(g, p, cx, cy)) : []);
   // реплики призраков в сценах прошлого
   g.ui.setBarks?.(!g.ui.mode ? (g.barkList || []).map((b) => ({ x: (b.x - cx) / W, y: (b.y - cy) / H, who: b.who, text: b.text })) : []);
   for (const t of g.texts) {
@@ -1293,7 +1352,15 @@ function reflectFigures(g) {
           c.globalAlpha = 1;
         },
       });
-    } else out.push({ y: p.y, draw: (c) => drawHeroC(c, p.x, p.y, heroOpts(g, p)) });
+    } else
+      out.push({
+        y: p.y,
+        draw: (c) => {
+          const o = heroOpts(g, p);
+          figureEdge(c, g, (dx, dy, t) => drawHeroC(c, p.x + dx, p.y + dy, o, t));
+          drawHeroC(c, p.x, p.y, o);
+        },
+      });
   }
   // Эхо: полупрозрачная бирюзовая тень героя
   const sh = g.echoShade;

@@ -88,6 +88,7 @@ function underMap() {
 
 export const under = {
   id: 'under',
+  zoom: 1.3, // мирная сцена — камера ближе
   title: 'Под площадью',
   weather: { fog: 'cold', fogA: 0.3 },
   music: 'hub',
@@ -186,6 +187,8 @@ const UPGRADES = [
 
 export const kitchen = {
   id: 'kitchen',
+  zoom: 1.45, // мирная сцена — камера ближе
+  rim: '#ffd9a0', // контровой свет от печи
   title: 'Кухня Последнего Дня',
   weather: { fog: 'amber', fogA: 0.1 },
   subtitle: 'Убежище',
@@ -208,25 +211,25 @@ export const kitchen = {
     table.onInteract = () => openTable(g);
     const box = g.addProp('box', T(18), TOP(9), { prompt: 'Ящик с обрывками' });
     box.onInteract = () => readRecords(g);
-    const mara = npc(g, drawMara, T(6), TOP(8), { prompt: 'Поговорить с Марой' });
+    const mara = npc(g, drawMara, T(6), TOP(8), { prompt: 'Поговорить с Марой', name: 'Мара' });
     mara.onInteract = () => talkMara(g);
-    const tik = npc(g, drawTik, T(14), TOP(5), { prompt: 'Поговорить с Тиком' });
+    const tik = npc(g, drawTik, T(14), TOP(5), { prompt: 'Поговорить с Тиком', name: 'Тик' });
     tik.onInteract = () => talkTik(g);
-    const dog = npc(g, drawDog, T(17), TOP(6), { prompt: 'Погладить Старого Пса' });
+    const dog = npc(g, drawDog, T(17), TOP(6), { prompt: 'Погладить Старого Пса', name: f.dogNamed ? 'Гром' : 'Старый Пёс' });
     dog.prompt = f.dogNamed ? 'Погладить Грома' : 'Погладить Старого Пса';
     dog.onInteract = () => talkDog(g, dog);
     if (f.camp === 'arno' || f.camp === 'both' || f.camp === 'fixed') {
-      const a = g.addProp('ghostNpc', T(4), TOP(11), { drawFn: drawGhost, drawOpts: { hat: true, alpha: 0.85 }, prompt: 'Поговорить с Арно', markY: 26 });
+      const a = g.addProp('ghostNpc', T(4), TOP(11), { drawFn: drawGhost, drawOpts: { hat: true, alpha: 0.85 }, prompt: 'Поговорить с Арно', markY: 26, name: 'Арно' });
       a.onInteract = () => g.say([{ who: 'Арно', text: f.camp === 'fixed' ? 'Та женщина у окна… Мы точно незнакомы? Она смеётся, как кто-то, кого я ждал.' : f.camp === 'both' ? 'Сена говорит, что я храплю. Значит, я есть.' : 'Здесь пахнет хлебом. Я и забыл, что так бывает.', portrait: 'arno' }]);
     }
     if (f.camp === 'sena' || f.camp === 'both' || f.camp === 'fixed') {
-      const s = g.addProp('ghostNpc', T(8), TOP(11), { drawFn: drawGhost, drawOpts: { dress: true, color: P.amberHi, alpha: 0.85 }, prompt: 'Поговорить с Сеной', markY: 26 });
+      const s = g.addProp('ghostNpc', T(8), TOP(11), { drawFn: drawGhost, drawOpts: { dress: true, color: P.amberHi, alpha: 0.85 }, prompt: 'Поговорить с Сеной', markY: 26, name: 'Сена' });
       s.onInteract = () => g.say([{ who: 'Сена', text: 'Я помню дорогу за двоих. Если пойдёшь снова — спрашивай.', portrait: 'sena' }]);
     }
     if (f.bellChoice === 'people' || f.bellChoice === 'split' || f.bellChoice === 'lastRing') {
       const n = f.bellChoice === 'split' ? 1 : 2;
       for (let i = 0; i < n; i++) {
-        const v = g.addProp('ghostNpc', T(13 + i * 3), TOP(11), { drawFn: drawGhost, drawOpts: { color: P.milk, alpha: 0.85, hat: i === 0 }, prompt: 'Поговорить с жителем', markY: 26 });
+        const v = g.addProp('ghostNpc', T(13 + i * 3), TOP(11), { drawFn: drawGhost, drawOpts: { color: P.milk, alpha: 0.85, hat: i === 0 }, prompt: 'Поговорить с жителем', markY: 26, name: 'Житель' });
         v.onInteract = () => g.say([{ who: 'Житель Колокольных Ворот', text: i === 0 ? 'Тесно, зато все на своих местах.' : 'Я помню, как звучал праздник. Хочешь, напою?', portrait: 'villager' }]);
       }
     }
