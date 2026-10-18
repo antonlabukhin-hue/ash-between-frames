@@ -30,13 +30,16 @@ USE THE ATTACHED IMAGES
   view) — our image must stay top-down 3/4 orthographic.
 
 LAYOUT (percent of image width W and height H, measured from the top-left corner)
-1. Night sky: the top 11% of the image (0–11% H), full width. Deep blue-black sky, a few dark
-   clouds, a pale full moon in the upper RIGHT area, distant gothic city silhouette with tiny warm
-   windows along the bottom of the sky. On the left the sky has a faint warm amber glow, on the
-   right a faint crimson glow.
-2. Stone balustrade: a horizontal band 11–13% H across the full width, carved balusters with a
-   stone rail, seen from slightly above. In its center (43–57% W) there is an opening: the road
-   continues up into a dark gate passage there.
+1. Night sky: ONLY a thin strip at the very top, 0–4% H, above the battlements of the city wall.
+   Dark blue-black with a hint of clouds; a faint warm glow on the left, a faint crimson glow on the right.
+   No horizon, no landscape, no distant city below the battlements.
+2. City wall facade: 4–13% H across the full width — the FRONT FACE of a tall dark stone city wall,
+   seen straight from the front (the same top-down 3/4 view as the ground): stone block rows,
+   battlements (merlons) along its top edge, a few buttresses, moss and water streaks; on the right
+   third the wall is cracked with crimson erasure cracks. In its center, exactly above the road
+   (from 43% to 57% W), a rounded ARCH GATE whose bottom touches the road at 13% H: inside the arch
+   there is only deep darkness behind a lowered iron portcullis. The road ENDS at this arch — it does
+   NOT continue beyond the wall, there is no view through the gate.
 3. Side walls: thin vertical stone walls along the left edge (0–3% W) and the right edge (97–100% W),
    from 13% H down to the bottom. The bottom 2% of the image is a dark stone parapet.
 4. The road: a wide straight vertical road of wet cobblestones, from 40% W to 60% W, running from
@@ -62,7 +65,8 @@ any text. The areas where those stand must be plain ground.
 
 QUALITY CHECK BEFORE ANSWERING
 - Same layout as image 1? Road straight and centered at 40–60% W? Chasm at 39–48% H? Sky only in the
-  top 11%? No objects, no people, no text? Top-down view without perspective? Crisp fine pixel art?
+  top 4% above the wall? The road ends at the arch with no view beyond? One single top-down projection,
+  no horizon anywhere? No objects, no people, no text? Crisp fine pixel art?
 ```
 
 ## Без картинки-основы (если генератор не принимает изображения)
@@ -78,6 +82,8 @@ wet stones, warm amber light on the left, crimson erasure glow on the right, hig
 
 - Появились деревья, фонари или люди:
   `Keep everything exactly the same, but remove all trees, lamps, people and objects — leave plain ground there.`
+- За стеной или в арке виден горизонт / дорога уходит вдаль («лестница»):
+  `Remove the horizon. The top of the map is the front face of a tall city wall with battlements and a closed arch gate; the road ends at the arch. Only a thin strip of sky above the battlements. One single top-down 3/4 projection.`
 - Появилась перспектива (дорога сужается вдаль):
   `Redraw it strictly top-down orthographic: the road must have the same width at the top and at the bottom, no vanishing point.`
 - Дорога или провал сдвинулись:

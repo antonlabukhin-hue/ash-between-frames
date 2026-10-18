@@ -174,18 +174,65 @@ function crack(ctx, x, y, rnd) {
 function walls(ctx, room, rnd, G) {
   const W = room.w * TILE;
   const H = room.h * TILE;
-  // ряды неба сверху (стены без пола) — прозрачные; балюстрада — на нижнем из них
+  // Вид сверху 3/4 не знает горизонта: карта упирается в фасад городской стены с аркой ворот.
+  // Ряды def.skyRows сверху — узкая полоса неба над зубцами (там параллакс), ниже до первого
+  // ряда пола — лицевая грань стены, видимая спереди.
   let sky = 1;
   while (sky < room.h && tileAt(room, 1, sky) === T.WALL) sky++;
-  const by = (sky - 1) * TILE;
-  for (let tx = 0; tx < room.w; tx++) {
-    if (tileAt(room, tx, sky - 1) !== T.WALL) continue;
-    const x = tx * TILE;
-    rect(ctx, x, by + 12.5, TILE, 3.5, lin(ctx, 0, by + 12.5, 0, by + 16, [[0, '#4d5570'], [0.3, '#30364a'], [1, '#12141c']]));
-    for (let b = 1.5; b < TILE; b += 3.2) {
-      poly(ctx, [x + b - 0.6, by + 5, x + b + 0.6, by + 5, x + b + 1, by + 8, x + b + 0.5, by + 10, x + b + 0.9, by + 12.5, x + b - 0.9, by + 12.5, x + b - 0.5, by + 10, x + b - 1, by + 8], lin(ctx, x + b - 1, 0, x + b + 1, 0, [[0, '#6c7590'], [0.5, '#3d4459'], [1, '#1d212d']]));
+  const wy0 = (room.def.skyRows ?? 1) * TILE; // верх стены
+  const wy1 = sky * TILE; // низ стены — начало пола
+  if (wy1 > wy0) {
+    // кладка: ряды блоков со светом сверху, к земле темнее
+    rect(ctx, 0, wy0, W, wy1 - wy0, lin(ctx, 0, wy0, 0, wy1, [[0, '#3d4459'], [0.5, '#2a3042'], [1, '#14161f']]));
+    for (let y = wy0 + 6; y < wy1; y += 5) {
+      const off = ((y / 5) | 0) % 2 ? 0 : 6;
+      path(ctx, [0, y, W, y], 'rgba(5,6,12,0.55)', 0.4);
+      for (let x = off; x < W; x += 12) {
+        const er = G.erased(x, wy1 - 1);
+        if (er && rnd() < 0.12) rect(ctx, x + 0.4, y + 0.4, 11.2, 4.2, '#0a0508');
+        path(ctx, [x, y, x, y + 5], 'rgba(5,6,12,0.45)', 0.35);
+        path(ctx, [x + 1, y + 0.6, x + 8, y + 0.6], er ? 'rgba(200,40,74,0.25)' : 'rgba(150,165,205,0.25)', 0.35);
+      }
     }
-    rect(ctx, x, by + 3, TILE, 2.4, lin(ctx, 0, by + 3, 0, by + 5.4, [[0, '#7a84a2'], [0.4, '#4a5168'], [1, '#1f2330']]));
+    // контрфорсы
+    for (let x = 40; x < W; x += 96) {
+      if (Math.abs(x - G.mid) < 60) continue;
+      rect(ctx, x - 5, wy0 + 4, 10, wy1 - wy0 - 4, lin(ctx, x - 5, 0, x + 5, 0, [[0, '#56607a'], [0.4, '#3d4459'], [1, '#161925']]));
+      rect(ctx, x - 6, wy0 + 2, 12, 3, '#6c7590');
+    }
+    // зубцы над стеной (силуэт на фоне неба)
+    rect(ctx, 0, wy0, W, 6, lin(ctx, 0, wy0, 0, wy0 + 6, [[0, '#6c7590'], [1, '#30364a']]));
+    for (let x = 2; x < W; x += 11) rect(ctx, x, wy0 - 5, 6, 5.5, lin(ctx, x, 0, x + 6, 0, [[0, '#7b88a3'], [0.5, '#4a5470'], [1, '#262b3a']]));
+    // мох и потёки, на стёртой стороне — малиновые трещины
+    for (let i = 0; i < 26; i++) {
+      const x = rnd() * W;
+      const er = G.erased(x, wy1 - 1);
+      const len = 6 + rnd() * (wy1 - wy0 - 10);
+      path(ctx, [x, wy0 + 6, x + (rnd() - 0.5) * 2, wy0 + 6 + len], er ? 'rgba(200,40,74,0.6)' : 'rgba(59,74,42,0.6)', er ? 0.45 : 0.8);
+    }
+    // арка ворот над выходом: глубокий тёмный проём, опущенная решётка, замковый камень
+    const aw = G.road.x1 - G.road.x0 - 24;
+    const ax0 = G.mid - aw / 2;
+    const atop = wy0 + 10;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(ax0, wy1);
+    ctx.lineTo(ax0, atop + aw / 2);
+    ctx.arc(G.mid, atop + aw / 2, aw / 2, Math.PI, 0);
+    ctx.lineTo(ax0 + aw, wy1);
+    ctx.closePath();
+    ctx.fillStyle = lin(ctx, 0, atop, 0, wy1, [[0, '#04050a'], [0.6, '#0a0b14'], [1, '#16121c']]);
+    ctx.fill();
+    ctx.clip();
+    for (let x = ax0 + 4; x < ax0 + aw; x += 6) path(ctx, [x, atop, x, wy1 - 3], 'rgba(60,64,84,0.9)', 0.9);
+    for (let y = atop + 8; y < wy1 - 3; y += 8) path(ctx, [ax0, y, ax0 + aw, y], 'rgba(60,64,84,0.8)', 0.7);
+    ctx.restore();
+    ctx.strokeStyle = '#7b88a3';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(G.mid, atop + aw / 2, aw / 2 + 1, Math.PI, 0);
+    ctx.stroke();
+    rect(ctx, G.mid - 3, atop - 2, 6, 6, '#8a93ae');
   }
   for (const tx of [0, room.w - 1]) {
     const x = tx * TILE;

@@ -84,8 +84,7 @@ const out = await page.evaluate(async (id) => {
       const wx = tx * TILE + 8;
       const wy = ty * TILE + 8;
       let c = '#2a2219';
-      if (t === T.WALL && ty === (r.def.skyRows ?? 0) - 1) c = '#5a6078'; // балюстрада под небом
-      else if (sky(tx, ty)) c = '#0e1430';
+      if (sky(tx, ty)) c = '#0e1430';
       else if (t === T.WALL) c = '#5a6078';
       else if (t === T.VOID) c = '#000000';
       else if (t === T.ROAD) c = geo?.erased(wx, wy) ? '#3a2a34' : '#3d4560';
@@ -97,6 +96,19 @@ const out = await page.evaluate(async (id) => {
     }
   }
   if (geo) {
+    // арка ворот в фасаде стены — тёмный проём над выходом
+    let gr = 1;
+    while (gr < r.h && tile(1, gr) === T.WALL) gr++;
+    const wy0 = (r.def.skyRows ?? 1) * TILE;
+    const aw = geo.road.x1 - geo.road.x0 - 24;
+    const atop = wy0 + 10;
+    lx.fillStyle = '#0a0a12';
+    lx.beginPath();
+    lx.moveTo((geo.mid - aw / 2) * RS, gr * TILE * RS);
+    lx.lineTo((geo.mid - aw / 2) * RS, (atop + aw / 2) * RS);
+    lx.arc(geo.mid * RS, (atop + aw / 2) * RS, (aw / 2) * RS, Math.PI, 0);
+    lx.lineTo((geo.mid + aw / 2) * RS, gr * TILE * RS);
+    lx.fill();
     lx.fillStyle = '#c8284a';
     lx.fillRect(TILE * RS, geo.gap.y0 * RS, (r.pxW - TILE * 2) * RS, 2 * RS);
     lx.fillRect(TILE * RS, geo.gap.y1 * RS - 2 * RS, (r.pxW - TILE * 2) * RS, 2 * RS);
