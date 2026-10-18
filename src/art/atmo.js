@@ -6,11 +6,13 @@
 //     wet: [коды тайлов], // где лужи и отражения; по умолчанию — дорога, брусчатка, плиты, ступени
 //     fog: 'cold' | [r,g,b], fogA: 0..1, // цвет и плотность тумана
 //     wind: 0.25,        // наклон струй
+//     leaves: 0,         // сколько падающих листьев
 //   }
 import { W, H, RS } from '../core/renderer.js';
 import { TILE, T } from './tiles.js';
 import { tileAt } from '../world/room.js';
 import { streak, fogTexture, FOG_W, FOG_H, vignette, rainDrop, splashAt, wetRuns, glow } from './glow.js';
+import { hash2 } from '../core/math.js';
 
 const WET_DEFAULT = [T.ROAD, T.FLOOR, T.PLAZA, T.STAIR];
 
@@ -132,10 +134,32 @@ export function drawRain(g, ctx) {
       ctx.lineTo(d.x + wind * len, d.y + len);
     }
     ctx.lineWidth = near ? 1 : 1 / RS;
-    ctx.strokeStyle = near ? 'rgba(185,200,235,0.28)' : 'rgba(160,180,225,0.35)';
+    ctx.strokeStyle = near ? 'rgba(185,200,235,0.2)' : 'rgba(160,180,225,0.26)';
     ctx.stroke();
   }
   ctx.restore();
+}
+
+// Падающие листья (экранные): вращаются и сносятся ветром.
+export function drawLeaves(g, ctx) {
+  const n = g.room?.def.weather?.leaves || 0;
+  if (!n || !g.quality.decorAnim) return;
+  const t = g.time;
+  const cols = ['#b8721f', '#d89a34', '#8a4a18', '#c45a1c'];
+  for (let i = 0; i < n; i++) {
+    const r = hash2(i, 5, 31);
+    const speed = 14 + r * 16;
+    const span = H + 20;
+    const y = ((t * speed + hash2(i, 6, 31) * span) % span) - 10;
+    const x = ((((hash2(i, 7, 31) * (W + 40) + Math.sin(t * 1.3 + i) * 10 + t * 12 - g.cam.x * 0.15) % (W + 40)) + W + 40) % (W + 40)) - 20;
+    const a = t * (2 + r * 3) + i;
+    ctx.fillStyle = cols[i % cols.length];
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a);
+    ctx.fillRect(-1, -0.5, 2, Math.abs(Math.sin(a)) + 0.5);
+    ctx.restore();
+  }
 }
 
 export function drawVignette(g, ctx) {

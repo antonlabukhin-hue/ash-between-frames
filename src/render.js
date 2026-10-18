@@ -12,10 +12,10 @@ import { isShifted, isFading, PAST, PRESENT, otherPhase, channelProgress } from 
 import { inPerfectWindow } from './combat/combo.js';
 import { drawHud, drawDigits, digitsWidth } from './ui/hud.js';
 import { hash2 } from './core/math.js';
-import { atlas, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js';
+import { atlas, hd, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js';
 import { blit } from './art/atlas.js';
 import { softMask, glow } from './art/glow.js';
-import { drawWet, drawFog, drawRain, drawVignette } from './art/atmo.js';
+import { drawWet, drawFog, drawRain, drawLeaves, drawVignette } from './art/atmo.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 
 const OUTLINE = '#05060c';
@@ -159,10 +159,12 @@ function propEntry(g, p, phase) {
   // состояние, зависящее от окружения (свет фонаря возвращает прошлое декору)
   const state = c.state ? c.state(p, g) : undefined;
   const key = `p|${p.kind}|${phase}|${frame}|${inst}|${state ?? ''}`;
-  return atlas.sprite(key, c.w, c.h, c.ax, c.ay, (bctx, ax, ay) => {
+  // 32-битный маляр объекта рисует в плотной сетке, кадр пикселизуется
+  const hdDraw = hd.on && p.def.drawHd;
+  return atlas.sprite(hdDraw ? `hd|${key}` : key, c.w, c.h, c.ax, c.ay, (bctx, ax, ay) => {
     const tl = { ...p.tl, phase };
-    p.def.draw(bctx, { ...p, x: ax, y: ay, tl, state }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
-  });
+    (hdDraw || p.def.draw)(bctx, { ...p, x: ax, y: ay, tl, state }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
+  }, hdDraw ? { hd: true, crisp: true } : undefined);
 }
 
 export function drawProp(g, ctx, p) {
@@ -704,6 +706,7 @@ export function renderWorld(g, ctx) {
   drawFog(g, ctx, cx, cy);
   drawLighting(g, ctx, cx, cy);
   drawRain(g, ctx);
+  drawLeaves(g, ctx);
   drawVignette(g, ctx);
   sec('свет');
 
@@ -860,7 +863,8 @@ function drawLighting(g, ctx, cx, cy) {
   const t = g.time;
   lc.globalCompositeOperation = 'source-over';
   lc.clearRect(0, 0, W / 2, H / 2);
-  lc.fillStyle = g.room.def.darkColor || `rgba(5,7,20,${Math.min(0.92, dark * 1.12)})`;
+  // тьма с холодным лунным оттенком: тёплые огни на её фоне читаются ярче
+  lc.fillStyle = g.room.def.darkColor || `rgba(6,10,30,${Math.min(0.92, dark * 1.12)})`;
   lc.fillRect(0, 0, W / 2, H / 2);
   lc.globalCompositeOperation = 'destination-out';
   const p = g.player;
@@ -877,9 +881,11 @@ function drawLighting(g, ctx, cx, cy) {
   extra.sort((a, b) => a.d - b.d);
   list.push(...extra.slice(0, q.lights - 1));
   for (const l of list) {
-    const m = softMask(l.r / 2, l.s);
+    // высокий источник (фонарь на столбе) светит на землю под собой: центр — между огнём и основанием
+    const ly = l.base != null ? (l.y + l.base) / 2 + 4 : l.y;
+    const m = softMask((l.r * (l.hero ? 1 : 1.15)) / 2, l.s);
     const r = m.width / 2;
-    lc.drawImage(m, (l.x - cx) / 2 - r, (l.y - cy) / 2 - r);
+    lc.drawImage(m, (l.x - cx) / 2 - r, (ly - cy) / 2 - r);
   }
   frameStats.lights = list.length;
   lc.globalCompositeOperation = 'source-over';
@@ -895,18 +901,24 @@ function drawLighting(g, ctx, cx, cy) {
     const c = l.c === 'cold' ? 'cold' : l.c;
     const flick = c === 'amber' || c === 'fire' ? 0.9 + 0.1 * Math.sin(t * 11 + l.x) * Math.sin(t * 7.3 + l.y) : 1;
     ctx.globalAlpha = flick;
-    const wide = glow(Math.round(l.r * 1.1), c, c === 'cold' ? 0.12 : 0.26, 0.75);
-    ctx.drawImage(wide, l.x - cx - wide.width / 2, l.y - cy - wide.height / 2 + 6);
-    const core = glow(Math.max(5, Math.round(l.r * 0.2)), c, 0.8);
+    // пятно на земле (эллипс в перспективе), ореол вокруг огня и яркое ядро
+    const gy = l.base ?? l.y + 6;
+    const wide = glow(Math.round(l.r * 1.2), c, c === 'cold' ? 0.12 : 0.36, 0.55);
+    ctx.drawImage(wide, l.x - cx - wide.width / 2, gy - cy - wide.height / 2);
+    if (l.base != null && l.base - l.y > 16) {
+      const halo = glow(Math.round(l.r * 0.55), c, 0.22);
+      ctx.drawImage(halo, l.x - cx - halo.width / 2, l.y - cy - halo.height / 2);
+    }
+    const core = glow(Math.max(5, Math.round(l.r * 0.18)), c, 0.85);
     ctx.drawImage(core, l.x - cx - core.width / 2, l.y - cy - core.height / 2);
   }
   // излучатели без собственного света: глаза врагов, снаряды
   for (const e of g.enemies) {
     if (e.spawn > 0 || e.dead || !visible(e.x, e.y, 60)) continue;
     const c = e.tl?.phase === PAST ? 'amber' : 'crimson';
-    const gl = glow(10, c, 0.22);
+    const gl = glow(6, c, 0.2);
     ctx.globalAlpha = 1;
-    ctx.drawImage(gl, e.x - cx - 10, e.y - cy - (e.hitY ?? 9) - 16);
+    ctx.drawImage(gl, e.x - cx - 6, e.y - cy - (e.hitY ?? 9) - 12);
   }
   for (const pr of g.projectiles) {
     const c = pr.tl?.phase === PAST ? 'amber' : 'crimson';

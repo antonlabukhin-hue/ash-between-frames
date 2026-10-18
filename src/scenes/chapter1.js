@@ -16,6 +16,7 @@ import { updateIslands, inIslands } from '../world/memory.js';
 import { atlas } from '../art/spritecache.js';
 import { blit } from '../art/atlas.js';
 import { line, px } from '../art/sprites.js';
+import { paintRoadBase, paintRoadHd, drawRoadParallax, drawRoadOver } from '../art/road32.js';
 
 const REN = (text) => ({ who: 'Рен', text, portrait: 'ren', style: 'white' });
 const TIK = (text) => ({ who: 'Тик', text, portrait: 'tik' });
@@ -85,7 +86,17 @@ export const road = {
   subtitle: 'Глава 1 · Колокол, который не помнит удара',
   music: 'road',
   dark: 0.5,
-  weather: { rain: 1, fog: 'cold', fogA: 0.4 },
+  // 32-битный эталон: ночь, дождь, мокрая брусчатка, тёплые фонари и зарево провала
+  weather: { rain: 1, fog: 'cold', fogA: 0.32, leaves: 26 },
+  paint: paintRoadBase,
+  paintHd: paintRoadHd,
+  drawParallax: drawRoadParallax,
+  drawOver: drawRoadOver,
+  lights: [
+    { x: TOP(34), y: TOP(2), r: 54, c: 'crimson' },
+    { x: TOP(34), y: TOP(7) + 8, r: 60, c: 'crimson' },
+    { x: TOP(34), y: TOP(12), r: 54, c: 'crimson' },
+  ],
   floor: ',',
   under: { '>': '=', '@': '=' },
   map: roadMap(),
@@ -94,8 +105,15 @@ export const road = {
   holdFade: (g) => !g.flags.introSeen,
   setup(g) {
     // декор: осенние деревья, знамёна, надгробия
-    for (const [x, y] of [[2, 2], [6, 3], [13, 2], [19, 12], [24, 3], [27, 12], [40, 2], [44, 12], [50, 3]]) g.addProp('tree', T(x), TOP(y + 1));
-    for (const [x, y] of [[30, 3], [37, 11], [38, 3]]) g.addProp('deadTree', T(x), TOP(y + 1));
+    for (const [x, y] of [[2, 2], [6, 3], [13, 2], [19, 12], [24, 3], [27, 12]]) g.addProp('tree', T(x), TOP(y + 1));
+    // за провалом — стёртая сторона: только мёртвые деревья
+    for (const [x, y] of [[30, 3], [37, 11], [38, 3], [40, 2], [44, 12], [50, 3]]) g.addProp('deadTree', T(x), TOP(y + 1));
+    // кованые фонари вдоль дороги; за провалом стёкла разбиты, свет малиновый
+    const lamp = (x, y) => (x > TOP(36) ? g.addProp('roadLamp', x, y, { erased: true, lightColor: 'crimson' }) : g.addProp('roadLamp', x, y));
+    for (const tx of [7, 18, 26, 40, 47]) lamp(T(tx), TOP(6) - 3);
+    for (const tx of [11, 22, 29, 38, 45, 52]) lamp(T(tx), TOP(9) + 5);
+    // башни ворот у выхода, между ними на цепи — колокол
+    g.gateTowers = [g.addProp('gateTower', TOP(54) + 6, TOP(6) - 2), g.addProp('gateTower', TOP(54) + 6, TOP(10) + 6)];
     g.addProp('banner', T(4), TOP(6) - 2);
     g.addProp('banner', T(14), TOP(6) - 2);
     for (const [x, y] of [[9, 11], [11, 12], [47, 11], [29, 11]]) g.addProp('grave', T(x), TOP(y + 1));
