@@ -15,6 +15,7 @@ export function updateIslands(state, sources, dt, speed = 2.6) {
     isl.y = s.y;
     isl.rx = s.rx;
     isl.ry = s.ry;
+    isl.rim = s.rim ?? true;
     const target = s.on ? 1 : 0;
     isl.k = target > isl.k ? Math.min(target, isl.k + dt * speed) : Math.max(target, isl.k - dt * speed);
   }
@@ -48,3 +49,27 @@ export function islandRows(isl, step = 2) {
   }
   return rows;
 }
+
+// ── ореолы объектов (docs/TIME_DESIGN.md, П2) ─────────────────────────────
+// PROP_KINDS[kind].aura = { past: [rx, ry], present: 0 } — объект в этой фазе открывает остров
+// памяти вокруг себя: пол цел, видны призраки и стёртые надписи, враги меняют стойкость.
+export function auraSources(props) {
+  const out = [];
+  for (const p of props) {
+    const a = p.def?.aura;
+    if (!a || p.hidden) continue;
+    const cur = a[p.tl.phase];
+    const size = cur || a.past || a.present;
+    if (!size) continue;
+    out.push({ id: p.id, x: p.x, y: p.y - (p.def.auraY ?? 0), rx: size[0], ry: size[1], on: !!cur, rim: p.def.auraRim ?? true });
+  }
+  return out;
+}
+
+// Входящий урон врагу внутри острова: Шрам слабеет, Отпечаток крепнет.
+export const AURA_DAMAGE = { present: 1.4, past: 0.7 };
+export const auraDamageMul = (phase) => AURA_DAMAGE[phase] ?? 1;
+
+// Где герой держит переносной предмет и куда его ставит.
+export const carryPos = (x, y, flip) => ({ x: x + (flip ? -5 : 5), y: y + 1 });
+export const dropPos = (x, y, flip) => ({ x: x + (flip ? -8 : 8), y: y + 3 });

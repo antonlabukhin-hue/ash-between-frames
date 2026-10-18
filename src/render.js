@@ -144,6 +144,17 @@ function drawMemoryIslands(g, ctx) {
   }
 }
 
+// Ореол без отпечатка комнаты: тёплое пятно и ступенчатый янтарный ободок.
+function drawAuraRims(g, ctx) {
+  for (const isl of g.memIslands) {
+    if (!isl.rim) continue;
+    const s = islandScale(isl.k);
+    ctx.fillStyle = `rgba(255,196,120,${0.07 * isl.k})`;
+    for (const [x, y, w, h] of islandRows(isl, 2)) ctx.fillRect(x, y, w, h);
+    ring(ctx, isl.x, isl.y, isl.rx * s, isl.k < 1 ? 'rgba(255,210,122,0.7)' : 'rgba(224,160,64,0.32)', isl.ry / isl.rx, 2);
+  }
+}
+
 // ── объекты через атлас ─────────────────────────────────────────────────
 // Кадр декора: цикл по fps; в Шраме каждый третий кадр пропускается (рывки), на Low — реже.
 function propFrame(g, c, phase) {
@@ -906,6 +917,7 @@ export function renderWorld(g, ctx) {
   const y0 = Math.max(0, Math.floor(cy / TILE));
   drawVoidLayer(g, ctx, x0, y0, x0 + Math.ceil(W / TILE) + 1, y0 + Math.ceil(H / TILE) + 1);
   if (room.pastCanvas && g.memIslands?.length) drawMemoryIslands(g, ctx);
+  else if (g.memIslands?.length) drawAuraRims(g, ctx);
 
   // зоны стирания
   for (const z of g.voidZones) {

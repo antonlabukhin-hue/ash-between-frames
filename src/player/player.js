@@ -76,7 +76,7 @@ function aimAngle(g, p) {
 export function pickShiftTarget(g, p) {
   const cands = [];
   const consider = (obj, x, y, type, range = SHIFT_RANGE, pinned = false) => {
-    if (!obj.tl?.switchable) return;
+    if (!obj.tl?.switchable || obj.carried) return;
     const d = dist(p.x, p.y - 6, x, y);
     if (d > range) return;
     const a = Math.atan2(y - (p.y - 6), x - p.x);
@@ -198,7 +198,7 @@ export function riftPulse(g, p) {
     if (dist(ax, ay, p.x, p.y) < 64 && pr.tl.switchable && !isShifted(pr.tl)) applyShift(g, { obj: pr, x: ax, y: ay, type: 'projectile' }, { free: true });
   }
   for (const pr of g.props) {
-    if (!pr.tl.switchable || pr.hidden || pr.noRift) continue;
+    if (!pr.tl.switchable || pr.hidden || pr.noRift || pr.carried) continue;
     const [cx, cy] = propCenter(pr);
     if (dist(cx, cy, p.x, p.y) < 64) applyShift(g, { obj: pr, x: cx, y: cy, type: 'prop' }, { free: true });
   }
@@ -367,7 +367,9 @@ export function updatePlayer(g, p, dt) {
 
   // ── атака ──
   const auto = g.save.settings.autoAttack && g.enemies.some((e) => !e.dead && e.spawn <= 0 && dist(e.x, e.y, p.x, p.y) < 30);
-  if (!locked && p.dodge <= 0 && !p.channel && (inp.pressed('attack') || (auto && !p.swing && p.combo.t > 0.5))) {
+  if (p.carry) {
+    if (!locked && inp.pressed('attack')) g.putDown();
+  } else if (!locked && p.dodge <= 0 && !p.channel && (inp.pressed('attack') || (auto && !p.swing && p.combo.t > 0.5))) {
     const hit = pressAttack(p.combo);
     if (hit) startSwing(g, p, hit);
   }
@@ -469,6 +471,7 @@ export function updatePlayer(g, p, dt) {
     let sp = SPEED;
     if (p.channel) sp *= 0.45;
     if (p.swing) sp *= 0.35;
+    if (p.carry) sp *= 0.72;
     vx = mv.x * sp;
     vy = mv.y * sp;
   }

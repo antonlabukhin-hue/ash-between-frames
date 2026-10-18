@@ -156,6 +156,32 @@ export function drawLanternHd(ctx, p, g) {
   poly(ctx, [x - 5, y - 34, x, y - 37.5, x + 5, y - 34], lin(ctx, x - 5, 0, x + 5, 0, [[0, IRON[3]], [1, IRON[0]]]));
 }
 
+// ── ручной фонарь привратника: стоит на земле или висит в руке героя (p.carried) ──
+export function drawHandLanternHd(ctx, p, g) {
+  const past = ph(p) === PAST;
+  const x = p.x;
+  const y = p.carried ? p.y - 9 : p.y;
+  const t = g.time || 0;
+  if (!p.carried) shadowOval(ctx, x, y, 4);
+  // дужка и крышка
+  path(ctx, [x - 2.6, y - 11, x - 1.6, y - 14, x + 1.6, y - 14, x + 2.6, y - 11], IRON[0], 0.7);
+  poly(ctx, [x - 3.6, y - 11, x + 3.6, y - 11, x + 2.6, y - 9.4, x - 2.6, y - 9.4], lin(ctx, x - 4, 0, x + 4, 0, [[0, IRON[3]], [1, IRON[0]]]));
+  // стекло
+  if (past) {
+    const fl = 0.3 + Math.sin(t * 9) * 0.06;
+    poly(ctx, [x - 2.8, y - 9.4, x + 2.8, y - 9.4, x + 2.8, y - 2.4, x - 2.8, y - 2.4], rad(ctx, x, y - 6, fl, 4.4, [[0, '#fff8e0'], [0.45, '#ffd27a'], [1, '#b8721f']]));
+  } else {
+    poly(ctx, [x - 2.8, y - 9.4, x + 2.8, y - 9.4, x + 2.8, y - 2.4, x - 2.8, y - 2.4], '#0d2a2c');
+    const s = Math.floor(t * 12) % 5;
+    if (s < 2) path(ctx, [x - 2, y - 8 + s, x + 1.6, y - 4 - s], '#a8fff0', 0.5);
+  }
+  path(ctx, [x - 2.8, y - 9.4, x - 2.8, y - 2.4], IRON[1], 0.6);
+  path(ctx, [x + 2.8, y - 9.4, x + 2.8, y - 2.4], IRON[0], 0.6);
+  path(ctx, [x, y - 9.4, x, y - 2.4], IRON[0], 0.35);
+  // донце
+  rect(ctx, x - 3.4, y - 2.4, 6.8, 1.6, IRON[2]);
+}
+
 // ── костёр ────────────────────────────────────────────────────────────
 export function drawCampfireHd(ctx, p, g) {
   const past = ph(p) === PAST;

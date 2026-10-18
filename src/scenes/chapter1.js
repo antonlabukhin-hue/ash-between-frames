@@ -12,7 +12,7 @@ import { unlockAbility } from '../player/abilities.js';
 import { SQ, drawSquareParallax, pastAt, drawStillOne, drawGarland, drawVillager } from '../art/level01.js';
 import { paintSquare as paintSquareV1, drawSquareParallax as drawSquareParallaxV1 } from '../art/level01_v1.js';
 import { paintTarget, inFissure, G as G16 } from '../art/square16.js';
-import { updateIslands, inIslands } from '../world/memory.js';
+import { inIslands } from '../world/memory.js';
 import { atlas } from '../art/spritecache.js';
 import { blit } from '../art/atlas.js';
 import { line, px } from '../art/sprites.js';
@@ -507,8 +507,6 @@ export const square = {
   ashColor: '#5a5470',
   setup(g, room) {
     room.pitAt = (gg, x, y) => artVariant !== 'current' && inFissure(x, y) && !inIslands(gg.memIslands || [], x, y);
-    g.islandState = new Map();
-    g.memIslands = [];
     const [cx, cy] = G16.center;
     const statue = g.addProp('statue16', cx, cy + 10, { prompt: 'Осмотреть постамент', icon: 'eye', markY: (o) => (o.tl.phase === PAST ? 68 : 34) });
     g.statue = statue;
@@ -553,6 +551,29 @@ export const square = {
     const ghosts = [[150, 214], [176, 270], [304, 196], [334, 238], [206, 300], [278, 296]];
     g.squareGhosts = ghosts.map(([x, y], i) => g.addProp('ghostNpc', x, y, { drawFn: drawVillager, drawOpts: { v: i % 4 }, hidden: true }));
     g.stillOne = g.addProp('ghostNpc', 404, 252, { drawFn: drawStillOne });
+    // переносной свет (П2): фонарь привратника у входа; в его ореоле — привратник и стёртая надпись
+    g.addProp('handLantern', 212, 330);
+    const keeper = g.addProp('ghostNpc', 272, 104, { drawFn: drawGhost, drawOpts: { hat: true }, inAura: true, hidden: true, prompt: 'Окликнуть привратника', markY: 28 });
+    keeper.onInteract = async () => {
+      const KEEP = (t) => ({ who: 'Привратник Ведан', text: t });
+      if (g.flags.keeperMet) {
+        await g.say([KEEP('Колокол молчит — ворота стоят. Ищи, кто звонил последним.')]);
+        return;
+      }
+      await g.say([
+        KEEP('Свет… Сколько лет никто не приносил мне свет.'),
+        KEEP('Я открывал ворота по звону. Звон — ворота. Тишина — засов.'),
+        KEEP('В последний вечер звонил Мел. Звонил и звонил, пока площадь не опустела.'),
+        KEEP('Мальчишка в латунной кепке пробежал мимо меня наверх. Я его не остановил.'),
+      ]);
+      g.flags.keeperMet = true;
+      g.persist();
+    };
+    const carved = g.addProp('inscription', 40, 286, { w: 22, h: 10, prompt: 'Прочитать надпись' });
+    carved.onInteract = async () => {
+      await g.say([NOTE('Строки проступают в свете: «Звонарь — Мел. Привратник — Ведан. Хлеб — у Мары. Мальчик в кепке — …». Имя сколото.')]);
+      g.flags.carvedRead = true;
+    };
     g.addProp('candles', cx - 22, cy + 16);
     g.addProp('candles', cx + 22, cy + 16);
     for (const [x, y] of [[60, 332], [432, 168]]) g.addProp('rubble', x, y);
@@ -585,8 +606,8 @@ export const square = {
       blit(ctx, e, x, g.room.pxH + 6);
     }
   },
+  memorySources: (g) => (artVariant === 'current' ? [] : memorySources(g)),
   update(g, dt) {
-    g.memIslands = artVariant === 'current' ? [] : updateIslands(g.islandState, memorySources(g), dt);
     if (g.squareWaves && g.lanterns) g.squareLit = g.lanterns.filter((l) => l.tl.phase === PAST).length;
   },
   async script(g) {

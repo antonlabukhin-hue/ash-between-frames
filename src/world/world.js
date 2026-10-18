@@ -4,6 +4,7 @@ import { tileAt, pointInRect } from './room.js';
 import { propFoot, propWalkRect, PROP_KINDS } from './props.js';
 import { PAST } from '../timeline/timeline.js';
 import { dist2 } from '../core/math.js';
+import { inIslands } from './memory.js';
 
 // Стирающаяся плита сейчас пустая? Решает сценарий комнаты (room.flickerOn).
 function flickerVoid(g, tx, ty) {
@@ -16,6 +17,8 @@ function flickerVoid(g, tx, ty) {
     const r = p.def.protect?.[p.tl.phase];
     if (r && dist2(cx, cy, p.x, p.y) < r * r) return false;
   }
+  // в острове памяти плиты целы
+  if (g.memIslands?.length && inIslands(g.memIslands, cx, cy)) return false;
   return true;
 }
 
