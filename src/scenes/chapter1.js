@@ -321,7 +321,7 @@ export const tornRoad = {
     // дорога стирается навстречу и не возвращается (карта зоны 4.2): держат только камни памяти.
     // Первый камень виден с берега; каждый следующий проступает лишь в свете предыдущего.
     makeErosion(room, { x0: 8, x1: 23 });
-    g.tornStones = [10, 15, 20].map((tx, i) => g.addProp('memoryStone', T(tx), TOP(9) + 6, { prompt: null, inAura: i > 0, hidden: i > 0 }));
+    g.tornStones = [10, 15, 20].map((tx, i) => g.addProp('memoryStone', T(tx), TOP(8) + 4, { prompt: null, inAura: i > 0, hidden: i > 0 }));
     for (const [x, y] of [[5, 3], [26, 15], [4, 15]]) g.addProp('pillar', T(x), TOP(y + 1), { tall: 30, broken: true });
     for (const [x, y] of [[2, 2], [29, 15], [11, 16]]) g.addProp('deadTree', T(x), TOP(y + 1));
     if (!g.flags.nameScrap) g.spawnPickup('scrap', T(29), T(1), { vx: 0, vy: 0 });

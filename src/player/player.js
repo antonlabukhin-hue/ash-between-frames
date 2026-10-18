@@ -81,7 +81,7 @@ export function pickShiftTarget(g, p) {
     const d = dist(p.x, p.y - 6, x, y);
     if (d > range) return;
     const a = Math.atan2(y - (p.y - 6), x - p.x);
-    cands.push({ obj, type, x, y, d, off: Math.abs(angleDiff(p.aim, a)), pinned });
+    cands.push({ obj, type, x, y, d, off: Math.abs(angleDiff(p.aim, a)), pinned, shifted: type === 'prop' && isShifted(obj.tl) });
   };
   for (const e of g.enemies) if (!e.dead && e.spawn <= 0) consider(e, e.x, e.y - e.hitY, 'enemy');
   for (const pr of g.projectiles) {
