@@ -666,3 +666,25 @@ body { font-family: var(--font-body); font-weight: 500; }
 .plate.dim { opacity: 0.6; }
 .plate .bar { height: 3px; margin-top: 2px; background: #24232e; }
 .plate .bar i { display: block; height: 100%; background: var(--teal); }
+
+/* реплики призраков в сценах прошлого — тёплые, полупрозрачные, курсивом */
+.bark {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  max-width: 38%;
+  padding: calc(var(--px) * 1.4) calc(var(--px) * 3.5);
+  background: rgba(40, 24, 8, 0.72);
+  border: 1px solid rgba(224, 160, 64, 0.55);
+  border-radius: 3px;
+  color: #ffe9b0;
+  font-style: italic;
+  font-size: max(13px, calc(var(--px) * 5.6));
+  line-height: 1.25;
+  text-align: center;
+  z-index: 5;
+}
+.bark .who { font-family: var(--font-title); font-style: normal; font-weight: 700; font-size: 0.82em; color: var(--amber); }
+.journal { display: grid; gap: calc(var(--px) * 3); margin-top: calc(var(--px) * 4); }
+.journal .m b { font-family: var(--font-title); color: var(--amber-hi); }
+.journal .m small { color: var(--ash); margin-left: 0.4em; }
+.journal .m p { margin: 0.15em 0 0; color: var(--milk); font-size: 0.92em; }

@@ -16,6 +16,7 @@ import { createGame } from './game.js';
 import { loadSave, hasProgress, parseSave } from './save/save.js';
 import { renderWorld } from './render.js';
 import { loadRoomArt } from './art/roomart.js';
+import { memoryList } from './story/memories.js';
 import { buildRoomCanvas } from './art/tiles.js';
 import { drawTitle } from './scenes/title.js';
 import { createTouch } from './mobile/touch.js';
@@ -299,7 +300,32 @@ function mapMenu() {
     game.paused = false;
     input.clear();
   };
-  ui.menu({ title: 'Глава 1 · Колокол, который не помнит удара', extra: box, items: [{ text: 'Закрыть', on: close }], back: close });
+  // дневник памяти: воспоминания — знание и предмет (их предъявляют в разговорах)
+  const wrap = document.createElement('div');
+  wrap.append(box);
+  const mem = memoryList(save);
+  const j = document.createElement('div');
+  j.className = 'journal';
+  const h = document.createElement('h2');
+  h.textContent = mem.length ? `Память · ${mem.length}` : 'Память';
+  j.append(h);
+  if (!mem.length) {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = 'Пока пусто. Досмотри сцену прошлого или найди обрывок — и воспоминание останется здесь.';
+    j.append(p);
+  }
+  for (const m of mem) {
+    const d = document.createElement('div');
+    d.className = 'm';
+    d.innerHTML = `<b></b><small></small><p></p>`;
+    d.querySelector('b').textContent = m.name;
+    d.querySelector('small').textContent = m.place;
+    d.querySelector('p').textContent = m.text;
+    j.append(d);
+  }
+  wrap.append(j);
+  ui.menu({ title: 'Глава 1 · Колокол, который не помнит удара', extra: wrap, items: [{ text: 'Закрыть', on: close }], back: close });
 }
 
 function pauseMenu2() {

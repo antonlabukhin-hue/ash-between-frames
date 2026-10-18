@@ -63,6 +63,7 @@ export function createUI(root, { audio }) {
     ui.hideBanner();
     ui.setPrompt(null);
     ui.setPlates([]);
+    ui.setBarks?.([]);
     if (all) {
       ui.caption(null);
       toast.classList.add('off');
@@ -130,6 +131,28 @@ export function createUI(root, { audio }) {
       elp.style.left = `${(pl.x * 100).toFixed(2)}%`;
       elp.style.top = `${(pl.y * 100).toFixed(2)}%`;
     }
+  };
+
+  // Реплики сцен прошлого: короткий текст над говорящим призраком.
+  const barkEls = [el('div', 'bark passive hidden', root), el('div', 'bark passive hidden', root)];
+  const barkKeys = ['', ''];
+  ui.setBarks = (list) => {
+    barkEls.forEach((elb, i) => {
+      const b = list[i];
+      if (!b) {
+        if (barkKeys[i]) elb.classList.add('hidden');
+        barkKeys[i] = '';
+        return;
+      }
+      const key = b.who + b.text;
+      if (key !== barkKeys[i]) {
+        barkKeys[i] = key;
+        elb.innerHTML = `${b.who ? `<div class="who">${esc(b.who)}</div>` : ''}<div>${esc(b.text)}</div>`;
+        elb.classList.remove('hidden');
+      }
+      elb.style.left = `${(b.x * 100).toFixed(2)}%`;
+      elb.style.top = `${(b.y * 100).toFixed(2)}%`;
+    });
   };
 
   ui.caption = (text, o = {}) => {

@@ -1,7 +1,8 @@
 // Рен, Последний Смотритель.
 import { createCombo, pressAttack, tickCombo, isActiveFrame, inPerfectWindow, resetCombo } from '../combat/combo.js';
 import { heroHitDamage, BALANCE } from '../combat/damage.js';
-import { createCharges, tickCharges, spend, canSpend, hasten } from '../timeline/charges.js';
+import { createCharges, tickCharges, spend, canSpend, hasten, gain } from '../timeline/charges.js';
+import { createHeat, heatCost, addHeat, notePaid, cancelRefund, isOverheated } from '../timeline/heat.js';
 import { shiftTimeline, shiftCost, channelTime, createChannel, tickChannel, isShifted, PAST } from '../timeline/timeline.js';
 import { moveBox } from '../world/room.js';
 import { heroBlocked, isPit } from '../world/world.js';
@@ -27,6 +28,7 @@ export function createPlayer(x, y, save) {
     aim: Math.PI / 2, dir: 'down', flip: false, walk: 0, sway: 0, moving: false,
     combo: createCombo(), swing: null, hitSet: new Set(),
     charges: createCharges(BALANCE.charges + (save.upgrades.charges || 0), 10),
+    heat: createHeat(),
     dodge: 0, dodgeCd: 0, dodgeDir: [0, 1], dodgeFresh: false,
     channel: null, echo: 0, rift: 0, critNext: false,
     shiftTarget: null, lastSafe: { x, y }, falling: 0, kx: 0, ky: 0,
@@ -74,7 +76,7 @@ function aimAngle(g, p) {
 export function pickShiftTarget(g, p) {
   const cands = [];
   const consider = (obj, x, y, type, range = SHIFT_RANGE, pinned = false) => {
-    if (!obj.tl?.switchable) return;
+    if (!obj.tl?.switchable || obj.carried) return;
     const d = dist(p.x, p.y - 6, x, y);
     if (d > range) return;
     const a = Math.atan2(y - (p.y - 6), x - p.x);
@@ -95,12 +97,38 @@ export function pickShiftTarget(g, p) {
   return p.shiftList[0] || null;
 }
 
+// Цена сдвига для героя: бесплатные режимы, затем перегрев браслета.
+export function effectiveCost(g, p, tl, free = false) {
+  return heatCost(p.heat, g.time, free ? 0 : shiftCost(tl, { free: p.echo > 0 || g.freeShift }));
+}
+
 export function applyShift(g, target, { free = false } = {}) {
   const p = g.player;
   const obj = target.obj;
-  const cost = free ? 0 : shiftCost(obj.tl, { free: p.echo > 0 || g.freeShift });
-  if (!spend(p.charges, cost)) return false;
-  if (p.echo > 0 && cost === 0 && !isShifted(obj.tl)) p.echo = 0;
+  // отмена: передумал быстро — заряд возвращается
+  if (isShifted(obj.tl)) {
+    const back = cancelRefund(obj.tl, g.time);
+    if (back > 0) {
+      gain(p.charges, back);
+      addText(g, p.x, p.y - 28, `+${back}`, P.teal);
+    }
+  } else {
+    const cost = effectiveCost(g, p, obj.tl, free);
+    if (!spend(p.charges, cost)) return false;
+    notePaid(obj.tl, cost, g.time);
+    if (cost > 0) {
+      const wasHot = isOverheated(p.heat, g.time);
+      addHeat(p.heat, g.time);
+      if (!wasHot && isOverheated(p.heat, g.time)) {
+        addText(g, p.x, p.y - 30, 'браслет раскалён', P.crimsonHi);
+        if (!g.flags.heatHinted) {
+          g.flags.heatHinted = true;
+          g.hint('Браслет раскалён: следующий сдвиг стоит вдвое. Дай ему пару секунд остыть.', 5);
+        }
+      }
+    }
+    if (p.echo > 0 && cost === 0) p.echo = 0;
+  }
   const phase = shiftTimeline(obj.tl);
   g.audio.sfx.shift(phase);
   const c = phase === PAST ? P.amberHi : P.crimsonHi;
@@ -170,7 +198,7 @@ export function riftPulse(g, p) {
     if (dist(ax, ay, p.x, p.y) < 64 && pr.tl.switchable && !isShifted(pr.tl)) applyShift(g, { obj: pr, x: ax, y: ay, type: 'projectile' }, { free: true });
   }
   for (const pr of g.props) {
-    if (!pr.tl.switchable || pr.hidden || pr.noRift) continue;
+    if (!pr.tl.switchable || pr.hidden || pr.noRift || pr.carried) continue;
     const [cx, cy] = propCenter(pr);
     if (dist(cx, cy, p.x, p.y) < 64) applyShift(g, { obj: pr, x: cx, y: cy, type: 'prop' }, { free: true });
   }
@@ -339,7 +367,9 @@ export function updatePlayer(g, p, dt) {
 
   // ── атака ──
   const auto = g.save.settings.autoAttack && g.enemies.some((e) => !e.dead && e.spawn <= 0 && dist(e.x, e.y, p.x, p.y) < 30);
-  if (!locked && p.dodge <= 0 && !p.channel && (inp.pressed('attack') || (auto && !p.swing && p.combo.t > 0.5))) {
+  if (p.carry) {
+    if (!locked && inp.pressed('attack')) g.putDown();
+  } else if (!locked && p.dodge <= 0 && !p.channel && (inp.pressed('attack') || (auto && !p.swing && p.combo.t > 0.5))) {
     const hit = pressAttack(p.combo);
     if (hit) startSwing(g, p, hit);
   }
@@ -359,7 +389,7 @@ export function updatePlayer(g, p, dt) {
   if (p.channel) p.shiftTarget = p.channel.target;
   if (!locked && inp.pressed('shift') && p.channel && p.shiftList?.length > 1) {
     const nt = nextTarget(p.shiftList, p.channel.target.obj);
-    if (nt && nt.obj !== p.channel.target.obj && canSpend(p.charges, shiftCost(nt.obj.tl, { free: p.echo > 0 || g.freeShift }))) {
+    if (nt && nt.obj !== p.channel.target.obj && canSpend(p.charges, effectiveCost(g, p, nt.obj.tl))) {
       p.channel = createChannel(nt, channelTime(nt.obj.tl, { speed: g.save.upgrades.quickSeam ? 0.75 : 1 }) || 0.3);
       p.shiftTarget = nt;
       g.audio.sfx.ui();
@@ -371,7 +401,7 @@ export function updatePlayer(g, p, dt) {
       g.audio.sfx.noCharge();
     } else {
       const free = p.echo > 0 || g.freeShift;
-      const cost = shiftCost(t.obj.tl, { free });
+      const cost = effectiveCost(g, p, t.obj.tl);
       if (!canSpend(p.charges, cost)) {
         g.audio.sfx.noCharge();
         addText(g, p.x, p.y - 28, 'нет зарядов', P.ash4);
@@ -441,6 +471,7 @@ export function updatePlayer(g, p, dt) {
     let sp = SPEED;
     if (p.channel) sp *= 0.45;
     if (p.swing) sp *= 0.35;
+    if (p.carry) sp *= 0.72;
     vx = mv.x * sp;
     vy = mv.y * sp;
   }

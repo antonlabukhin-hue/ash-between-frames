@@ -1,5 +1,6 @@
 // Враги. Каждый — TimelineEnemy: параметры для Отпечатка (past) и Шрама (present).
 import { createTimeline, tickTimeline, PAST, PRESENT } from '../timeline/timeline.js';
+import { inIslands, auraDamageMul } from '../world/memory.js';
 import { moveBox } from '../world/room.js';
 import { enemyBlocked, revealedAt } from '../world/world.js';
 import { burst, addText, ringFx } from '../world/fx.js';
@@ -129,6 +130,8 @@ export function damageEnemy(g, e, amount, o = {}) {
     addText(g, e.x, e.y - 18, '·', P.ash3, { life: 0.3 });
     return -1;
   }
+  // остров памяти: Шрам слабеет, Отпечаток крепнет (П2)
+  if (!o.pure && e.tl && g.memIslands?.length && inIslands(g.memIslands, e.x, e.y)) amount = Math.max(1, Math.round(amount * auraDamageMul(e.tl.phase)));
   e.hp -= amount;
   e.flash = 0.12;
   if (o.kx || o.ky) {

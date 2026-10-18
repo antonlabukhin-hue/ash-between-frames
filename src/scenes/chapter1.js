@@ -12,7 +12,7 @@ import { unlockAbility } from '../player/abilities.js';
 import { SQ, drawSquareParallax, pastAt, drawStillOne, drawGarland, drawVillager } from '../art/level01.js';
 import { paintSquare as paintSquareV1, drawSquareParallax as drawSquareParallaxV1 } from '../art/level01_v1.js';
 import { paintTarget, inFissure, G as G16 } from '../art/square16.js';
-import { updateIslands, inIslands } from '../world/memory.js';
+import { inIslands } from '../world/memory.js';
 import { atlas } from '../art/spritecache.js';
 import { blit } from '../art/atlas.js';
 import { line, px } from '../art/sprites.js';
@@ -168,7 +168,18 @@ export const road = {
     // на рисованном полу башни уже нарисованы — колокол висит между их верхушками
     g.gateTowers = roadArt() ? [{ x: 135, y: 129 }, { x: 344, y: 129 }] : [g.addProp('gateTower', 166, RT(8), { warm: true }), g.addProp('gateTower', 314, RT(8))];
 
-    const sign = g.addProp('sign', 200, RT(38) - 1, { prompt: 'Осмотреть указатель', markY: 32 });
+    const sign = g.addProp('sign', 200, RT(38) - 1, { prompt: 'Осмотреть указатель', markY: 32, timeline: { hold: 9 } });
+    // сцена прошлого: у указателя в Отпечатке зазывают торговцы — досмотри, и останется воспоминание
+    const near = (o, r) => g.player && Math.hypot(g.player.x - o.x, g.player.y - o.y) < r;
+    g.pastScene({
+      memory: 'fair',
+      cond: () => sign.tl.phase === PAST && near(sign, 90),
+      lines: [
+        { at: { x: sign.x - 26, y: sign.y - 20 }, who: 'Торговец', text: 'Последний звон перед праздником! Воск, хлеб, фонари!', dur: 2.6 },
+        { at: { x: sign.x + 30, y: sign.y - 14 }, who: 'Торговка', text: 'В Колокольные Ворота — до ночи, пока звонят!', dur: 2.6 },
+        { at: { x: sign.x - 26, y: sign.y - 20 }, who: 'Торговец', text: 'Смотритель, и ты на праздник? Держи свечу — даром.', dur: 2.8 },
+      ],
+    });
     sign.onInteract = async () => {
       await g.say([NOTE('Указатель: «КОЛОКОЛЬНЫЕ ВО…» Последние буквы дрожат и меняются каждый кадр, будто их кто-то стирает.')]);
       g.flags.signRead = true;
@@ -378,6 +389,22 @@ export const camp = {
     fire.onShift = (gg, f, phase) => {
       if (phase === PAST) g.flags.fireLit = true;
     };
+    // нить причин (П3): котёл кипит, только если горит костёр; пар поднимает заслонку погреба
+    const kettle = g.addProp('kettle', fire.x + 24, fire.y + 2);
+    const hatch = g.addProp('hatch', 26, TOP(9) + 4, { w: 20, h: 14, prompt: 'Спуститься в погреб' });
+    g.link(kettle, hatch, { need: [fire] });
+    kettle.update = (gg, k) => {
+      k.tl.switchable = !!g.flags.camp; // до сцены у костра — не отвлекать от обучения
+      k.boil = k.tl.phase === PAST && fire.tl.phase === PAST;
+    };
+    hatch.canInteract = () => hatch.tl.phase === PAST && !g.flags.cellarLooted;
+    hatch.onInteract = async () => {
+      g.flags.cellarLooted = true;
+      for (let i = 0; i < 5; i++) g.spawnPickup('ash', hatch.x + 10, hatch.y + 8);
+      g.spawnPickup('shard', hatch.x + 10, hatch.y + 10);
+      await g.say([NOTE('В погребе — свечи, мешок золы и записка: «Арно, суп в котле. Не жди меня — грейся. С.»')]);
+      g.persist();
+    };
   },
   async script(g) {
     const { arno, sena, fire } = g.campNpc;
@@ -404,14 +431,15 @@ export const camp = {
       SENA('Ты помнишь камни. А я помню тебя.'),
       REN('Один из них — настоящий. Другой — отпечаток. Браслет не скажет, кто.'),
     ]);
-    const hasScrap = !!g.flags.nameScrap;
+    g.remember('campfire');
+    const hasScrap = g.hasMemory('nameScrap') || !!g.flags.nameScrap;
     const hasCharge = g.player.charges.n >= 1;
     const i = await g.choose('Дорога удержит только одно воспоминание.', [
       { text: 'Оставить Арно', sub: 'Сена исчезнет' },
       { text: 'Оставить Сену', sub: 'Арно исчезнет' },
       {
-        text: 'Сохранить обоих',
-        sub: !hasScrap ? 'Нужен обрывок имени — он остался на Разорванной дороге' : !hasCharge ? 'Нужен заряд браслета' : 'Потратить обрывок имени и заряд браслета',
+        text: 'Показать Сене записку',
+        sub: !hasScrap ? 'Нужна записка «…но, жди у ворот» — она осталась на Разорванной дороге' : !hasCharge ? 'Нужен заряд браслета' : 'Сохранить обоих: записка и заряд браслета',
         disabled: !hasScrap || !hasCharge,
       },
     ]);
@@ -419,7 +447,11 @@ export const camp = {
     g.flags.camp = choice;
     if (choice === 'both') {
       g.player.charges.n -= 1;
-      g.flags.nameScrap = false;
+      await g.say([
+        SENA('«…но, жди меня у ворот. С.» Это мой почерк.'),
+        SENA('Арно. Я писала тебе, когда ты ушёл вперёд. Ты мой брат.'),
+        ARNO('…Брат. Да. Я ждал у ворот, а ворота забыли меня.'),
+      ]);
       g.audio.sfx.shift(PAST);
       ringFx(g, fire.x, fire.y - 8, 4, 40, P.amberHi, 0.6);
     } else {
@@ -491,8 +523,6 @@ export const square = {
   ashColor: '#5a5470',
   setup(g, room) {
     room.pitAt = (gg, x, y) => artVariant !== 'current' && inFissure(x, y) && !inIslands(gg.memIslands || [], x, y);
-    g.islandState = new Map();
-    g.memIslands = [];
     const [cx, cy] = G16.center;
     const statue = g.addProp('statue16', cx, cy + 10, { prompt: 'Осмотреть постамент', icon: 'eye', markY: (o) => (o.tl.phase === PAST ? 68 : 34) });
     g.statue = statue;
@@ -521,10 +551,45 @@ export const square = {
       g.heal(25);
       g.toast('Вода из прошлого ещё холодная');
     };
+    // сцена прошлого: при двух горящих фонарях у фонтана проступает праздник
+    const litCount = () => g.lanterns.filter((l) => l.tl.phase === PAST).length;
+    g.pastScene({
+      memory: 'lanternFeast',
+      cond: () => (litCount() >= 2 || g.flags.squareDone) && g.player && Math.hypot(g.player.x - fx, g.player.y - fy) < 96,
+      lines: [
+        { at: { x: fx - 30, y: fy - 10 }, who: 'Горожанка', text: 'Фонари зажгли — значит, скоро звон!', dur: 2.5 },
+        { at: { x: fx + 6, y: fy - 30 }, who: 'Мальчик в латунной кепке', text: 'Мам, я на фонтан — оттуда видно звонаря!', dur: 2.6 },
+        { at: { x: fx + 34, y: fy - 6 }, who: 'Женщина в платке', text: '…! Не убегай, слышишь? Только не в толпу!', dur: 2.6 },
+        { at: { x: fx, y: fy - 22 }, who: '', text: 'Звон накрывает площадь. Имя мальчика тонет в нём.', dur: 2.8 },
+      ],
+    });
     // жители прошлого — вокруг статуи; в Шраме — один силуэт спиной к игроку
     const ghosts = [[150, 214], [176, 270], [304, 196], [334, 238], [206, 300], [278, 296]];
     g.squareGhosts = ghosts.map(([x, y], i) => g.addProp('ghostNpc', x, y, { drawFn: drawVillager, drawOpts: { v: i % 4 }, hidden: true }));
     g.stillOne = g.addProp('ghostNpc', 404, 252, { drawFn: drawStillOne });
+    // переносной свет (П2): фонарь привратника у входа; в его ореоле — привратник и стёртая надпись
+    g.addProp('handLantern', 212, 330);
+    const keeper = g.addProp('ghostNpc', 272, 104, { drawFn: drawGhost, drawOpts: { hat: true }, inAura: true, hidden: true, prompt: 'Окликнуть привратника', markY: 28 });
+    keeper.onInteract = async () => {
+      const KEEP = (t) => ({ who: 'Привратник Ведан', text: t });
+      if (g.flags.keeperMet) {
+        await g.say([KEEP('Колокол молчит — ворота стоят. Ищи, кто звонил последним.')]);
+        return;
+      }
+      await g.say([
+        KEEP('Свет… Сколько лет никто не приносил мне свет.'),
+        KEEP('Я открывал ворота по звону. Звон — ворота. Тишина — засов.'),
+        KEEP('В последний вечер звонил Мел. Звонил и звонил, пока площадь не опустела.'),
+        KEEP('Мальчишка в латунной кепке пробежал мимо меня наверх. Я его не остановил.'),
+      ]);
+      g.flags.keeperMet = true;
+      g.persist();
+    };
+    const carved = g.addProp('inscription', 40, 286, { w: 22, h: 10, prompt: 'Прочитать надпись' });
+    carved.onInteract = async () => {
+      await g.say([NOTE('Строки проступают в свете: «Звонарь — Мел. Привратник — Ведан. Хлеб — у Мары. Мальчик в кепке — …». Имя сколото.')]);
+      g.flags.carvedRead = true;
+    };
     g.addProp('candles', cx - 22, cy + 16);
     g.addProp('candles', cx + 22, cy + 16);
     for (const [x, y] of [[60, 332], [432, 168]]) g.addProp('rubble', x, y);
@@ -557,8 +622,8 @@ export const square = {
       blit(ctx, e, x, g.room.pxH + 6);
     }
   },
+  memorySources: (g) => (artVariant === 'current' ? [] : memorySources(g)),
   update(g, dt) {
-    g.memIslands = artVariant === 'current' ? [] : updateIslands(g.islandState, memorySources(g), dt);
     if (g.squareWaves && g.lanterns) g.squareLit = g.lanterns.filter((l) => l.tl.phase === PAST).length;
   },
   async script(g) {
@@ -651,6 +716,17 @@ async function boyTalk(g) {
   const i = await g.choose('Спросить мальчика…', [{ text: 'Кто ты?' }, { text: 'Мне пора наверх' }]);
   if (i === 0) await g.say([BOY('Я был мальчиком, пока меня не понадобилось заменить.'), REN('Кем заменить?'), BOY('Тем, кто не стирается.')]);
   else await g.say([BOY('Лестница из двух версий. Наступай на ту, что помнит тебя.')]);
+  if (g.flags.boyQuest) return;
+  await g.present('Показать Мальчику воспоминание?', {
+    lanternFeast: async (gg) => {
+      await gg.say([
+        BOY('Кепка… моя. А лицо — нет. Это тот, кого я заменил.'),
+        BOY('Женщина в платке — его мать. Она ещё ищет. Найди её, Смотритель.'),
+      ]);
+      gg.flags.boyQuest = true;
+      gg.persist();
+    },
+  }, 'Я этого не помню. Значит, со мной этого не было.', 'Латунный Мальчик');
 }
 
 // ── 4. Лестница из двух версий ───────────────────────────────────────
@@ -829,6 +905,7 @@ export const ascent = {
     mara.onInteract = async () => {
       if (g.flags.bread) {
         await g.say([{ who: 'Мара', text: 'Наверху Брат Мел. Звонит в пустоту. Не дай ему дозвониться.', portrait: 'mara' }]);
+        if (!g.flags.maraQuest) await maraPresent(g);
         return;
       }
       const MARA = (t) => ({ who: 'Мара', text: t, portrait: 'mara' });
@@ -842,8 +919,23 @@ export const ascent = {
       g.heal(g.player.maxHp);
       g.persist();
       await g.say([MARA('Наверху Брат Мел. Звонит в пустоту. Не дай ему дозвониться.')]);
+      await maraPresent(g);
     };
     // жители прошлого готовятся к празднику
+    async function maraPresent(gg) {
+      const MARA = (t) => ({ who: 'Мара', text: t, portrait: 'mara' });
+      await gg.present('Показать Маре воспоминание?', {
+        lanternFeast: async () => {
+          await gg.say([
+            MARA('Платок… это мой платок.'),
+            MARA('В тот вечер я потеряла сына. Помню, как звала его. Не помню — как.'),
+            MARA('Найди его, Смотритель. Или хотя бы его имя.'),
+          ]);
+          gg.flags.maraQuest = true;
+          gg.persist();
+        },
+      }, 'Красиво. Но это не моё.', 'Мара');
+    }
     const ghosts = [[8, 6], [11, 10], [16, 8], [20, 6], [30, 9], [35, 6], [39, 10]];
     g.drawables.push({
       y: 0,

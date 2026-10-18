@@ -5,7 +5,7 @@ import { P } from '../art/palette.js';
 import { px, line, disc, ring, drawBrassBoy, drawGhost, shadow } from '../art/sprites.js';
 import { createTimeline, PAST, PRESENT } from '../timeline/timeline.js';
 import { hash2 } from '../core/math.js';
-import { drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
+import { drawKettleHd, drawHatchHd, drawHandLanternHd, drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
 import { drawTik32, drawMara32, drawDog32, drawGhost32, drawBrassBoy32, drawVillager32, drawStillOne32 } from '../art/npcs32.js';
 import { drawTik, drawMara, drawDog } from '../art/sprites.js';
 import { drawLampHd, drawBannerHd, drawTreeHd, drawDeadTreeHd, drawGraveHd, drawGateTowerHd } from '../art/road32.js';
@@ -41,6 +41,8 @@ export const PROP_KINDS = {
     solid: { past: true, present: false },
     protect: { past: 52, present: 0 }, // удерживает стирающиеся плиты рядом
     light: { past: 44, present: 0 },
+    aura: { past: [54, 38], present: 0 },
+    auraRim: false, // свой круг рун уже нарисован
     draw: drawMemoryStone,
   },
   lantern: {
@@ -53,6 +55,30 @@ export const PROP_KINDS = {
     pulse: { past: 0, present: 38 }, // электрический импульс по кругу
     draw: drawLantern,
   },
+  // переносной свет (П2): зажечь сдвигом, взять (E), донести — ореол прошлого идёт с героем
+  handLantern: {
+    name: 'Фонарь привратника',
+    timeline: { hold: Infinity, cost: 1, switchTime: 0.5 },
+    foot: { w: 6, h: 3 },
+    solid: { past: true, present: true },
+    light: { past: 62, present: 10 },
+    lightColor: { past: 'amber', present: 'cold' },
+    lightY: 6,
+    reveal: { past: 62, present: 0 },
+    aura: { past: [64, 46], present: 0 },
+    carry: true,
+    draw: drawHandLanternHd,
+  },
+  // нити причин (П3): котёл кипит над углями, пар по трубе поднимает заслонку
+  kettle: {
+    name: 'Котёл',
+    timeline: { hold: 7, cost: 1, switchTime: 0.5 },
+    threadY: 10,
+    draw: drawKettleHd,
+  },
+  hatch: { name: 'Заслонка погреба', flat: true, timeline: { hold: Infinity, cost: 0 }, draw: drawHatchHd },
+  // стёртая надпись: читается только внутри острова памяти
+  inscription: { name: 'Стёртая надпись', flat: true, auraOnly: true, draw: drawInscription },
   campfire: {
     name: 'Костёр',
     timeline: { hold: Infinity, cost: 0, switchTime: 0.5 },
@@ -61,6 +87,8 @@ export const PROP_KINDS = {
     light: { past: 80, present: 0 },
     lightColor: { past: 'fire', present: 'cold' },
     lightY: 8,
+    aura: { past: [72, 50], present: 0 },
+    auraY: 2,
     draw: drawCampfire,
   },
   statue: {
@@ -131,7 +159,7 @@ const phaseOf = (p) => p.tl.phase;
 // Твёрдое основание объекта в текущей фазе.
 export function propFoot(p) {
   const d = p.def;
-  if (!d.foot || !d.solid || !d.solid[phaseOf(p)] || p.hidden) return null;
+  if (!d.foot || !d.solid || !d.solid[phaseOf(p)] || p.hidden || p.carried) return null;
   if (p.kind === 'chest' && p.open === 'gone') return null;
   return { x: p.x - d.foot.w / 2, y: p.y - d.foot.h, w: d.foot.w, h: d.foot.h };
 }
@@ -492,6 +520,17 @@ function drawShelf(ctx, p) {
   }
 }
 
+// стёртая надпись на плите: в Шраме — малиновые царапины, в острове памяти — янтарные строки
+function drawInscription(ctx, p, g) {
+  const x = Math.round(p.x);
+  const y = Math.round(p.y);
+  const lit = p.lit;
+  px(ctx, x, y, 22, 10, lit ? '#3a3046' : '#262234');
+  px(ctx, x, y, 22, 1, '#4a4258');
+  const c = lit ? P.amberHi : '#5a1a32';
+  for (let r = 0; r < 3; r++) for (let i = 0; i < 5; i++) if (lit || hash2(i, r + p.id) > 0.45) px(ctx, x + 2 + i * 4, y + 2 + r * 3, lit ? 3 : 2, 1, c);
+}
+
 function drawBox(ctx, p) {
   const x = Math.round(p.x);
   const y = Math.round(p.y);
@@ -512,6 +551,8 @@ const CACHE = {
   memoryStone: C(110, 56, 55, 30, 6, 6),
   lantern: C(16, 42, 8, 40, 12, 5),
   campfire: C(20, 22, 10, 18, 9, 6),
+  handLantern: C(14, 30, 7, 26, 12, 5, (p) => (p.carried ? 'c' : '')),
+  kettle: C(20, 36, 10, 32, 8, 8, (p) => (p.boil ? 'b' : '')),
   statue: C(26, 46, 13, 44, 2, 4),
   chest: C(22, 20, 11, 18, 6, 4, (p) => `${p.open}`),
   pillar: C(22, 64, 11, 56, 0, 1, (p) => `${p.tall ?? 40}|${p.broken ? 1 : 0}`),
@@ -536,7 +577,7 @@ for (const k of Object.keys(CACHE)) PROP_KINDS[k].cache = CACHE[k];
 
 // 32-битные маляры объектов (src/art/props32.js); при hd.on — вместо 16-битных
 const HD = {
-  sign: drawSignHd, memoryStone: drawMemoryStoneHd, lantern: drawLanternHd, campfire: drawCampfireHd,
+  handLantern: drawHandLanternHd, kettle: drawKettleHd, sign: drawSignHd, memoryStone: drawMemoryStoneHd, lantern: drawLanternHd, campfire: drawCampfireHd,
   chest: drawChestHd, pillar: drawPillarHd, rubble: drawRubbleHd, candles: drawCandlesHd, stove: drawStoveHd,
   table: drawTableHd, window: drawWindowHd, portraits: drawPortraitsHd, shelf: drawShelfHd, box: drawBoxHd,
 };

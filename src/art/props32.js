@@ -156,6 +156,88 @@ export function drawLanternHd(ctx, p, g) {
   poly(ctx, [x - 5, y - 34, x, y - 37.5, x + 5, y - 34], lin(ctx, x - 5, 0, x + 5, 0, [[0, IRON[3]], [1, IRON[0]]]));
 }
 
+// ── ручной фонарь привратника: стоит на земле или висит в руке героя (p.carried) ──
+export function drawHandLanternHd(ctx, p, g) {
+  const past = ph(p) === PAST;
+  const x = p.x;
+  const y = p.carried ? p.y - 9 : p.y;
+  const t = g.time || 0;
+  if (!p.carried) shadowOval(ctx, x, y, 4);
+  // дужка и крышка
+  path(ctx, [x - 2.6, y - 11, x - 1.6, y - 14, x + 1.6, y - 14, x + 2.6, y - 11], IRON[0], 0.7);
+  poly(ctx, [x - 3.6, y - 11, x + 3.6, y - 11, x + 2.6, y - 9.4, x - 2.6, y - 9.4], lin(ctx, x - 4, 0, x + 4, 0, [[0, IRON[3]], [1, IRON[0]]]));
+  // стекло
+  if (past) {
+    const fl = 0.3 + Math.sin(t * 9) * 0.06;
+    poly(ctx, [x - 2.8, y - 9.4, x + 2.8, y - 9.4, x + 2.8, y - 2.4, x - 2.8, y - 2.4], rad(ctx, x, y - 6, fl, 4.4, [[0, '#fff8e0'], [0.45, '#ffd27a'], [1, '#b8721f']]));
+  } else {
+    poly(ctx, [x - 2.8, y - 9.4, x + 2.8, y - 9.4, x + 2.8, y - 2.4, x - 2.8, y - 2.4], '#0d2a2c');
+    const s = Math.floor(t * 12) % 5;
+    if (s < 2) path(ctx, [x - 2, y - 8 + s, x + 1.6, y - 4 - s], '#a8fff0', 0.5);
+  }
+  path(ctx, [x - 2.8, y - 9.4, x - 2.8, y - 2.4], IRON[1], 0.6);
+  path(ctx, [x + 2.8, y - 9.4, x + 2.8, y - 2.4], IRON[0], 0.6);
+  path(ctx, [x, y - 9.4, x, y - 2.4], IRON[0], 0.35);
+  // донце
+  rect(ctx, x - 3.4, y - 2.4, 6.8, 1.6, IRON[2]);
+}
+
+// ── котёл на треноге: в прошлом цел и кипит (пар), в Шраме — ржавый, с дырой ──
+export function drawKettleHd(ctx, p, g) {
+  const past = ph(p) === PAST;
+  const boil = past && p.boil;
+  const x = p.x;
+  const y = p.y;
+  const t = g.time || 0;
+  shadowOval(ctx, x, y, 7, 0.35);
+  // угли под котлом
+  for (let i = 0; i < 4; i++) oval(ctx, x - 3 + i * 2, y - 1, 1.3, 0.8, boil ? (i % 2 ? '#ff9a3c' : '#c8501e') : '#2a2226');
+  // тренога
+  path(ctx, [x - 7, y, x, y - 17], WOOD[2], 1);
+  path(ctx, [x + 7, y, x, y - 17], WOOD[1], 1);
+  path(ctx, [x, y - 17, x, y - 12], IRON[1], 0.5);
+  // котёл
+  oval(ctx, x, y - 8, 5.2, 4, lin(ctx, x - 5, 0, x + 5, 0, past ? [[0, '#5a5f73'], [0.5, '#3a3d4c'], [1, '#1c1e28']] : [[0, '#6a3a24'], [0.6, '#3a2418'], [1, '#1c1210']]));
+  oval(ctx, x, y - 11.6, 4.6, 1.2, past ? '#1c1e28' : '#24160e');
+  if (!past) {
+    oval(ctx, x + 2, y - 7, 1.1, 0.9, '#05060a'); // дыра
+    path(ctx, [x - 3, y - 9, x - 1, y - 6], '#8a4a2a', 0.4);
+  }
+  if (boil) {
+    oval(ctx, x, y - 11.6, 3.6, 0.8, '#e8f0ff');
+    for (let i = 0; i < 3; i++) {
+      const k = (t * 0.8 + i / 3) % 1;
+      oval(ctx, x - 1 + Math.sin(k * 6 + i) * 2, y - 14 - k * 12, 1.4 + k * 2, 1 + k * 1.4, `rgba(220,230,245,${0.55 * (1 - k)})`);
+    }
+  }
+}
+
+// ── заслонка погреба (плоская): в Шраме — заколочена, в прошлом — поднята паром ──
+export function drawHatchHd(ctx, p, g) {
+  const past = ph(p) === PAST;
+  const x = p.x;
+  const y = p.y;
+  const w = p.w;
+  const h = p.h;
+  rect(ctx, x, y, w, h, STONE[1]);
+  rect(ctx, x + 1, y + 1, w - 2, h - 2, '#07080c');
+  if (past) {
+    // ступени вниз и тёплый свет снизу
+    for (let i = 0; i < 3; i++) rect(ctx, x + 3, y + 3 + i * 3, w - 6, 1.4, STONE[2 - (i > 1 ? 1 : 0)]);
+    rect(ctx, x + 3, y + h - 3, w - 6, 1.5, 'rgba(255,170,90,0.45)');
+    // поднятая крышка стоит ребром над проёмом
+    poly(ctx, [x, y + 1, x + w, y + 1, x + w - 2, y - 6, x + 2, y - 6], lin(ctx, 0, y - 6, 0, y + 1, [[0, WOOD[3]], [1, WOOD[1]]]));
+    path(ctx, [x + 2, y - 2.5, x + w - 2, y - 2.5], IRON[2], 0.6);
+  } else {
+    poly(ctx, [x + 1, y + 1, x + w - 1, y + 1, x + w - 1, y + h - 1, x + 1, y + h - 1], lin(ctx, 0, y, 0, y + h, [[0, WOOD[2]], [1, WOOD[0]]]));
+    for (let i = 1; i < 4; i++) path(ctx, [x + 1, y + (h * i) / 4, x + w - 1, y + (h * i) / 4], WOOD[0], 0.5);
+    path(ctx, [x + 2, y + 2, x + w - 2, y + h - 2], IRON[2], 0.9);
+    path(ctx, [x + w - 2, y + 2, x + 2, y + h - 2], IRON[2], 0.9);
+    const s = Math.floor((g.time || 0) * 5) % 4;
+    if (s === 0) path(ctx, [x + w / 2 - 2, y + h / 2, x + w / 2 + 2, y + h / 2 + 1], '#86163a', 0.5);
+  }
+}
+
 // ── костёр ────────────────────────────────────────────────────────────
 export function drawCampfireHd(ctx, p, g) {
   const past = ph(p) === PAST;

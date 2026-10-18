@@ -5,7 +5,9 @@ import { createPlayer, updatePlayer, hurtPlayer, resetPlayerCombat, applyShift }
 import { updateEnemies, damageEnemy, createEnemy } from './enemies/enemies.js';
 import { updateProjectiles } from './combat/projectiles.js';
 import { createProp, propFoot, propCenter } from './world/props.js';
-import { collectLights } from './world/world.js';
+import { collectLights, isPit, isWall, solidPropAt } from './world/world.js';
+import { updateIslands, inIslands, auraSources, carryPos, dropPos } from './world/memory.js';
+import { link, resolveThreads, chainOf } from './timeline/threads.js';
 import { updateFx, burst, addText, ringFx } from './world/fx.js';
 import { tickTimeline, isShifted, PAST } from './timeline/timeline.js';
 import { writeSave, freshSave } from './save/save.js';
@@ -17,13 +19,14 @@ import { P } from './art/palette.js';
 import { ROOMS } from './scenes/rooms.js';
 import { createParticlePool, clearParticles, resizePool } from './world/particles.js';
 import { PROFILES } from './core/quality.js';
+import { MEMORIES, addMemory, hasMemory, memoryList, createScene, stepScene } from './story/memories.js';
 
 export function createGame({ input, audio, ui, storage, save }) {
   const g = {
     input, audio, ui, storage, save, flags: save.flags,
     scene: 'title', time: 0, room: null, roomCanvas: null,
     player: null, enemies: [], props: [], projectiles: [], pickups: [], fx: [], texts: [], voidZones: [], drawables: [],
-    exits: [], lights: [], cam: { x: 0, y: 0, shakeA: 0, shakeT: 0 },
+    exits: [], lights: [], scenes: [], barkList: [], cam: { x: 0, y: 0, shakeA: 0, shakeT: 0 },
     cinematic: false, inputLocked: false, paused: false, hitstopT: 0, slowT: 0,
     waiters: [], scriptToken: 0, bossBar: null, interactTarget: null, freeShift: false, glitch: 0.015,
     transitioning: false, frame: 0,
@@ -63,6 +66,62 @@ export function createGame({ input, audio, ui, storage, save }) {
     }
   };
 
+  // ── воспоминания (docs/TIME_DESIGN.md, П5) ───────────────────────────
+  g.remember = (id) => {
+    if (!addMemory(save, id)) return false;
+    const m = MEMORIES[id];
+    ui.card('Воспоминание · в дневнике (Tab)', m.name, m.text, 4.6);
+    audio.sfx.shift('past');
+    g.persist();
+    return true;
+  };
+  g.hasMemory = (id) => hasMemory(save, id);
+
+  // Сцена прошлого: призраки говорят репликами над головой, пока cond(g) истинно.
+  // Досмотрел — воспоминание. Ушёл или прошлое погасло — сцена рассыпается и начнётся снова.
+  // lines: [{ at: объект|{x,y}|() => {x,y}, who, text, dur }]
+  g.pastScene = ({ memory, cond, lines, onDone }) => {
+    if (memory && (hasMemory(save, memory) || save.spentMemories?.includes(memory))) return null;
+    const sc = { ...createScene(lines), memory, cond, onDone, tok: g.scriptToken };
+    g.scenes.push(sc);
+    return sc;
+  };
+  g.barks = [];
+  const anchorOf = (at) => (typeof at === 'function' ? at() : at);
+  function updateScenes(dt) {
+    for (const sc of g.scenes) {
+      if (sc.done || sc.tok !== g.scriptToken) continue;
+      const ev = stepScene(sc, !g.cinematic && !g.paused && !!sc.cond(g), dt);
+      if (ev === 'line') {
+        const l = sc.lines[sc.i];
+        g.barks = [{ at: l.at, who: l.who, text: l.text, sc }];
+      } else if (ev === 'reset') {
+        g.barks = g.barks.filter((b) => b.sc !== sc);
+        const p = g.player;
+        if (p) addText(g, p.x, p.y - 30, 'сцена рассеялась', P.ash4);
+      } else if (ev === 'done') {
+        g.barks = g.barks.filter((b) => b.sc !== sc);
+        if (sc.memory) g.remember(sc.memory);
+        sc.onDone?.(g);
+      }
+    }
+    g.barkList = g.barks.map((b) => ({ ...anchorOf(b.at), who: b.who, text: b.text }));
+  }
+  g.updateScenes = updateScenes;
+
+  // Предъявить воспоминание: выбор из дневника; reactions[id] — что делает собеседник.
+  // Возвращает id показанного или null.
+  g.present = async (prompt, reactions = {}, fallback = 'Это ни о чём мне не говорит.', who = '') => {
+    const list = memoryList(save);
+    if (!list.length) return null;
+    const i = await g.choose(prompt, [...list.map((m) => ({ text: m.name, sub: m.place })), { text: 'Ничего не показывать' }]);
+    const m = list[i];
+    if (!m) return null;
+    if (reactions[m.id]) await reactions[m.id](g);
+    else await g.say([{ who, text: fallback }]);
+    return m.id;
+  };
+
   g.giveFragment = (id) => {
     if (!addFragment(save, id)) return;
     const f = FRAGMENTS[id];
@@ -78,8 +137,41 @@ export function createGame({ input, audio, ui, storage, save }) {
 
   g.addProp = (kind, x, y, o) => {
     const p = createProp(kind, x, y, o);
+    // переносной свет: E — взять; в руках — E (или удар) — поставить
+    if (p.def.carry && !p.onInteract) {
+      p.prompt ??= `Взять: ${p.def.name.toLowerCase()}`;
+      p.onInteract = () => g.pickUp(p);
+    }
     g.props.push(p);
     return p;
+  };
+
+  // нить причины: cause → effect (docs/TIME_DESIGN.md, П3)
+  g.link = (cause, effect, o) => link(cause, effect, o);
+
+  // ── переносной свет (П2) ──────────────────────────────────────────
+  g.pickUp = (o) => {
+    const p = g.player;
+    if (!p || p.carry) return;
+    p.carry = o;
+    o.carried = true;
+    audio.sfx.pickup?.();
+    if (!save.flags.carryHinted) {
+      save.flags.carryHinted = true;
+      g.hint('С фонарём в руках не ударить. Ореол прошлого идёт с тобой. E — поставить.', 5);
+    }
+  };
+  g.putDown = () => {
+    const p = g.player;
+    const o = p?.carry;
+    if (!o) return;
+    const free = (x, y) => !isPit(g, x, y) && !isWall(g, x, y) && !solidPropAt(g, x, y);
+    const d = dropPos(p.x, p.y, p.flip);
+    o.carried = false;
+    if (free(d.x, d.y)) Object.assign(o, d);
+    else Object.assign(o, { x: p.x, y: p.y + 1 });
+    p.carry = null;
+    audio.sfx.drop?.();
   };
 
   g.spawnEnemy = (kind, x, y, o) => {
@@ -195,6 +287,12 @@ export function createGame({ input, audio, ui, storage, save }) {
     g.fx = [];
     clearParticles(g.particles);
     g.texts = [];
+    g.scenes = [];
+    g.islandState = new Map();
+    g.memIslands = [];
+    if (g.player) g.player.carry = null;
+    g.barks = [];
+    g.barkList = [];
     g.voidZones = [];
     g.drawables = [];
     g.exits = [];
@@ -279,8 +377,9 @@ export function createGame({ input, audio, ui, storage, save }) {
     const p = g.player;
     const items = [];
     for (const o of g.props) {
-      if (!o.onInteract || o.hidden) continue;
+      if (!o.onInteract || o.hidden || o.carried) continue;
       if (o.canInteract && !o.canInteract(g)) continue;
+      if (o.def.auraOnly && !o.lit) continue;
       const [cx, cy] = o.def.flat ? propCenter(o) : [o.x, o.y - 2];
       items.push({ obj: o, x: cx, y: cy, range: o.interactRange, reach: o.reach });
     }
@@ -289,7 +388,11 @@ export function createGame({ input, audio, ui, storage, save }) {
 
   g.tryInteract = () => {
     const o = g.interactTarget;
-    if (!o || g.cinematic) return;
+    if (g.cinematic) return;
+    if (!o) {
+      if (g.player?.carry) g.putDown();
+      return;
+    }
     const tok = g.scriptToken;
     Promise.resolve(o.onInteract(g, o)).catch((err) => {
       if (live(tok)) console.error(err);
@@ -305,6 +408,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     const lines = [];
     const it = g.interactTarget;
     if (it) lines.push(`${pad ? 'B' : touch ? '✋' : 'E'} — ${it.prompt || 'Осмотреть'}`);
+    else if (p.carry) lines.push(`${pad ? 'B' : touch ? '✋' : 'E'} — поставить ${p.carry.def.name.toLowerCase()}`);
     else if (g.interactNear) lines.push(`Подойди ближе — ${(g.interactNear.prompt || 'осмотреть').toLowerCase()}`);
     const t = p.shiftTarget;
     if (t) {
@@ -371,9 +475,7 @@ export function createGame({ input, audio, ui, storage, save }) {
         else if (pk.kind === 'fragment') g.giveFragment(pk.id);
         else if (pk.kind === 'scrap') {
           g.flags.nameScrap = true;
-          ui.card('Находка', 'Обрывок имени', 'Клочок, на котором чьё-то имя ещё держится. Пригодится, чтобы кого-то не стереть.', 3.6);
-          audio.sfx.shard();
-          g.persist();
+          g.remember('nameScrap');
         }
         pk.onTake?.(g);
       }
@@ -382,7 +484,18 @@ export function createGame({ input, audio, ui, storage, save }) {
   }
 
   function updateProps(dt) {
+    const p = g.player;
+    if (p?.carry) Object.assign(p.carry, carryPos(p.x, p.y, p.flip));
+    // острова памяти: ореолы объектов (PROP_KINDS.aura) и особые источники комнаты
+    const extra = g.room.def.memorySources?.(g);
+    g.memIslands = updateIslands(g.islandState, extra ? [...auraSources(g.props), ...extra] : auraSources(g.props), dt);
     for (const pr of g.props) {
+      // призраки ореола видны только в острове, стёртые надписи — читаются только там
+      if (pr.inAura) pr.hidden = !inIslands(g.memIslands, pr.x, pr.y - 4);
+      if (pr.def.auraOnly) {
+        const [ix, iy] = propCenter(pr);
+        pr.lit = inIslands(g.memIslands, ix, iy);
+      }
       if (tickTimeline(pr.tl, dt) === 'reverted') {
         audio.sfx.shift('present');
         const [cx, cy] = propCenter(pr);
@@ -390,7 +503,7 @@ export function createGame({ input, audio, ui, storage, save }) {
         pr.onRevert?.(g, pr);
       }
       // фонарь в Шраме бьёт током по кругу
-      const pulse = pr.def.pulse?.[pr.tl.phase];
+      const pulse = !pr.carried && pr.def.pulse?.[pr.tl.phase];
       if (pulse) {
         pr.pulseT = (pr.pulseT ?? Math.random() * 2) - dt;
         if (pr.pulseT <= 0) {
@@ -409,6 +522,13 @@ export function createGame({ input, audio, ui, storage, save }) {
         }
       }
       pr.update?.(g, pr, dt);
+    }
+    // нити причин: следствия идут за причинами каскадом
+    for (const pr of resolveThreads(g.props)) {
+      const [ex, ey] = propCenter(pr);
+      burst(g, ex, ey - 4, pr.tl.phase === PAST ? [P.amberHi, P.milk] : [P.crimson, P.ink], 8, 34);
+      audio.sfx.shift(pr.tl.phase);
+      pr.onShift?.(g, pr, pr.tl.phase);
     }
     if (g.props.some((pr) => pr.removed)) g.props = g.props.filter((pr) => !pr.removed);
   }
@@ -516,7 +636,14 @@ export function createGame({ input, audio, ui, storage, save }) {
       p.moving = false;
     }
     updateFx(g, dt);
+    updateScenes(dt);
     g.lights = collectLights(g);
+    // первая встреча с нитью причин — подсказка
+    const st = p?.shiftTarget?.obj;
+    if (st && !save.flags.threadHinted && !g.cinematic && chainOf(g.props, st).length) {
+      save.flags.threadHinted = true;
+      g.hint('Янтарная нить — причина и следствие. Сдвигай причину: следствие пойдёт за ней.', 6);
+    }
     // интерактив
     const found = !g.cinematic && p && !p.dead ? findInteract() : { target: null, near: null };
     g.interactTarget = found.target;
