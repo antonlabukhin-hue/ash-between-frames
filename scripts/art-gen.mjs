@@ -1,8 +1,8 @@
-// Генерация вариантов арта через API: node scripts/art-gen.mjs <провайдер> <задание> [--n 2] [--ref файл.png] [--aspect 2:3]
-//   провайдер: gemini | grok | all
+// Генерация вариантов арта через API: node scripts/art-gen.mjs <провайдер> <задание> [--n 2] [--ref файл.png] [--aspect 2:3] [--size 960x1472] [--transparent]
+//   провайдер: gemini | grok | openai | all
 //   задание:   art/prompts/<имя>.md (текст запроса) — результат в art/inbox/<имя>/<провайдер>-<n>.png
-// Ключи — в .env.local (не попадает в git): GEMINI_API_KEY, XAI_API_KEY.
-// Модели можно сменить: GEMINI_IMAGE_MODEL, XAI_IMAGE_MODEL.
+// Ключи — в .env.local (не попадает в git): GEMINI_API_KEY, XAI_API_KEY, OPENAI_API_KEY.
+// Модели можно сменить: GEMINI_IMAGE_MODEL, XAI_IMAGE_MODEL, OPENAI_IMAGE_MODEL.
 // Картинки ничего не меняют в игре: сначала согласование, потом scripts/art-approve.mjs.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { basename } from 'node:path';
@@ -23,14 +23,40 @@ const opt = (name, def) => {
 };
 const provider = args[0];
 const job = args[1];
+
+// node scripts/art-gen.mjs check — проверить ключи бесплатно (список моделей, без генерации)
+if (provider === 'check') {
+  const tries = [
+    ['Gemini', 'GEMINI_API_KEY', (k) => fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': k } }), (j) => (j.models || []).map((m) => m.name.replace('models/', '')).filter((n) => /image|banana/i.test(n))],
+    ['Grok', 'XAI_API_KEY', (k) => fetch('https://api.x.ai/v1/models', { headers: { Authorization: `Bearer ${k}` } }), (j) => (j.data || []).map((m) => m.id).filter((n) => /image|imagine/i.test(n))],
+    ['OpenAI', 'OPENAI_API_KEY', (k) => fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${k}` } }), (j) => (j.data || []).map((m) => m.id).filter((n) => /image/i.test(n))],
+  ];
+  for (const [name, envKey, req, pick] of tries) {
+    const k = key(envKey);
+    if (!k) {
+      console.log(`${name}: ключа нет (${envKey})`);
+      continue;
+    }
+    try {
+      const res = await req(k);
+      const j = await res.json();
+      console.log(res.ok ? `${name}: ключ работает, модели картинок: ${pick(j).join(', ') || 'не найдены в списке'}` : `${name}: ошибка ${res.status} — ${JSON.stringify(j).slice(0, 200)}`);
+    } catch (e) {
+      console.log(`${name}: нет связи — ${e.message}`);
+    }
+  }
+  process.exit(0);
+}
 if (!provider || !job) {
-  console.log('node scripts/art-gen.mjs <gemini|grok|all> art/prompts/<задание>.md [--n 2] [--ref файл.png] [--aspect 2:3]');
+  console.log('node scripts/art-gen.mjs <gemini|grok|openai|all> art/prompts/<задание>.md [--n 2] [--ref файл.png] [--aspect 2:3] [--size 960x1472] [--transparent]');
   process.exit(1);
 }
 const prompt = readFileSync(job, 'utf8');
 const n = Number(opt('n', 2));
 const aspect = opt('aspect', '2:3');
 const ref = opt('ref', null);
+const size = opt('size', null);
+const transparent = args.includes('--transparent');
 const name = basename(job).replace(/\.\w+$/, '');
 const dir = `art/inbox/${name}`;
 mkdirSync(dir, { recursive: true });
@@ -90,8 +116,42 @@ async function grok(i) {
   return save(imgs[0], `${dir}/grok-${i}.png`);
 }
 
-const list = provider === 'all' ? ['gemini', 'grok'] : [provider];
-const fns = { gemini, grok };
+// OpenAI (GPT Image): размер кратен 16, пропорции от 1:3 до 3:1; прозрачный фон — для переднего плана.
+// С --ref — правка картинки-основы (images/edits), иначе — генерация с нуля.
+async function openai(i) {
+  const k = key('OPENAI_API_KEY');
+  if (!k) throw new Error('нет OPENAI_API_KEY в .env.local');
+  const model = key('OPENAI_IMAGE_MODEL') || 'gpt-image-2.5-flare';
+  const sz = size || (aspect === '2:3' ? '1024x1536' : aspect === '3:2' ? '1536x1024' : '1024x1024');
+  let res;
+  if (ref) {
+    const form = new FormData();
+    form.append('model', model);
+    form.append('prompt', prompt);
+    form.append('size', sz);
+    form.append('image', new Blob([readFileSync(ref)], { type: 'image/png' }), basename(ref));
+    if (transparent) form.append('background', 'transparent');
+    res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${k}` }, body: form });
+  } else {
+    res = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${k}` },
+      body: JSON.stringify({ model, prompt, n: 1, size: sz, quality: 'high', output_format: 'png', ...(transparent ? { background: 'transparent' } : {}) }),
+    });
+  }
+  const json = await res.json();
+  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${JSON.stringify(json).slice(0, 400)}`);
+  const imgs = findImages(json);
+  if (!imgs.length) throw new Error(`OpenAI не вернул картинку: ${JSON.stringify(json).slice(0, 300)}`);
+  return save(imgs[0], `${dir}/openai-${i}.png`);
+}
+
+const list = provider === 'all' ? ['gemini', 'grok', 'openai'] : [provider];
+const fns = { gemini, grok, openai };
+if (list.some((p) => !fns[p])) {
+  console.log(`Неизвестный провайдер: ${provider}. Есть: gemini, grok, openai, all`);
+  process.exit(1);
+}
 const done = [];
 for (const p of list) {
   for (let i = 1; i <= n; i++) {
