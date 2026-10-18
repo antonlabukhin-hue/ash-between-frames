@@ -153,3 +153,12 @@ describe('Рисованные слои комнат', () => {
     expect(parseRoomArt({ rooms: 'нет' })).toEqual({});
   });
 });
+
+describe('камера ближе (zoom)', () => {
+  it('zoom 1.5 — мира в кадре в полтора раза меньше по высоте', () => {
+    const z = frameSize(1920, 1080, 2, 1.5);
+    const n = frameSize(1920, 1080, 2, 1);
+    expect(Math.abs(z.h - n.h / 1.5)).toBeLessThanOrEqual(20); // допуск ради целого масштаба
+    expect(z.w / z.h).toBeCloseTo(n.w / n.h, 1);
+  });
+});

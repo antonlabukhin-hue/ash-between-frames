@@ -433,10 +433,13 @@ function frame(now) {
     game.time += dt;
     drawSpriteSheet(renderer.ctx, game.time);
   } else if (game.scene === 'title') {
+    renderer.setZoom(1);
     ui.typewriter(dt);
     game.time += dt;
     drawTitle(renderer.ctx, game.time);
   } else {
+    // мирные сцены — камера ближе (def.zoom комнаты), бой — обычный кадр
+    renderer.setZoom(game.room?.def.zoom ?? 1);
     game.update(dt);
     t1 = performance.now();
     renderWorld(game, renderer.ctx);
