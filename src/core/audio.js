@@ -25,6 +25,12 @@ export function createAudio() {
     if (ac) return ac;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
+    // iOS 17+: играть и при переключателе «Без звука» (как музыка, а не системные щелчки)
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    } catch {
+      /* старый браузер */
+    }
     ac = new AC();
     master = ac.createGain();
     master.gain.value = 0.9;
@@ -236,7 +242,8 @@ export function createAudio() {
   return {
     unlock() {
       if (!ensure()) return;
-      if (ac.state === 'suspended') ac.resume();
+      // suspended — ещё не разрешён, interrupted — iOS после звонка или сворачивания
+      if (ac.state !== 'running') ac.resume()?.catch?.(() => {});
       if (music.track && !music.timer) {
         const tr = music.track;
         music.track = null;

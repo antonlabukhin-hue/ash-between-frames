@@ -282,7 +282,10 @@ export function createUI(root, { audio }) {
         audio.sfx.uiOk();
         it.on();
       };
-      b.addEventListener('click', activate);
+      b.addEventListener('click', () => {
+        audio.unlock(); // click — жест, в котором iOS разрешает звук, даже если пункт уже сработал
+        activate();
+      });
       b.addEventListener('pointerup', (e) => {
         if (e.pointerType !== 'mouse') activate();
       });
