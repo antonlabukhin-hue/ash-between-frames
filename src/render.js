@@ -164,7 +164,7 @@ function propEntry(g, p, phase) {
   return atlas.sprite(hdDraw ? `hd|${key}` : key, c.w, c.h, c.ax, c.ay, (bctx, ax, ay) => {
     const tl = { ...p.tl, phase };
     (hdDraw || p.def.draw)(bctx, { ...p, x: ax, y: ay, tl, state }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
-  }, hdDraw ? { hd: true, crisp: true } : undefined);
+  }, hdDraw ? { hd: true, crisp: p.def.crisp ?? true } : undefined);
 }
 
 export function drawProp(g, ctx, p) {
@@ -248,6 +248,7 @@ function drawEnemy(g, ctx, e) {
     return;
   }
   shadow(ctx, e.x, e.y, SHADOW_W[e.kind] ?? 12);
+  groundRing(g, ctx, e);
   const flash = e.flash > 0;
   const shifted = isShifted(e.tl);
   const fading = isFading(e.tl) && Math.floor(g.time * 10) % 2 === 0;
@@ -278,12 +279,111 @@ function drawEnemy(g, ctx, e) {
 }
 
 
-// Подбираемое — кадр из атласа (3 положения покачивания).
+// Кольцо врага на земле (как в эталоне): малиновое в Шраме, янтарное в Отпечатке.
+// Враг сразу отличается от столба, статуи и прочего декора.
+function groundRing(g, ctx, e) {
+  const r = (SHADOW_W[e.kind] ?? 12) / 2 + 3;
+  const past = e.tl.phase === PAST;
+  const pulse = 0.65 + 0.25 * Math.sin(g.time * 4 + e.id);
+  ctx.save();
+  ctx.lineWidth = 0.6;
+  ctx.strokeStyle = past ? `rgba(255,200,110,${pulse})` : `rgba(255,70,105,${pulse})`;
+  ctx.beginPath();
+  ctx.ellipse(e.x, e.y - 0.5, r, r * 0.42, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = past ? 'rgba(224,160,64,0.3)' : 'rgba(200,40,74,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(e.x, e.y - 0.5, r + 1.5, (r + 1.5) * 0.42, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Подбираемое — 32-битный кадр из атласа (покачивание по 0,5 px), свечение — в слое света.
 function drawPickup(ctx, pk, t) {
-  const bob = Math.round(Math.sin(t * 5 + pk.seed) * 1.5);
-  const key = `pk|${pk.kind}|${bob}`;
-  const e = atlas.sprite(key, 16, 18, 8, 13, (b, ax, ay) => paintPickup(b, pk.kind, ax, ay, bob, t));
-  blit(ctx, e, pk.x, pk.y);
+  const bob = Math.round(Math.sin(t * 5 + pk.seed) * 3) / 2;
+  const f = Math.floor(t * 6 + pk.seed) % 3;
+  ctx.fillStyle = 'rgba(3,4,10,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(pk.x, pk.y, 3.2 - bob * 0.3, 1, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const e = atlas.sprite(`pk|${pk.kind}|${f}`, 16, 20, 8, 16, (b, ax, ay) => paintPickupHd(b, pk.kind, ax, ay, f), { hd: true, crisp: true, outline: OUTLINE });
+  blit(ctx, e, pk.x, pk.y - 2 + bob);
+}
+
+// Зола — тлеющий уголёк, осколок — бирюзовый кристалл, хлеб — румяная краюха,
+// фрагмент — светящийся кадр плёнки, обрывок — бумажный лист.
+function paintPickupHd(c, kind, x, y, f) {
+  const oval = (cx, cy, rx, ry, fill, rot = 0) => {
+    c.beginPath();
+    c.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2);
+    c.fillStyle = fill;
+    c.fill();
+  };
+  const poly = (pts, fill) => {
+    c.beginPath();
+    c.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]);
+    c.closePath();
+    c.fillStyle = fill;
+    c.fill();
+  };
+  const lin = (x0, y0, x1, y1, stops) => {
+    const gr = c.createLinearGradient(x0, y0, x1, y1);
+    stops.forEach(([k, col]) => gr.addColorStop(k, col));
+    return gr;
+  };
+  if (kind === 'ash') {
+    poly([x - 3, y - 2, x - 1.5, y - 5.5, x + 2, y - 6, x + 3.4, y - 3, x + 2, y - 0.6, x - 1.8, y - 0.4], lin(x - 3, y - 6, x + 3, y, [[0, '#55576a'], [0.5, '#24252e'], [1, '#0d0e14']]));
+    c.strokeStyle = f === 1 ? '#ffd27a' : '#e0a040';
+    c.lineWidth = 0.5;
+    c.beginPath();
+    c.moveTo(x - 1.6, y - 4.4);
+    c.lineTo(x, y - 3);
+    c.lineTo(x + 1.8, y - 3.6);
+    c.moveTo(x, y - 3);
+    c.lineTo(x - 0.4, y - 1.2);
+    c.stroke();
+    c.fillStyle = '#fff4d0';
+    c.fillRect(x - 0.25, y - 3.25, 0.5, 0.5);
+    c.fillStyle = '#ffd27a';
+    c.fillRect(x - 1 + f, y - 8 - f, 0.5, 0.5);
+  } else if (kind === 'shard') {
+    poly([x, y - 11, x + 2.6, y - 5, x + 1.2, y, x - 1.6, y - 0.4, x - 2.4, y - 6], lin(x - 2, y - 10, x + 2, y, [[0, '#d8fff8'], [0.35, '#6ff2e0'], [0.7, '#2a9a92'], [1, '#145a5a']]));
+    poly([x, y - 11, x + 0.4, y - 5, x - 1.6, y - 0.4, x - 2.4, y - 6], 'rgba(255,255,255,0.35)');
+    c.fillStyle = '#ffffff';
+    c.fillRect(x - 1, y - 8 + f, 0.5, 1);
+  } else if (kind === 'heal') {
+    oval(x, y - 3.4, 4.6, 3.2, lin(x - 4, y - 6, x + 4, y, [[0, '#ffd27a'], [0.4, '#c8842a'], [1, '#6a3a12']]));
+    c.strokeStyle = '#5a3014';
+    c.lineWidth = 0.45;
+    c.beginPath();
+    for (const dx of [-2, 0, 2]) {
+      c.moveTo(x + dx - 0.8, y - 5.6);
+      c.lineTo(x + dx + 0.8, y - 3.8);
+    }
+    c.stroke();
+    oval(x - 1.6, y - 5.4, 1.2, 0.5, 'rgba(255,240,200,0.8)');
+  } else if (kind === 'fragment' || kind === 'scrap') {
+    const paper = kind === 'scrap';
+    c.save();
+    c.translate(x, y - 5);
+    c.rotate((f - 1) * 0.08);
+    c.fillStyle = paper ? '#ece4cf' : lin(-3, -4, 3, 4, [[0, '#fff4d0'], [0.5, '#ffd27a'], [1, '#b8721f']]);
+    c.fillRect(-3.4, -4, 6.8, 8);
+    c.fillStyle = paper ? '#b9ab8e' : '#4a2a10';
+    c.fillRect(-2.2, -2.8, 4.4, 5.6);
+    c.fillStyle = paper ? '#ece4cf' : '#fff8e0';
+    for (let i = 0; i < 3; i++) {
+      c.fillRect(-3.2, -3.4 + i * 2.6, 0.6, 0.9);
+      c.fillRect(2.6, -3.4 + i * 2.6, 0.6, 0.9);
+    }
+    if (!paper) {
+      c.fillStyle = '#ffd27a';
+      c.fillRect(-0.8, -1.2, 1.6, 2.2);
+    }
+    c.restore();
+  }
 }
 
 function paintPickup(ctx, kind, x, y, bob, t) {
@@ -531,8 +631,94 @@ function drawInteractMarker(g, ctx, obj) {
   const bob = Math.floor(g.time * 3) % 2;
   const label = g.input.device === 'pad' ? 'B' : g.input.device === 'touch' ? '' : 'E';
   const icon = iconFor(obj);
-  const e = atlas.sprite(`ia|${icon}|${label}`, 13, 20, 6, 0, (bc, ax) => paintBubble(bc, ax, icon, label));
-  blit(ctx, e, cx, top - 14 - bob);
+  const e = atlas.sprite(`ia32|${icon}|${label}`, 18, 22, 9, 0, (bc, ax) => paintBubbleHd(bc, ax, icon, label), { hd: true, crisp: true, outline: OUTLINE });
+  blit(ctx, e, cx, top - 16 - bob);
+}
+
+// Пузырь взаимодействия в 32-битной сетке: тёмная подложка с янтарной каймой, крупная
+// пиктограмма действия и клавиша (E / B) отдельной «кнопкой» под хвостиком.
+function paintBubbleHd(c, x, icon, label) {
+  const amber = '#ffd27a';
+  c.fillStyle = '#16131e';
+  c.beginPath();
+  c.roundRect(x - 8, 0.5, 16, 11.5, 2.5);
+  c.fill();
+  c.strokeStyle = '#e0a040';
+  c.lineWidth = 0.6;
+  c.stroke();
+  c.beginPath();
+  c.moveTo(x - 2, 12);
+  c.lineTo(x, 14.4);
+  c.lineTo(x + 2, 12);
+  c.fillStyle = '#e0a040';
+  c.fill();
+  const cy = 6.2;
+  c.fillStyle = amber;
+  c.strokeStyle = amber;
+  c.lineWidth = 0.7;
+  c.lineCap = 'round';
+  c.beginPath();
+  if (icon === 'eye') {
+    c.ellipse(x, cy, 4.6, 2.6, 0, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.arc(x, cy, 1.4, 0, Math.PI * 2);
+    c.fill();
+  } else if (icon === 'talk') {
+    c.roundRect(x - 4.6, cy - 3, 9.2, 5.4, 1.6);
+    c.stroke();
+    for (const dx of [-2.2, 0, 2.2]) c.fillRect(x + dx - 0.5, cy - 0.8, 1, 1);
+    c.beginPath();
+    c.moveTo(x - 2, cy + 2.4);
+    c.lineTo(x - 3, cy + 4);
+    c.lineTo(x, cy + 2.4);
+    c.fill();
+  } else if (icon === 'hand') {
+    c.roundRect(x - 2.6, cy - 0.6, 5.6, 4, 1.4);
+    c.fill();
+    for (let i = 0; i < 4; i++) c.fillRect(x - 2.4 + i * 1.4, cy - 3.6 + (i === 0 || i === 3 ? 1 : 0), 1, 3.4);
+    c.fillRect(x + 3, cy - 0.4, 1.6, 1);
+  } else if (icon === 'drop') {
+    c.moveTo(x, cy - 4);
+    c.quadraticCurveTo(x + 3.4, cy + 0.6, x, cy + 3.6);
+    c.quadraticCurveTo(x - 3.4, cy + 0.6, x, cy - 4);
+    c.fill();
+  } else if (icon === 'fire') {
+    c.moveTo(x - 3, cy + 3.4);
+    c.quadraticCurveTo(x - 3.6, cy - 1, x - 0.6, cy - 4);
+    c.quadraticCurveTo(x, cy - 1, x + 1.4, cy - 2);
+    c.quadraticCurveTo(x + 3.6, cy + 0.6, x + 3, cy + 3.4);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#fff4d0';
+    c.beginPath();
+    c.ellipse(x, cy + 1.6, 1, 1.6, 0, 0, Math.PI * 2);
+    c.fill();
+  } else {
+    c.rect(x - 4.4, cy - 3, 8.8, 6);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(x - 1.4, cy - 3);
+    c.lineTo(x - 1.4, cy + 3);
+    c.moveTo(x + 1.4, cy - 3);
+    c.lineTo(x + 1.4, cy + 3);
+    c.stroke();
+  }
+  if (label) {
+    c.fillStyle = '#05060c';
+    c.beginPath();
+    c.roundRect(x - 3.6, 15, 7.2, 6.6, 1.2);
+    c.fill();
+    c.fillStyle = '#3a3b47';
+    c.beginPath();
+    c.roundRect(x - 3, 15.4, 6, 5.4, 1);
+    c.fill();
+    c.fillStyle = '#ece4cf';
+    c.font = 'bold 6px "Pixelify Sans", monospace';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(label, x, 18.3);
+  }
 }
 
 function paintBubble(ctx, x, icon, label) {
@@ -919,6 +1105,18 @@ function drawLighting(g, ctx, cx, cy) {
     const gl = glow(6, c, 0.2);
     ctx.globalAlpha = 1;
     ctx.drawImage(gl, e.x - cx - 6, e.y - cy - (e.hitY ?? 9) - 12);
+  }
+  // подбираемое светится своим цветом — его видно в темноте
+  const PK_GLOW = { ash: 'amber', shard: 'teal', heal: 'amber', fragment: 'amber', scrap: 'milk' };
+  for (const pk of g.pickups) {
+    if (!visible(pk.x, pk.y, 16, 8)) continue;
+    const gl = glow(9, PK_GLOW[pk.kind] || 'amber', 0.45);
+    ctx.drawImage(gl, pk.x - cx - 9, pk.y - cy - 15);
+  }
+  for (const e of g.enemies) {
+    if (e.spawn > 0 || e.dead || e.draw || !visible(e.x, e.y, 30)) continue;
+    const gr = glow(Math.round((SHADOW_W[e.kind] ?? 12) / 2 + 6), e.tl?.phase === PAST ? 'amber' : 'crimson', 0.3, 0.42);
+    ctx.drawImage(gr, e.x - cx - gr.width / 2, e.y - cy - gr.height / 2);
   }
   for (const pr of g.projectiles) {
     const c = pr.tl?.phase === PAST ? 'amber' : 'crimson';

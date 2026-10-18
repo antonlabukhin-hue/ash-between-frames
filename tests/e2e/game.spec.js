@@ -148,4 +148,29 @@ test.describe('телефон', () => {
     const x1 = await page.evaluate(() => window.__abf.game.player.x);
     expect(x1 - x0).toBeGreaterThan(15);
   });
+
+  test('смерть с зажатой кнопкой удара: «Вспомнить себя» и «В главное меню» срабатывают по касанию', async ({ page }) => {
+    await page.goto('/');
+    await ready(page);
+    await page.evaluate(() => window.__abf.shot('kitchen'));
+    // палец держит кнопку удара, когда героя стирает
+    const atk = page.locator('.tbtn.attack');
+    const b = await atk.boundingBox();
+    await page.evaluate(([x, y]) => {
+      const el = document.querySelector('.tbtn.attack');
+      el.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 9, clientX: x, clientY: y, bubbles: true, pointerType: 'touch' }));
+      window.__abf.game.player.hp = 1;
+      window.__abf.game.hurtPlayer(10, 0, 0, 'test');
+    }, [b.x + b.width / 2, b.y + b.height / 2]);
+    await expect(page.getByText('Тебя стёрло')).toBeVisible({ timeout: 5000 });
+    await expect(atk).toBeHidden();
+    await page.getByRole('button', { name: 'Вспомнить себя' }).tap();
+    await page.waitForFunction(() => window.__abf.game.player && !window.__abf.game.player.dead && window.__abf.game.player.hp > 1);
+    await page.evaluate(() => {
+      window.__abf.game.player.hp = 1;
+      window.__abf.game.hurtPlayer(10, 0, 0, 'test');
+    });
+    await page.getByRole('button', { name: 'В главное меню' }).tap({ timeout: 5000 });
+    await page.waitForFunction(() => window.__abf.game.scene === 'title');
+  });
 });

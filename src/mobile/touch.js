@@ -154,6 +154,7 @@ export function createTouch(root, input, renderer) {
       for (const b of Object.values(btn)) b.classList.toggle('hidden', !on);
       zone.classList.toggle('hidden', !on);
       if (!on) {
+        for (const b of Object.values(btn)) b.classList.remove('down');
         input.touchMove.x = input.touchMove.y = 0;
         stick.classList.add('hidden');
         stickId = null;

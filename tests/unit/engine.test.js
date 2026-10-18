@@ -25,8 +25,12 @@ describe('Подбор кадра: 32-битная сетка', () => {
     expect((cw * ch) / (w * h)).toBeGreaterThan(0.85);
     if (f.exact) expect(Number.isInteger(f.scale)).toBe(true);
   });
-  it('1080p — целый ×2 при кадре 480×270', () => {
-    expect(frameSize(1920, 1080)).toMatchObject({ scale: 2, w: 480, h: 270, exact: true });
+  it('1080p — кадр 384×216 (герой крупный), дробный ×2,5 без полей', () => {
+    expect(frameSize(1920, 1080)).toMatchObject({ w: 384, h: 216, exact: false });
+    expect(frameSize(1920, 1080).scale).toBeCloseTo(2.5, 5);
+  });
+  it('1440p — целый ×3 при высоте 240', () => {
+    expect(frameSize(2560, 1440)).toMatchObject({ scale: 3, h: 240, exact: true });
   });
   it('телефон 844×390 @3 заполняется целым ×3', () => {
     expect(frameSize(2532, 1170)).toMatchObject({ scale: 3, w: 422, exact: true });

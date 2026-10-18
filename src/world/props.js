@@ -5,6 +5,9 @@ import { P } from '../art/palette.js';
 import { px, line, disc, ring, drawBrassBoy, drawGhost, shadow } from '../art/sprites.js';
 import { createTimeline, PAST, PRESENT } from '../timeline/timeline.js';
 import { hash2 } from '../core/math.js';
+import { drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
+import { drawTik32, drawMara32, drawDog32, drawGhost32, drawBrassBoy32, drawVillager32, drawStillOne32 } from '../art/npcs32.js';
+import { drawTik, drawMara, drawDog } from '../art/sprites.js';
 import { drawLampHd, drawBannerHd, drawTreeHd, drawDeadTreeHd, drawGraveHd, drawGateTowerHd } from '../art/road32.js';
 
 // flat — рисуется под персонажами; rect — x,y,w,h в пикселях (левый верх).
@@ -69,7 +72,7 @@ export const PROP_KINDS = {
     draw: (ctx, p, g) => drawBrassBoy(ctx, p.x, p.y, { phase: p.tl.phase, t: g.time }),
   },
   chest: { name: 'Сундук', foot: { w: 14, h: 6 }, solid: { past: true, present: true }, draw: drawChest },
-  gate: { name: 'Ворота', flat: false, draw: drawGate },
+  gate: { name: 'Ворота', flat: false, draw: drawGateHd },
   pillar: { foot: { w: 14, h: 8 }, solid: { past: true, present: true }, draw: drawPillar },
   tree: { foot: { w: 6, h: 4 }, solid: { past: true, present: true }, draw: drawTree, drawHd: drawTreeHd },
   deadTree: { foot: { w: 6, h: 4 }, solid: { past: true, present: true }, draw: drawDeadTree, drawHd: drawDeadTreeHd },
@@ -510,7 +513,7 @@ const CACHE = {
   lantern: C(16, 42, 8, 40, 12, 5),
   campfire: C(20, 22, 10, 18, 9, 6),
   statue: C(26, 46, 13, 44, 2, 4),
-  chest: C(20, 18, 10, 16, 0, 1, (p) => `${p.open}`),
+  chest: C(22, 20, 11, 18, 6, 4, (p) => `${p.open}`),
   pillar: C(22, 64, 11, 56, 0, 1, (p) => `${p.tall ?? 40}|${p.broken ? 1 : 0}`),
   tree: C(48, 62, 24, 58, 2, 4, (p) => p.id),
   deadTree: C(30, 38, 15, 35),
@@ -518,7 +521,7 @@ const CACHE = {
   grave: C(14, 20, 7, 18),
   roadLamp: C(14, 46, 7, 44, 6, 3, (p) => (p.erased ? 'e' : '')),
   gateTower: C(26, 96, 13, 92, 4, 4),
-  rubble: C(20, 10, 10, 8),
+  rubble: C(22, 12, 11, 9, 0, 1, (p) => p.id % 4),
   candles: C(14, 12, 7, 10, 8, 2),
   stove: C(32, 44, 16, 42, 7, 6),
   table: C(36, 18, 18, 16),
@@ -530,3 +533,20 @@ const CACHE = {
   ghostNpc: C(28, 40, 14, 36, 6, 6, figureKey),
 };
 for (const k of Object.keys(CACHE)) PROP_KINDS[k].cache = CACHE[k];
+
+// 32-битные маляры объектов (src/art/props32.js); при hd.on — вместо 16-битных
+const HD = {
+  sign: drawSignHd, memoryStone: drawMemoryStoneHd, lantern: drawLanternHd, campfire: drawCampfireHd,
+  chest: drawChestHd, pillar: drawPillarHd, rubble: drawRubbleHd, candles: drawCandlesHd, stove: drawStoveHd,
+  table: drawTableHd, window: drawWindowHd, portraits: drawPortraitsHd, shelf: drawShelfHd, box: drawBoxHd,
+};
+for (const k of Object.keys(HD)) PROP_KINDS[k].drawHd = HD[k];
+
+// NPC и фигуры-воспоминания: 16-битный маляр → 32-битный
+const FIGURE_HD = new Map([[drawTik, drawTik32], [drawMara, drawMara32], [drawDog, drawDog32], [drawGhost, drawGhost32], [drawBrassBoy, drawBrassBoy32]]);
+export const registerFigureHd = (fn, hdFn) => FIGURE_HD.set(fn, hdFn);
+const figureHd = (ctx, p, g) => (FIGURE_HD.get(p.drawFn) || p.drawFn)(ctx, p.x, p.y, { t: g.time + (p.id % 7), ...(p.drawOpts || {}) });
+PROP_KINDS.npc.drawHd = figureHd;
+PROP_KINDS.ghostNpc.drawHd = figureHd;
+PROP_KINDS.ghostNpc.crisp = { keepAlpha: true };
+PROP_KINDS.statue.drawHd = (ctx, p, g) => drawBrassBoy32(ctx, p.x, p.y, { phase: p.tl.phase, t: g.time });
