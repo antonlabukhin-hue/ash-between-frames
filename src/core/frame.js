@@ -3,11 +3,13 @@
 // плотнее. Спрайты и комнаты запекаются с той же плотностью, поэтому на экране вдвое
 // больше деталей, а игровая логика не меняется.
 //
-// Масштаб холста к экрану — целый, если так закрывается ≥ 92 % экрана (мелкая сетка
-// почти всегда это позволяет). Иначе — дробный «вписанный» масштаб без пустых полей.
+// Масштаб холста к экрану — целый, если так закрывается ≥ 92 % экрана и высота мира
+// близка к цели (±30). Иначе — дробный «вписанный» масштаб без пустых полей: герой и
+// враги должны быть крупными и читаемыми (около 1/8 высоты кадра).
 
 export const RS = 2;
-export const TARGET_H = 240;
+export const TARGET_H = 216;
+const NEAR = 30;
 export const LIMITS = { minH: 180, maxH: 270, minW: 320, maxW: 512 };
 const COVER_OK = 0.92;
 
@@ -27,7 +29,7 @@ export function frameSize(devW, devH, rs = RS) {
     const score = cover - (Math.abs(fh - TARGET_H) / TARGET_H) * 0.5;
     if (!best || score > best.score) best = { w: fw, h: fh, scale: s, cover, score };
   }
-  if (best && best.cover >= COVER_OK) return { w: best.w, h: best.h, rs, scale: best.scale, exact: true };
+  if (best && best.cover >= COVER_OK && Math.abs(best.h - TARGET_H) <= NEAR) return { w: best.w, h: best.h, rs, scale: best.scale, exact: true };
   // дробный масштаб: высота около цели, ширина — по соотношению сторон экрана
   const h = even(clamp(Math.round(Math.min(TARGET_H, devH / rs)), LIMITS.minH, LIMITS.maxH));
   const w = even(clamp(Math.round((h * devW) / devH), LIMITS.minW, LIMITS.maxW));
