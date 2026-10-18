@@ -1,6 +1,7 @@
-// Согласованную картинку — в игру: node scripts/art-approve.mjs <картинка> <room> <floor|over> <present|past> [--bits 5] [--key ff00ff]
+// Согласованную картинку — в игру: node scripts/art-approve.mjs <картинка> <room> <floor|over> <present|past> [--bits 5] [--key ff00ff] [--mask none]
 //   • масштаб к размеру комнаты в плотной сетке (по шаблону art/templates/<room>/spec.json);
 //   • пол: небо и пустоты вырезаются по маске шаблона (там работают параллакс и поле Стирания);
+//     --mask none — оставить картинку целиком (небо и провал нарисованы на ней самой);
 //   • передний план: фон цвета --key (по умолчанию чистая маджента) становится прозрачным;
 //   • цвет сводится к 15 битам с дизерингом, край — без полутонов (как кодовые HD-кадры);
 //   • файл — в public/art/rooms/<room>/<слой>-<фаза>.png, запись — в manifest.json,
@@ -60,7 +61,7 @@ const res = await page.evaluate(
         const dist = Math.abs(px[i] - kr) + Math.abs(px[i + 1] - kg) + Math.abs(px[i + 2] - kb);
         if (dist < 120) px[i + 3] = 0;
       }
-    } else {
+    } else if (maskSrc) {
       const m = await load(maskSrc);
       const mc = document.createElement('canvas');
       mc.width = W;
@@ -76,7 +77,7 @@ const res = await page.evaluate(
     x.putImageData(d, 0, 0);
     return { url: c.toDataURL('image/png'), aspectIn, aspectOut };
   },
-  [dataUrl(file), dataUrl(`${tdir}/mask.png`), spec.size[0], spec.size[1], layer, Number(opt('bits', 5)), opt('key', 'ff00ff')],
+  [dataUrl(file), opt('mask', '') === 'none' ? null : dataUrl(`${tdir}/mask.png`), spec.size[0], spec.size[1], layer, Number(opt('bits', 5)), opt('key', 'ff00ff')],
 );
 await browser.close();
 if (Math.abs(res.aspectIn - res.aspectOut) / res.aspectOut > 0.05) console.log(`внимание: пропорции картинки ${res.aspectIn.toFixed(3)} ≠ комнаты ${res.aspectOut.toFixed(3)} — растянуто`);

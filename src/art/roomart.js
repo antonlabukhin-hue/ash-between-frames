@@ -57,6 +57,9 @@ export async function loadRoomArt(base, onReady) {
   return true;
 }
 
+// Есть ли в манифесте слой (картинка может ещё грузиться): по нему выбирается карта комнаты.
+export const hasArt = (roomId, layer = 'floor', phase = 'present') => !!roomArt.rooms[roomId]?.[layer]?.[phase];
+
 // Готовая картинка слоя или null (тогда — кодовый маляр).
 export function artFor(roomId, layer, phase = 'present') {
   const f = roomArt.rooms[roomId]?.[layer]?.[phase];

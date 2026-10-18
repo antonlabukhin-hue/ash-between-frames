@@ -19,6 +19,7 @@ import { line, px } from '../art/sprites.js';
 import { registerFigureHd } from '../world/props.js';
 import { drawVillager32, drawStillOne32 } from '../art/npcs32.js';
 import { paintRoadBase, paintRoadHd, drawRoadParallax, drawRoadOver } from '../art/road32.js';
+import { hasArt } from '../art/roomart.js';
 
 registerFigureHd(drawVillager, drawVillager32);
 registerFigureHd(drawStillOne, drawStillOne32);
@@ -73,6 +74,34 @@ function eraseEnemiesInPits(g) {
 }
 
 // ── 0. Затухший тракт ───────────────────────────────────────────────
+// Рисованный пол тракта (вариант 4): стена с аркой выше, провал ниже, внизу парапет.
+// Ряды прежней карты переводятся в ряды карты под картинку кусочно-линейно.
+const roadArt = () => hasArt('road', 'floor');
+const ROW_MAP = [[0, 0], [5, 11], [6, 12], [18, 21], [22, 26], [44, 41], [45, 42]];
+function R(row) {
+  if (!roadArt()) return row;
+  for (let i = 1; i < ROW_MAP.length; i++) {
+    const [a0, b0] = ROW_MAP[i - 1];
+    const [a1, b1] = ROW_MAP[i];
+    if (row <= a1) return b0 + ((row - a0) * (b1 - b0)) / (a1 - a0);
+  }
+  return row;
+}
+const RT = (row) => TOP(R(row));
+
+function roadMapArt() {
+  const m = grid(30, 46);
+  fill(m, 1, 12, 28, 30, ',');
+  fill(m, 12, 12, 6, 30, '=');
+  fill(m, 1, 21, 28, 5, ' ');
+  fill(m, 13, 11, 4, 1, '>');
+  // основания нарисованных башен — непроходимы
+  fill(m, 6, 12, 5, 1, '#');
+  fill(m, 19, 12, 5, 1, '#');
+  put(m, 14, 41, '@');
+  return rows(m);
+}
+
 function roadMap() {
   // Композиция эталона: дорога снизу вверх к башням ворот с колоколом, слева — тёплая
   // сторона прошлого, справа — Стирание, поперёк — провал. Над воротами — небо (ряды 0–5).
@@ -99,37 +128,47 @@ export const road = {
   paintHd: paintRoadHd,
   drawParallax: drawRoadParallax,
   drawOver: drawRoadOver,
-  skyRows: 2, // узкая полоса неба над зубцами стены; ряды 2–5 — фасад стены с аркой
-  lights: [
-    { x: T(4), y: TOP(20), r: 60, c: 'crimson' },
-    { x: T(14), y: TOP(20), r: 64, c: 'crimson' },
-    { x: T(25), y: TOP(20), r: 60, c: 'crimson' },
-  ],
+  // узкая полоса неба над зубцами стены (ряды 2–5 — фасад с аркой); у рисованного пола небо своё
+  get skyRows() {
+    return roadArt() ? 0 : 2;
+  },
+  // зарево провала (ряды зависят от того, рисованный ли пол)
+  get lights() {
+    return [
+      { x: T(4), y: RT(20), r: 60, c: 'crimson' },
+      { x: T(14), y: RT(20), r: 64, c: 'crimson' },
+      { x: T(25), y: RT(20), r: 60, c: 'crimson' },
+    ];
+  },
   floor: ',',
   under: { '>': '=', '@': '=' },
-  map: roadMap(),
+  // с рисованным полом (public/art/rooms) — карта под картинку, иначе — кодовая
+  get map() {
+    return roadArt() ? roadMapArt() : roadMap();
+  },
   facing: -Math.PI / 2,
   exits: [{ marker: '>', to: 'tornRoad', gate: true }],
   holdFade: (g) => !g.flags.introSeen,
   setup(g) {
     // тёплая сторона (слева): осенние деревья
-    for (const [x, y] of [[3, 25], [7, 28], [4, 33], [8, 36], [3, 41], [6, 44], [4, 9], [8, 12], [3, 15]]) g.addProp('tree', T(x), TOP(y + 1));
+    for (const [x, y] of [[3, 25], [7, 28], [4, 33], [8, 36], [3, 41], [6, 44], [4, 9], [8, 12], [3, 15]]) g.addProp('tree', T(x), RT(y + 1));
     // правая сторона до провала — старое кладбище, за провалом — стёртые руины
-    for (const [x, y] of [[22, 27], [26, 33]]) g.addProp('tree', T(x), TOP(y + 1));
-    for (const [x, y] of [[21, 38], [25, 42], [21, 9], [25, 11], [23, 15]]) g.addProp('deadTree', T(x), TOP(y + 1));
-    for (const [x, y] of [[20, 31], [24, 36], [27, 40], [26, 9], [20, 13]]) g.addProp('grave', T(x), TOP(y + 1));
-    for (const [x, y] of [[23, 25], [27, 14], [23, 11]]) g.addProp('rubble', T(x), TOP(y + 1));
+    for (const [x, y] of [[22, 27], [26, 33]]) g.addProp('tree', T(x), RT(y + 1));
+    for (const [x, y] of [[21, 38], [25, 42], [21, 9], [25, 11], [23, 15]]) g.addProp('deadTree', T(x), RT(y + 1));
+    for (const [x, y] of [[20, 31], [24, 36], [27, 40], [26, 9], [20, 13]]) g.addProp('grave', T(x), RT(y + 1));
+    for (const [x, y] of [[23, 25], [27, 14], [23, 11]]) g.addProp('rubble', T(x), RT(y + 1));
     // кованые фонари вдоль дороги; справа за провалом стёкла разбиты, свет малиновый
-    for (const r of [25, 31, 43, 11, 15]) g.addProp('roadLamp', 184, TOP(r));
-    for (const r of [28, 34, 40]) g.addProp('roadLamp', 296, TOP(r));
-    for (const r of [10, 13, 16]) g.addProp('roadLamp', 296, TOP(r), { erased: true, lightColor: 'crimson' });
+    for (const r of [25, 31, 43, 11, 15]) g.addProp('roadLamp', 184, RT(r));
+    for (const r of [28, 34, 40]) g.addProp('roadLamp', 296, RT(r));
+    for (const r of [10, 13, 16]) g.addProp('roadLamp', 296, RT(r), { erased: true, lightColor: 'crimson' });
     // знамёна: синие с золотым солнцем слева, багровые рваные справа у ворот
-    for (const r of [29, 35, 13]) g.addProp('banner', 166, TOP(r));
-    for (const r of [12, 16]) g.addProp('banner', 316, TOP(r), { erased: true });
+    for (const r of [29, 35, 13]) g.addProp('banner', 166, RT(r));
+    for (const r of [12, 16]) g.addProp('banner', 316, RT(r), { erased: true });
     // башни ворот, между ними на цепи — колокол
-    g.gateTowers = [g.addProp('gateTower', 166, TOP(8), { warm: true }), g.addProp('gateTower', 314, TOP(8))];
+    // на рисованном полу башни уже нарисованы — колокол висит между их верхушками
+    g.gateTowers = roadArt() ? [{ x: 135, y: 129 }, { x: 344, y: 129 }] : [g.addProp('gateTower', 166, RT(8), { warm: true }), g.addProp('gateTower', 314, RT(8))];
 
-    const sign = g.addProp('sign', 200, TOP(38) - 1, { prompt: 'Осмотреть указатель', markY: 32 });
+    const sign = g.addProp('sign', 200, RT(38) - 1, { prompt: 'Осмотреть указатель', markY: 32 });
     sign.onInteract = async () => {
       await g.say([NOTE('Указатель: «КОЛОКОЛЬНЫЕ ВО…» Последние буквы дрожат и меняются каждый кадр, будто их кто-то стирает.')]);
       g.flags.signRead = true;
@@ -138,8 +177,8 @@ export const road = {
       if (phase === PAST) g.flags.signShifted = true;
     };
 
-    g.addProp('bridge', TOP(12), TOP(18) - 4, { w: 96, h: 72 });
-    const chest = g.addProp('chest', T(6), TOP(24) - 2, { prompt: 'Открыть сундук' });
+    g.addProp('bridge', TOP(12), RT(18) - 4, { w: 96, h: (R(22) - R(18)) * 16 + 8 });
+    const chest = g.addProp('chest', T(6), RT(24) - 2, { prompt: 'Открыть сундук' });
     chest.onInteract = () => {
       chest.open = true;
       chest.onInteract = null;
@@ -147,9 +186,9 @@ export const road = {
       for (let i = 0; i < 6; i++) g.spawnPickup('ash', chest.x, chest.y + 4);
       g.spawnPickup('shard', chest.x, chest.y + 6);
     };
-    for (let i = 0; i < 5; i++) g.spawnPickup('ash', 216 + (i % 2) * 40, TOP(36 - i * 1.5), { vx: 0, vy: 0 });
+    for (let i = 0; i < 5; i++) g.spawnPickup('ash', 216 + (i % 2) * 40, RT(36 - i * 1.5), { vx: 0, vy: 0 });
 
-    g.tik = npc(g, drawTik, T(9), TOP(41), { hidden: true, prompt: 'Поговорить с Тиком' });
+    g.tik = npc(g, drawTik, T(9), RT(41), { hidden: true, prompt: 'Поговорить с Тиком' });
     g.tik.onInteract = async () => {
       await g.say([TIK('Отпечаток — каким вещь была. Шрам — какой стала. Ты не чинишь мир, ты одалживаешь у прошлого. На время.')]);
     };
@@ -177,7 +216,7 @@ export const road = {
       await ui.fade(false);
     }
     g.hint(`${key(g, 'move')} — идти по дороге к воротам`, 5);
-    await g.waitUntil(() => p.y < TOP(38) || g.flags.signRead);
+    await g.waitUntil(() => p.y < RT(38) || g.flags.signRead);
     if (!g.flags.signRead) {
       g.hint(`Подойди к указателю — он засветится, ${key(g, 'interact')} осмотреть`, 8);
       await g.waitUntil(() => g.flags.signRead);
@@ -205,12 +244,12 @@ export const road = {
       g.persist();
     } else g.tik.hidden = false;
 
-    await g.waitUntil(() => p.y < TOP(27));
+    await g.waitUntil(() => p.y < RT(27));
     const bridge = g.props.find((o) => o.kind === 'bridge');
     if (bridge.tl.phase !== PAST) g.hint(`Мост помнит, что был целым. Подойди к обрыву и нажми ${key(g, 'shift')}. Успей перейти, пока не вернулся Шрам.`, 8);
-    await g.waitUntil(() => p.y < TOP(17));
+    await g.waitUntil(() => p.y < RT(17));
     ui.clearHint();
-    const h = g.spawnEnemy('hollow', T(15), TOP(11), { spawn: 1 });
+    const h = g.spawnEnemy('hollow', T(15), RT(11), { spawn: 1 });
     await g.wait(0.3);
     await g.say([TIK('Пустокожий. У него стёрли имя, осталась только обида.')]);
     if (g.input.device === 'touch') g.hint('Тап по экрану — удар в точку тапа, свайп — уклонение. Бей снова, когда клинок вспыхнет янтарём.', 8);
