@@ -51,9 +51,13 @@ function applySettings() {
 }
 applySettings();
 
+// Звук разрешается только внутри «жеста»: в iOS Safari это touchend и click,
+// а не pointerdown/pointerup — слушаем все, в фазе перехвата (раньше, чем кнопки).
 const unlock = () => audio.unlock();
-window.addEventListener('pointerdown', unlock);
-window.addEventListener('keydown', unlock);
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(ev, unlock, { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && audio.ready) audio.unlock();
+});
 
 // ── меню ─────────────────────────────────────────────────────────────
 const LOGO = '<h1>ПЕПЕЛ МЕЖДУ КАДРАМИ</h1><p>мир забывает самого себя</p>';

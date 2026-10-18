@@ -73,28 +73,71 @@ export function drawDog32(ctx, x, y, o = {}) {
 // ── призрак-воспоминание (Арно, Сена, торговцы) ─────────────────────────
 export function drawGhost32(ctx, x, y, o = {}) {
   const t = o.t || 0;
-  const hue = o.color === '#ece4cf' ? ['#fffaf0', '#ece4cf', '#9a9cac'] : o.color === '#ffd27a' ? ['#fff8e0', '#ffd27a', '#b8721f'] : ['#ffe9b0', '#e0a040', '#8a5a1c'];
+  // цвет воспоминания: янтарь (по умолчанию), светлый янтарь (Сена), молочный (жители убежища)
+  const C = o.color === '#ece4cf'
+    ? { hi: '#ffffff', base: '#e2d8c0', mid: '#b4aa94', lo: '#6e6656', skin: '#fff6e6' }
+    : o.color === '#ffd27a'
+      ? { hi: '#fff8e0', base: '#ffd27a', mid: '#d89a34', lo: '#7a4a18', skin: '#fff0c8' }
+      : { hi: '#ffe9b0', base: '#e0a040', mid: '#b8721f', lo: '#5a3014', skin: '#ffd9a0' };
   const a0 = ctx.globalAlpha;
   ctx.globalAlpha = a0 * (o.alpha ?? 0.75);
-  const body = o.dress
-    ? [x - 2.6, y - 15, x + 2.6, y - 15, x + 5, y - 1, x - 5, y - 1]
-    : [x - 3.4, y - 15, x + 3.4, y - 15, x + 4, y - 2, x - 4, y - 2];
-  poly(ctx, body, lin(ctx, 0, y - 16, 0, y, [[0, hue[1]], [0.7, hue[2]], [1, 'rgba(0,0,0,0)']]));
-  // голова, шляпа или волосы
-  oval(ctx, x, y - 18.5, 2.8, 3, lin(ctx, x - 3, 0, x + 3, 0, [[0, hue[0]], [1, hue[1]]]));
-  if (o.hat) {
-    rect(ctx, x - 4.4, y - 21.6, 8.8, 1.1, hue[2]);
-    rect(ctx, x - 2.4, y - 24, 4.8, 2.6, hue[2]);
+  const sway = Math.sin(t * 1.6) * 0.4; // дыхание и лёгкое покачивание
+  const fill = (x0, y0, x1, y1) => lin(ctx, x0, y0, x1, y1, [[0, C.hi], [0.35, C.base], [0.75, C.mid], [1, C.lo]]);
+  const woman = !!o.dress;
+  // ноги / юбка
+  if (woman) {
+    poly(ctx, [x - 2.4, y - 10, x + 2.4, y - 10, x + 5, y - 0.8, x + 2, y - 0.2, x - 2, y - 0.2, x - 5, y - 0.8], fill(x - 5, y - 10, x + 5, y));
+    path(ctx, [x - 0.6, y - 9, x - 1.6, y - 1], C.mid, 0.4);
+    path(ctx, [x + 1.4, y - 9, x + 2.6, y - 1.2], C.lo, 0.4);
+  } else {
+    poly(ctx, [x - 2.7, y - 9, x - 0.3, y - 9, x - 0.6, y - 1, x - 2.5, y - 1], fill(x - 3, y - 9, x, y));
+    poly(ctx, [x + 0.3, y - 9, x + 2.7, y - 9, x + 2.5, y - 1, x + 0.6, y - 1], fill(x, y - 9, x + 3, y));
+    oval(ctx, x - 1.8, y - 0.8, 1.6, 0.8, C.lo);
+    oval(ctx, x + 1.8, y - 0.8, 1.6, 0.8, C.lo);
   }
-  if (o.dress) poly(ctx, [x - 2.8, y - 20, x - 3.6, y - 14.6, x - 2, y - 16.6], hue[2]);
-  rect(ctx, x - 1.3, y - 18.8, 0.7, 0.7, '#3a2810');
-  rect(ctx, x + 0.6, y - 18.8, 0.7, 0.7, '#3a2810');
-  // строки развёртки: память «мерцает»
-  const sh = Math.floor(t * 6) % 7;
+  // туловище: пальто с полами или лиф платья
+  const top = y - 16.6 + sway * 0.3;
+  if (woman) poly(ctx, [x - 3.2, top, x + 3.2, top, x + 2.4, y - 10, x - 2.4, y - 10], fill(x - 3, top, x + 3, y - 10));
+  else {
+    poly(ctx, [x - 3.6, top, x + 3.6, top, x + 3.4, y - 6.6, x + 0.4, y - 7.4, x - 0.4, y - 7.4, x - 3.4, y - 6.6], fill(x - 4, top, x + 4, y - 6));
+    path(ctx, [x, top + 1.5, x, y - 7.6], C.lo, 0.4);
+    rect(ctx, x - 3.4, y - 10.4, 6.8, 0.8, C.lo); // пояс
+  }
+  // плечи и руки с кистями
+  oval(ctx, x, top + 0.3, woman ? 3.5 : 3.9, 1.2, C.base);
+  for (const s of [-1, 1]) {
+    const wave = o.wave && s > 0;
+    const ex = x + s * (woman ? 3.8 : 4.3);
+    const hx = wave ? x + s * 5.6 : x + s * (woman ? 3.6 : 4.1);
+    const hy = wave ? top - 3.2 + Math.sin(t * 8) * 0.8 : y - 8.6 + (s > 0 ? sway : -sway) * 0.4;
+    path(ctx, [x + s * 3.3, top + 0.8, ex, top + 4.2, hx, hy], s < 0 ? C.base : C.mid, 1.5);
+    oval(ctx, hx, hy + (wave ? -0.6 : 0.6), 0.8, 0.9, C.skin);
+  }
+  // шаль у женщины
+  if (woman) poly(ctx, [x - 3.4, top + 0.4, x + 3.4, top + 0.4, x, top + 4.4], C.mid);
+  // шея и голова
+  rect(ctx, x - 0.8, top - 1.8, 1.6, 2, C.mid);
+  const hy = top - 4 + sway * 0.2;
+  oval(ctx, x, hy, 2.3, 2.6, lin(ctx, x - 2.4, 0, x + 2.4, 0, [[0, C.skin], [0.6, C.base], [1, C.mid]]));
+  rect(ctx, x - 1.2, hy - 0.2, 0.6, 0.6, C.lo);
+  rect(ctx, x + 0.6, hy - 0.2, 0.6, 0.6, C.lo);
+  if (o.hat) {
+    rect(ctx, x - 2.2, hy - 5.4, 4.4, 3.2, fill(x - 2, hy - 5, x + 2, hy - 2));
+    rect(ctx, x - 2.2, hy - 2.9, 4.4, 0.6, C.lo);
+    oval(ctx, x, hy - 2.1, 3.8, 0.75, C.mid);
+  } else if (woman) {
+    poly(ctx, [x - 2.5, hy + 0.4, x - 2.2, hy - 2.2, x, hy - 2.9, x + 2.2, hy - 2.2, x + 2.5, hy + 0.4, x + 1.6, hy - 1.2, x - 1.6, hy - 1.2], C.mid);
+    oval(ctx, x + 1.4, hy - 2.8, 1.3, 1.1, C.mid);
+  } else poly(ctx, [x - 2.4, hy - 0.4, x - 1.8, hy - 2.4, x + 1.8, hy - 2.4, x + 2.4, hy - 0.4, x + 1.4, hy - 1.4, x - 1.4, hy - 1.4], C.lo);
+  // контровой свет слева сверху
+  path(ctx, [x - 2.1, hy - 1.2, x - 2.3, hy + 0.6], C.hi, 0.35);
+  path(ctx, [x - 3.5, top + 0.8, x - 3.3, y - 8], C.hi, 0.35);
+  // память мерцает: редкие строки развёртки и тающий низ
+  const sh = Math.floor(t * 6) % 4;
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
-  for (let j = 0; j < 24; j += 3) rect(ctx, x - 6, y - 24 + j + (sh % 3), 12, 0.5, 'rgba(0,0,0,0.6)');
-  for (let i = 0; i < 6; i++) if ((i + Math.floor(t * 8)) % 2) rect(ctx, x - 5 + i * 2, y - 2.5, 1, 1.5, '#000');
+  for (let j = 0; j < 26; j += 4) rect(ctx, x - 6, y - 26 + j + sh, 12, 0.5, 'rgba(0,0,0,0.35)');
+  for (let i = 0; i < 6; i++) if ((i + Math.floor(t * 8)) % 2) rect(ctx, x - 5 + i * 2, y - 1.4, 1, 1.4, '#000');
   ctx.restore();
   if (Math.floor(t * 10) % 9 < 2) rect(ctx, x - 5 + ((t * 37) % 10), y - 6 - (Math.floor(t * 10) % 9) * 3, 0.6, 0.6, '#fff8e0');
   ctx.globalAlpha = a0;
@@ -105,11 +148,8 @@ export function drawVillager32(ctx, x, y, o = {}) {
   const t = o.t || 0;
   const f = Math.floor(t * 3) % 4;
   const v = o.v ?? 0;
-  drawGhost32(ctx, x, y, { t, hat: v === 0, dress: v === 1, alpha: 0.85 });
-  if (v === 0) {
-    const up = f % 2 ? -3 : 0;
-    path(ctx, [x + 3.2, y - 14, x + 5, y - 19 + up], '#e0a040', 1.1);
-  } else if (v === 3) {
+  drawGhost32(ctx, x, y, { t, hat: v === 0, dress: v === 1 || v === 3, wave: v === 0 && f % 2 === 1, alpha: 0.85 });
+  if (v === 3) {
     rect(ctx, x - 7.4, y - 12, 5, 3.6, lin(ctx, 0, y - 12, 0, y - 8, [[0, '#9a7450'], [1, '#3a281a']]));
     path(ctx, [x - 7, y - 12, x - 4.9, y - 14.6, x - 2.8, y - 12], '#77553a', 0.5);
   }
