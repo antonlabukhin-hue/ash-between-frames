@@ -12,12 +12,12 @@ import { mulberry32, hash2 } from '../core/math.js';
 import { poly, oval, path, rect, lin, rad, inside } from './hd.js';
 import { atlas } from './spritecache.js';
 import { blit } from './atlas.js';
+import { clipTiles, stone, leaf, tuft, LEAF } from './tiles32.js';
 
 const GAP = { x0: 32, x1: 35 }; // колонки провала
 const isRoad = (t) => t === T.ROAD;
 const isGround = (t) => t === T.ASH || t === T.GRASS;
 
-const LEAF = ['#b8721f', '#8a4a18', '#d89a34', '#5a3014', '#c45a1c', '#e0a040'];
 
 // ── пол ────────────────────────────────────────────────────────────────
 export function paintRoadBase() {
@@ -120,22 +120,6 @@ export function paintRoadHd(ctx, room) {
   ctx.restore();
 }
 
-function clipTiles(ctx, room, pred) {
-  ctx.beginPath();
-  for (let ty = 0; ty < room.h; ty++) {
-    let s = -1;
-    for (let tx = 0; tx <= room.w; tx++) {
-      const ok = tx < room.w && pred(tileAt(room, tx, ty));
-      if (ok && s < 0) s = tx;
-      else if (!ok && s >= 0) {
-        ctx.rect(s * TILE, ty * TILE, (tx - s) * TILE, TILE);
-        s = -1;
-      }
-    }
-  }
-  ctx.clip();
-}
-
 function firstRow(room, pred) {
   for (let ty = 0; ty < room.h; ty++) for (let tx = 0; tx < room.w; tx++) if (pred(tileAt(room, tx, ty))) return ty;
   return 0;
@@ -143,25 +127,6 @@ function firstRow(room, pred) {
 function lastRow(room, pred) {
   for (let ty = room.h - 1; ty >= 0; ty--) for (let tx = 0; tx < room.w; tx++) if (pred(tileAt(room, tx, ty))) return ty;
   return 0;
-}
-
-function stone(ctx, x, y, w, h, rnd, erased) {
-  if (erased && rnd() < 0.12) {
-    // выпавший камень — провал с малиновым дном
-    rect(ctx, x, y, w, h, '#05060c');
-    rect(ctx, x + 1, y + h - 1.2, w - 2, 0.6, '#4a0c1e');
-    return;
-  }
-  const v = rnd();
-  const base = erased ? ['#24242e', '#2a2933', '#1f1f28'][(v * 3) | 0] : ['#262b3a', '#2d3344', '#343b4f', '#2a2f40'][(v * 4) | 0];
-  const r = Math.min(1.6, h / 2.4);
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.fillStyle = lin(ctx, x, y, x + w * 0.4, y + h, [[0, erased ? '#3a3a46' : '#4a5470'], [0.35, base], [1, '#161925']]);
-  ctx.fill();
-  // мокрый блик сверху слева, иногда — длинный отсвет
-  path(ctx, [x + r, y + 0.45, x + w * (0.4 + rnd() * 0.4), y + 0.45], erased ? 'rgba(160,160,180,0.25)' : 'rgba(150,175,230,0.45)', 0.4);
-  if (rnd() < 0.18) oval(ctx, x + w * 0.5, y + h * 0.45, w * 0.3, 0.45, 'rgba(190,210,255,0.22)');
 }
 
 function curb(ctx, y, W, rnd, east) {
@@ -190,24 +155,6 @@ function crack(ctx, x, y, rnd) {
   path(ctx, pts, '#05060c', 1.2);
   path(ctx, pts, '#c8284a', 0.5);
   path(ctx, pts.map((v, i) => (i % 2 ? v - 0.4 : v)), 'rgba(255,90,122,0.6)', 0.25);
-}
-
-function tuft(ctx, x, y, rnd, erased) {
-  const n = 4 + ((rnd() * 4) | 0);
-  for (let i = 0; i < n; i++) {
-    const a = -Math.PI / 2 + (rnd() - 0.5) * 1.2;
-    const len = 2.5 + rnd() * 3.5;
-    const ex = x + Math.cos(a) * len + (rnd() - 0.5);
-    const ey = y + Math.sin(a) * len;
-    const c = erased ? ['#24252c', '#30313b', '#3a1a26'][i % 3] : ['#2e3a24', '#3b4a2a', '#262e1e', '#4f5430'][i % 4];
-    path(ctx, [x + (rnd() - 0.5) * 1.5, y, (x + ex) / 2 + 0.4, (y + ey) / 2, ex, ey], c, 0.55);
-    if (!erased && rnd() < 0.35) rect(ctx, ex - 0.25, ey - 0.25, 0.5, 0.5, '#d89a34');
-  }
-}
-
-function leaf(ctx, x, y, a, c) {
-  oval(ctx, x, y, 1.3, 0.6, c, a);
-  path(ctx, [x - Math.cos(a) * 1.1, y - Math.sin(a) * 1.1, x + Math.cos(a) * 1.1, y + Math.sin(a) * 1.1], 'rgba(40,20,8,0.5)', 0.2);
 }
 
 // Верхний ряд стен — балюстрада: карниз, балясины, столбы; между балясинами — небо.

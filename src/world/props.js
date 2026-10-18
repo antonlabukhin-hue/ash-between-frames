@@ -86,9 +86,9 @@ export const PROP_KINDS = {
   // башня ворот: кладка, бойница с огнём, багровое знамя; между башнями — колокол
   gateTower: { foot: { w: 18, h: 8 }, solid: { past: true, present: true }, light: { past: 34, present: 34 }, lightY: 60, draw: drawGateTowerHd, drawHd: drawGateTowerHd },
   rubble: { draw: drawRubble },
-  candles: { draw: drawCandles, light: { past: 26, present: 26 } },
+  candles: { draw: drawCandles, light: { past: 26, present: 26 }, lightColor: { past: 'fire', present: 'fire' }, lightY: 6 },
   glyph: { name: 'Знак арены', flat: true, draw: drawGlyph },
-  stove: { foot: { w: 26, h: 8 }, solid: { past: true, present: true }, light: { past: 60, present: 60 }, draw: drawStove },
+  stove: { foot: { w: 26, h: 8 }, solid: { past: true, present: true }, light: { past: 60, present: 60 }, lightColor: { past: 'fire', present: 'fire' }, draw: drawStove },
   table: { foot: { w: 30, h: 8 }, solid: { past: true, present: true }, draw: drawTable },
   window: { draw: drawWindowProp },
   portraits: { draw: drawPortraits },

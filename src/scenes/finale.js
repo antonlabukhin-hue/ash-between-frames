@@ -32,6 +32,7 @@ function belfryMap() {
 export const belfry = {
   id: 'belfry',
   title: 'Брат Мел',
+  weather: { rain: 0.4, fog: 'moon', fogA: 0.22 },
   subtitle: 'Звонарь без башни',
   music: 'boss',
   dark: 0.55,
@@ -85,6 +86,7 @@ function underMap() {
 export const under = {
   id: 'under',
   title: 'Под площадью',
+  weather: { fog: 'cold', fogA: 0.3 },
   music: 'hub',
   dark: 0.6,
   map: underMap(),
@@ -162,6 +164,7 @@ const UPGRADES = [
 export const kitchen = {
   id: 'kitchen',
   title: 'Кухня Последнего Дня',
+  weather: { fog: 'amber', fogA: 0.1 },
   subtitle: 'Убежище',
   music: 'hub',
   dark: 0.3,
@@ -343,6 +346,7 @@ const WAVE_POOL = [
 export const ruins = {
   id: 'ruins',
   title: 'Пепельные руины',
+  weather: { rain: 1, fog: 'cold', fogA: 0.35, leaves: 10 },
   subtitle: 'Вылазка',
   music: 'road',
   dark: 0.5,

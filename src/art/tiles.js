@@ -3,6 +3,8 @@ import { P } from './palette.js';
 import { hash2 } from '../core/math.js';
 import { upscaleCanvas } from './upscale.js';
 import { RS } from '../core/frame.js';
+import { hd } from './hdflag.js';
+import { paintTilesHd } from './tiles32.js';
 
 export const TILE = 16;
 
@@ -270,6 +272,18 @@ export function drawTile(ctx, room, tx, ty) {
 // Комната печатается в логических пикселях и удваивается Scale2x в 32-битную сетку
 // (холст помечен полем rs — во сколько раз он плотнее мира).
 export function buildRoomCanvas(room) {
+  // обычная комната в 32-битном режиме печатается сразу в плотной сетке
+  if (hd.on && RS > 1 && !room.def?.paint) {
+    const out = document.createElement('canvas');
+    out.width = room.w * TILE * RS;
+    out.height = room.h * TILE * RS;
+    out.rs = RS;
+    const hctx = out.getContext('2d');
+    hctx.scale(RS, RS);
+    paintTilesHd(hctx, room);
+    room.def?.paintHd?.(hctx, room);
+    return out;
+  }
   const c = document.createElement('canvas');
   c.width = room.w * TILE;
   c.height = room.h * TILE;

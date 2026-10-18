@@ -7,8 +7,9 @@ import { RS } from '../core/frame.js';
 import { drawHero32 } from './hero32.js';
 import { drawHollow32, drawFramer32, drawRinger32, drawEater32 } from './enemies32.js';
 
-// 32-битные кадры персонажей (HD-маляры). false — прежние 16-битные через Scale2x.
-export const hd = { on: true };
+import { hd } from './hdflag.js';
+
+export { hd };
 const HD_OPTS = { hd: true, crisp: true };
 
 // 32-битная сетка: кадры хранятся в RS раз плотнее мира (страницы 2048×2048)

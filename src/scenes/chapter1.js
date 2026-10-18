@@ -243,6 +243,7 @@ function tornMap() {
 export const tornRoad = {
   id: 'tornRoad',
   title: 'Разорванная дорога',
+  weather: { rain: 0.8, fog: 'cold', fogA: 0.3, leaves: 12 },
   music: 'road',
   dark: 0.4,
   floor: ',',
@@ -300,6 +301,7 @@ function campMap() {
 export const camp = {
   id: 'camp',
   title: 'Чужой привал',
+  weather: { rain: 0.25, fog: 'cold', fogA: 0.25 },
   music: 'road',
   dark: 0.7,
   floor: ',',
@@ -425,6 +427,7 @@ function memorySources(g) {
 export const square = {
   id: 'square',
   title: 'Площадь без центра',
+  weather: { rain: 0.6, fog: 'cold', fogA: 0.22 },
   subtitle: 'Город Колокольных Ворот',
   music: 'city',
   dark: 0.5,
@@ -619,6 +622,7 @@ function stairsMap() {
 export const stairs = {
   id: 'stairs',
   title: 'Лестница из двух версий',
+  weather: { fog: 'cold', fogA: 0.35 },
   music: 'city',
   dark: 0.55,
   map: stairsMap(),
@@ -701,6 +705,7 @@ function arenaMap() {
 export const shadowArena = {
   id: 'shadowArena',
   title: 'Звонкая Тень',
+  weather: { fog: 'crimson', fogA: 0.22 },
   music: 'boss',
   dark: 0.62,
   map: arenaMap(),
@@ -757,6 +762,7 @@ function ascentMap() {
 export const ascent = {
   id: 'ascent',
   title: 'Подъём к колокольне',
+  weather: { rain: 0.5, fog: 'cold', fogA: 0.3 },
   walls: 'city',
   music: 'city',
   dark: 0.5,
