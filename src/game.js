@@ -22,6 +22,7 @@ import { ROOMS } from './scenes/rooms.js';
 import { createParticlePool, clearParticles, resizePool } from './world/particles.js';
 import { PROFILES } from './core/quality.js';
 import { MEMORIES, addMemory, hasMemory, memoryList, createScene, stepScene } from './story/memories.js';
+import { NODES, LOSS, isFixed, fixedWith, nodePrices, fixNode } from './story/nodes.js';
 
 export function createGame({ input, audio, ui, storage, save }) {
   const g = {
@@ -150,6 +151,64 @@ export function createGame({ input, audio, ui, storage, save }) {
 
   // нить причины: cause → effect (docs/TIME_DESIGN.md, П3)
   g.link = (cause, effect, o) => link(cause, effect, o);
+
+  // ── Узлы памяти (П6) ─────────────────────────────────────────────
+  // Узел под объектом obj: закрепление навсегда переводит obj в прошлое (и делает несдвигаемым).
+  // o: { x, y, w, h } — круг на земле; onFix(g, obj, silent) — последствия; interact — false,
+  // если закрепляет сцена (выбор у костра), а не сам круг.
+  const fixObject = (obj) => {
+    obj.tl.base = PAST;
+    obj.tl.phase = PAST;
+    obj.tl.left = 0;
+    obj.tl.switchable = false;
+  };
+  g.isFixed = (id) => isFixed(save, id);
+  g.memoryNode = (obj, id, o = {}) => {
+    const w = o.w ?? 40;
+    const h = o.h ?? 18;
+    const node = g.addProp('memoryNode', o.x ?? obj.x - w / 2, o.y ?? obj.y - h / 2 - 2, { w, h, prompt: 'Узел памяти', nodeId: id });
+    node.fixed = isFixed(save, id);
+    if (node.fixed) {
+      fixObject(obj);
+      o.onFix?.(g, obj, true);
+    }
+    node.fix = async (memory) => {
+      if (!fixNode(save, id, memory)) return false;
+      node.fixed = true;
+      fixObject(obj);
+      g.persist();
+      audio.sfx.shift(PAST);
+      const [cx, cy] = propCenter(node);
+      ringFx(g, cx, cy, 4, 46, P.amberHi, 0.8);
+      burst(g, cx, cy - 6, [P.amberHi, P.milk, P.amber], 24, 60);
+      g.toast(`«${MEMORIES[memory].name}» отдано. ${NODES[id].name} — навсегда в прошлом.`, 4);
+      await o.onFix?.(g, obj, false);
+      return true;
+    };
+    node.onInteract = async () => {
+      const def = NODES[id];
+      if (node.fixed) {
+        await g.say([{ who: '', text: `Узел памяти «${def.name}» закреплён. Отдано: «${MEMORIES[fixedWith(save, id)].name}».` }]);
+        return;
+      }
+      if (o.interact === false) {
+        await g.say([{ who: '', text: `Узел памяти «${def.name}». ${o.closedText || 'Руны гаснут: здесь всё уже решено.'}` }]);
+        return;
+      }
+      const prices = nodePrices(save, id);
+      const want = def.accepts ? def.accepts.map((m) => `«${MEMORIES[m].name}»`).join(' или ') : 'любое воспоминание';
+      if (!prices.length) {
+        await g.say([{ who: '', text: `Узел памяти «${def.name}». ${def.gain} Цена — ${want}. В дневнике нет подходящего.` }]);
+        return;
+      }
+      await g.say([{ who: '', text: `Узел памяти «${def.name}». ${def.gain} Цена — ${want}: отданное исчезнет из мира.` }]);
+      const opts = prices.map((m) => ({ text: `Отдать «${MEMORIES[m].name}»`, sub: LOSS[m] || 'Это воспоминание исчезнет навсегда.' }));
+      opts.push({ text: 'Не сейчас', sub: 'Сдвиг останется временным' });
+      const i = await g.choose('Закрепить прошлое навсегда?', opts);
+      if (i < prices.length) await node.fix(prices[i]);
+    };
+    return node;
+  };
 
   // ── Эхо (П4) ─────────────────────────────────────────────────────
   g.hitShade = (n = 1) => {
@@ -385,6 +444,9 @@ export function createGame({ input, audio, ui, storage, save }) {
     }
     g.holdFade = !!def.holdFade?.(g);
     def.setup?.(g, room);
+    if (isFixed(save, 'oven') && g.player && !g.player.dead && g.player.hp < g.player.maxHp) {
+      g.player.hp = Math.min(g.player.maxHp, g.player.hp + Math.round(g.player.maxHp * 0.15));
+    }
     (save.flags.visited ||= {})[id] = true;
     if (def.checkpoint !== false) {
       save.room = id;

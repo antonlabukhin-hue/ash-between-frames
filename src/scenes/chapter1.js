@@ -188,7 +188,9 @@ export const road = {
       if (phase === PAST) g.flags.signShifted = true;
     };
 
-    g.addProp('bridge', TOP(12), RT(18) - 4, { w: 96, h: (R(22) - R(18)) * 16 + 8 });
+    const bridge = g.addProp('bridge', TOP(12), RT(18) - 4, { w: 96, h: (R(22) - R(18)) * 16 + 8 });
+    // Узел памяти у начала моста: отдай воспоминание — мост цел навсегда
+    g.memoryNode(bridge, 'bridge', { x: bridge.x + bridge.w / 2 - 22, y: bridge.y + bridge.h + 4, w: 44, h: 18 });
     const chest = g.addProp('chest', T(6), RT(24) - 2, { prompt: 'Открыть сундук' });
     chest.onInteract = () => {
       chest.open = true;
@@ -375,7 +377,13 @@ export const camp = {
     const arno = g.addProp('ghostNpc', T(9), TOP(4) + 8, { drawFn: drawGhost, drawOpts: { hat: true }, prompt: 'Поговорить с силуэтом', markY: 28 });
     const sena = g.addProp('ghostNpc', T(13), TOP(4) + 8, { drawFn: drawGhost, drawOpts: { dress: true, color: P.amberHi }, hidden: true, markY: 28 });
     g.campNpc = { arno, sena, fire };
+    g.campNode = g.memoryNode(fire, 'campfire', { w: 52, h: 22, x: fire.x - 26, y: fire.y - 9, interact: false, closedText: 'Руны гаснут: у этого костра выбор уже сделан.' });
+    g.campNode.canInteract = () => !!g.flags.camp; // до выбора не отвлекать от силуэта
     arno.onInteract = async () => {
+      if (g.flags.camp === 'fixed') {
+        await g.say([{ who: 'Арно', text: 'Странная женщина у костра. Добрая. Кажется, я её где-то видел…', portrait: 'arno' }]);
+        return;
+      }
       if (g.flags.camp) {
         await g.say([{ who: 'Арно', text: 'Дорога ещё помнит нас. Иди, Смотритель.', portrait: 'arno' }]);
         return;
@@ -442,10 +450,21 @@ export const camp = {
         sub: !hasScrap ? 'Нужна записка «…но, жди у ворот» — она осталась на Разорванной дороге' : !hasCharge ? 'Нужен заряд браслета' : 'Сохранить обоих: записка и заряд браслета',
         disabled: !hasScrap || !hasCharge,
       },
+      {
+        text: 'Закрепить костёр',
+        sub: g.hasMemory('campfire') ? 'Узел памяти: отдать «Вечер у костра». Останутся оба — но чужими друг другу' : 'Нужно воспоминание «Вечер у костра»',
+        disabled: !g.hasMemory('campfire'),
+      },
     ]);
-    const choice = ['arno', 'sena', 'both'][i];
+    const choice = ['arno', 'sena', 'both', 'fixed'][i];
     g.flags.camp = choice;
-    if (choice === 'both') {
+    if (choice === 'fixed') {
+      await g.campNode.fix('campfire');
+      await g.say([
+        SENA('…Простите. Мы знакомы?'),
+        ARNO('Не думаю. Но у вашего костра тепло. Можно, я посижу?'),
+      ]);
+    } else if (choice === 'both') {
       g.player.charges.n -= 1;
       await g.say([
         SENA('«…но, жди меня у ворот. С.» Это мой почерк.'),
@@ -466,6 +485,7 @@ export const camp = {
       arno: [ARNO('…Я один. Наверное, так и было. Спасибо, Смотритель. Если найдёшь Кухню — я приду.')],
       sena: [SENA('Он был тёплый. Я сохраню это за двоих. Найди Кухню Мары — я буду там.')],
       both: [SENA('Мы оба?.. Значит, дорога длиннее, чем мы думали.'), ARNO('Встретимся у Мары. Там тепло — по-настоящему.')],
+      fixed: [SENA('Хороший костёр. Будто горел всегда.'), ARNO('Говорят, у Мары кормят. Пойдёмте туда — каждый своей дорогой.')],
     };
     await g.say(lines[choice]);
     g.openExits();
@@ -920,6 +940,11 @@ export const ascent = {
     const echo = g.addProp('memoryStone', T(13), TOP(7) + 4, { timeline: { hold: 9, cost: 0, switchTime: 0.5 } });
     g.cityEcho = echo;
     const mara = npc(g, drawMara, T(24), TOP(7) + 4, { prompt: 'Поговорить с Марой' });
+    // печь Мары остывает в Шраме; Узел памяти под ней держит прошлое навсегда
+    const oven = g.addProp('maraOven', T(24), TOP(5) + 6);
+    g.memoryNode(oven, 'oven', { w: 46, h: 18, x: oven.x - 23, y: oven.y - 6, onFix: async (gg, o, silent) => {
+      if (!silent) await gg.say([{ who: 'Мара', text: 'Печь… тёплая. Как в тот вечер. Теперь хлеб не остынет — ни здесь, ни на Кухне.', portrait: 'mara' }]);
+    } });
     mara.onInteract = async () => {
       if (g.flags.bread) {
         await g.say([{ who: 'Мара', text: 'Наверху Брат Мел. Звонит в пустоту. Не дай ему дозвониться.', portrait: 'mara' }]);

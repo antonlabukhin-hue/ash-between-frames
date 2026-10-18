@@ -5,7 +5,7 @@ import { P } from '../art/palette.js';
 import { px, line, disc, ring, drawBrassBoy, drawGhost, shadow } from '../art/sprites.js';
 import { createTimeline, PAST, PRESENT } from '../timeline/timeline.js';
 import { hash2 } from '../core/math.js';
-import { drawWeightPlateHd, drawKettleHd, drawHatchHd, drawHandLanternHd, drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
+import { drawMemoryNodeHd, drawWeightPlateHd, drawKettleHd, drawHatchHd, drawHandLanternHd, drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
 import { drawTik32, drawMara32, drawDog32, drawGhost32, drawBrassBoy32, drawVillager32, drawStillOne32 } from '../art/npcs32.js';
 import { drawTik, drawMara, drawDog } from '../art/sprites.js';
 import { drawLampHd, drawBannerHd, drawTreeHd, drawDeadTreeHd, drawGraveHd, drawGateTowerHd } from '../art/road32.js';
@@ -78,6 +78,8 @@ export const PROP_KINDS = {
   },
   // Эхо (П4): плиту держит вес героя или тени; нажата — фаза «прошлое» (причина для нитей)
   weightPlate: { name: 'Плита-противовес', flat: true, weight: true, timeline: { hold: Infinity, cost: 0, switchable: false }, threadY: 0, draw: drawWeightPlateHd },
+  // Узел памяти (П6): здесь — и только здесь — прошлое можно закрепить навсегда
+  memoryNode: { name: 'Узел памяти', flat: true, timeline: { hold: Infinity, cost: 0, switchable: false }, draw: drawMemoryNodeHd },
   hatch: { name: 'Заслонка погреба', flat: true, timeline: { hold: Infinity, cost: 0 }, draw: drawHatchHd },
   // стёртая надпись: читается только внутри острова памяти
   inscription: { name: 'Стёртая надпись', flat: true, auraOnly: true, draw: drawInscription },
@@ -124,6 +126,8 @@ export const PROP_KINDS = {
   candles: { draw: drawCandles, light: { past: 26, present: 26 }, lightColor: { past: 'fire', present: 'fire' }, lightY: 6 },
   glyph: { name: 'Знак арены', flat: true, draw: drawGlyph },
   stove: { foot: { w: 26, h: 8 }, solid: { past: true, present: true }, light: { past: 60, present: 60 }, lightColor: { past: 'fire', present: 'fire' }, draw: drawStove },
+  // печь Мары: в прошлом горит, в Шраме остыла; Узел памяти под ней (П6)
+  maraOven: { name: 'Печь Мары', timeline: { hold: 8, cost: 1, switchTime: 0.5 }, foot: { w: 26, h: 8 }, solid: { past: true, present: true }, light: { past: 60, present: 0 }, lightColor: { past: 'fire', present: 'cold' }, draw: drawStove },
   table: { foot: { w: 30, h: 8 }, solid: { past: true, present: true }, draw: drawTable },
   window: { draw: drawWindowProp },
   portraits: { draw: drawPortraits },
@@ -567,6 +571,7 @@ const CACHE = {
   rubble: C(22, 12, 11, 9, 0, 1, (p) => p.id % 4),
   candles: C(14, 12, 7, 10, 8, 2),
   stove: C(32, 44, 16, 42, 7, 6),
+  maraOven: C(32, 44, 16, 42, 7, 6),
   table: C(36, 18, 18, 16),
   window: C(22, 16, 11, 15, 1, 9, (p) => (p.bell ? 1 : 0)),
   portraits: C(52, 14, 24, 13, 0, 1, (p) => p.count),
@@ -580,7 +585,7 @@ for (const k of Object.keys(CACHE)) PROP_KINDS[k].cache = CACHE[k];
 // 32-битные маляры объектов (src/art/props32.js); при hd.on — вместо 16-битных
 const HD = {
   handLantern: drawHandLanternHd, kettle: drawKettleHd, sign: drawSignHd, memoryStone: drawMemoryStoneHd, lantern: drawLanternHd, campfire: drawCampfireHd,
-  chest: drawChestHd, pillar: drawPillarHd, rubble: drawRubbleHd, candles: drawCandlesHd, stove: drawStoveHd,
+  chest: drawChestHd, pillar: drawPillarHd, rubble: drawRubbleHd, candles: drawCandlesHd, stove: drawStoveHd, maraOven: drawStoveHd,
   table: drawTableHd, window: drawWindowHd, portraits: drawPortraitsHd, shelf: drawShelfHd, box: drawBoxHd,
 };
 for (const k of Object.keys(HD)) PROP_KINDS[k].drawHd = HD[k];

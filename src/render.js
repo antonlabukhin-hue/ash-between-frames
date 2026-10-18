@@ -547,6 +547,25 @@ function paintSlash(ctx, x, y, angle, span, radius, c) {
   }
 }
 
+// Узлы памяти заметны издалека: руны круга горят янтарём поверх света, закреплённый — ровно.
+function drawNodeRunes(g, ctx) {
+  for (const n of g.props) {
+    if (n.kind !== 'memoryNode' || !visible(n.x + n.w / 2, n.y + n.h / 2, n.w)) continue;
+    const cx = n.x + n.w / 2;
+    const cy = n.y + n.h / 2;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const k = n.fixed ? 1 : 0.35 + 0.65 * Math.max(0, Math.sin(g.time * 2.2 - i * 0.7));
+      ctx.globalAlpha = 0.25 + 0.7 * k;
+      const x = Math.round(cx + Math.cos(a) * n.w / 2);
+      const y = Math.round(cy + Math.sin(a) * n.h / 2);
+      px(ctx, x - 1, y, 3, 1, k > 0.7 ? P.amberHi : P.amber);
+      px(ctx, x, y - 1, 1, 1, P.amberHi);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 // Запись Эха: бирюзовый след пути и убывающее кольцо у ног героя.
 function drawEchoRec(g, ctx, p) {
   const rec = p.echoRec;
@@ -1101,6 +1120,7 @@ export function renderWorld(g, ctx) {
   // а имя и действие пишутся табличкой над ним (HTML-слой, src/ui/overlay.js)
   if (p && !p.dead && !g.cinematic) drawThreads(g, ctx, p);
   if (p?.echoRec) drawEchoRec(g, ctx, p);
+  drawNodeRunes(g, ctx);
   if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
   g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
   // реплики призраков в сценах прошлого

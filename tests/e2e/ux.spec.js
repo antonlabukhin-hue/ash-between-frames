@@ -113,7 +113,7 @@ test('target_enemy_over_nearby_prop: Q выбирает врага, на кот�
   const r = await page.evaluate(() => window.__abf.game.player.shiftTarget?.obj.kind);
   expect(r).toBe('hollow');
   await expect(page.locator('#ui > .prompt')).toContainText('Пустокожий');
-  await expect(page.locator('.plate:not(.hidden)').first()).toContainText('Пустокожий');
+  await expect(page.locator('.plate:not(.hidden)', { hasText: 'Пустокожий' })).toBeVisible();
   // смотрим на мост — цель меняется на мост
   const bc = await page.evaluate(() => {
     const br = window.__abf.game.props.find((o) => o.kind === 'bridge');

@@ -33,6 +33,7 @@ export function defaultSave() {
     items: [], // предметы убежища (хлеб и т.п.)
     memories: [], // воспоминания (src/story/memories.js)
     spentMemories: [], // отданные в Узлах памяти — больше не вернуть
+    fixed: {}, // закреплённые Узлы памяти (src/story/nodes.js)
     stats: { deaths: 0, kills: 0, playTime: 0 },
     settings: defaultSettings(),
   };
