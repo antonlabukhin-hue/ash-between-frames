@@ -74,7 +74,7 @@ export const PROP_KINDS = {
   grave: { foot: { w: 10, h: 4 }, solid: { past: true, present: true }, draw: drawGrave },
   rubble: { draw: drawRubble },
   candles: { draw: drawCandles, light: { past: 26, present: 26 } },
-  glyph: { flat: true, draw: drawGlyph },
+  glyph: { name: 'Знак арены', flat: true, draw: drawGlyph },
   stove: { foot: { w: 26, h: 8 }, solid: { past: true, present: true }, light: { past: 60, present: 60 }, draw: drawStove },
   table: { foot: { w: 30, h: 8 }, solid: { past: true, present: true }, draw: drawTable },
   window: { draw: drawWindowProp },

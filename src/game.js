@@ -11,6 +11,7 @@ import { tickTimeline, isShifted, PAST } from './timeline/timeline.js';
 import { writeSave, freshSave } from './save/save.js';
 import { addFragment, hasFragment, loseFragments, FRAGMENTS } from './items/fragments.js';
 import { dist, clamp } from './core/math.js';
+import { findInteractable, shiftLabel } from './world/interact.js';
 import { W, H } from './core/renderer.js';
 import { P } from './art/palette.js';
 import { ROOMS } from './scenes/rooms.js';
@@ -100,6 +101,12 @@ export function createGame({ input, audio, ui, storage, save }) {
   g.wait = (s) => {
     const tok = g.scriptToken;
     return new Promise((res) => g.waiters.push({ t: s, res, tok }));
+  };
+  // ожидание, которое можно прервать нажатием; резолвится true, если прервали
+  g.waitSkip = (s) => {
+    const tok = g.scriptToken;
+    g.skipReq = false;
+    return new Promise((res) => g.waiters.push({ t: s, res, tok, skip: true }));
   };
   g.waitUntil = (pred) => {
     const tok = g.scriptToken;
@@ -270,19 +277,14 @@ export function createGame({ input, audio, ui, storage, save }) {
   // ── взаимодействие ────────────────────────────────────────────────
   function findInteract() {
     const p = g.player;
-    let best = null;
-    let bd = 26;
+    const items = [];
     for (const o of g.props) {
       if (!o.onInteract || o.hidden) continue;
       if (o.canInteract && !o.canInteract(g)) continue;
       const [cx, cy] = o.def.flat ? propCenter(o) : [o.x, o.y - 2];
-      const d = dist(p.x, p.y, cx, cy) - (o.reach ?? 0);
-      if (d < bd) {
-        bd = d;
-        best = o;
-      }
+      items.push({ obj: o, x: cx, y: cy, range: o.interactRange, reach: o.reach });
     }
-    return best;
+    return findInteractable(items, p.x, p.y);
   }
 
   g.tryInteract = () => {
@@ -293,6 +295,26 @@ export function createGame({ input, audio, ui, storage, save }) {
       if (live(tok)) console.error(err);
     });
   };
+
+  // Строка подсказки внизу: взаимодействие и цель сдвига — что именно выбрано и что будет.
+  function promptText() {
+    const p = g.player;
+    if (!p || p.dead || g.cinematic) return null;
+    const pad = input.device === 'pad';
+    const touch = input.device === 'touch';
+    const lines = [];
+    const it = g.interactTarget;
+    if (it) lines.push(`${pad ? 'B' : touch ? '✋' : 'E'} — ${it.prompt || 'Осмотреть'}`);
+    else if (g.interactNear) lines.push(`Подойди ближе — ${(g.interactNear.prompt || 'осмотреть').toLowerCase()}`);
+    const t = p.shiftTarget;
+    if (t) {
+      const tl = t.obj.tl;
+      const next = isShifted(tl) ? tl.base : tl.phase === PAST ? 'present' : 'past';
+      const name = t.obj.name || t.obj.def?.name || (t.type === 'projectile' ? (t.obj.kind === 'ring' ? 'Звуковая волна' : 'Нота') : 'Объект');
+      lines.push(`${pad ? 'Y' : touch ? '⧗' : 'Q'} — ${shiftLabel(name, next)}`);
+    }
+    return lines.length ? lines.join('\n') : null;
+  }
 
   // ── обновление ────────────────────────────────────────────────────
   function snapCamera() {
@@ -453,13 +475,20 @@ export function createGame({ input, audio, ui, storage, save }) {
         w.done = true;
         continue;
       }
+      if (w.skip && g.skipReq) {
+        w.done = true;
+        w.res(true);
+        continue;
+      }
       if (w.t != null) {
         w.t -= dt;
         if (w.t <= 0) w.done = true;
       } else if (w.pred(g)) w.done = true;
-      if (w.done) w.res();
+      if (w.done) w.res(false);
     }
     g.waiters = g.waiters.filter((w) => !w.done);
+    // нажатие во время сцены без диалога — запрос пропуска для g.waitSkip
+    g.skipReq = g.cinematic && !ui.mode && input.anyPressed('confirm', 'attack', 'interact', 'rift', 'dodge');
 
     if (g.hitstopT > 0) {
       g.hitstopT -= dt;
@@ -489,10 +518,10 @@ export function createGame({ input, audio, ui, storage, save }) {
     updateFx(g, dt);
     g.lights = collectLights(g);
     // интерактив
-    g.interactTarget = !g.cinematic && p && !p.dead ? findInteract() : null;
-    const it = g.interactTarget;
-    const key = input.device === 'pad' ? 'B' : input.device === 'touch' ? '✋' : 'E';
-    ui.setPrompt(it ? `${key} — ${it.prompt || 'Осмотреть'}` : null);
+    const found = !g.cinematic && p && !p.dead ? findInteract() : { target: null, near: null };
+    g.interactTarget = found.target;
+    g.interactNear = found.near;
+    ui.setPrompt(promptText());
     updateCamera(dt);
     if (p) updateMusicPhase();
   };

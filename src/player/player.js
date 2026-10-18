@@ -11,6 +11,7 @@ import { burst, ringFx, slashFx, addText, boltFx } from '../world/fx.js';
 import { dist, norm, angleDiff, clamp } from '../core/math.js';
 import { propCenter } from '../world/props.js';
 import { P } from '../art/palette.js';
+import { rankTargets, nextTarget } from './targeting.js';
 import { ABILITIES, createAbilityState, tickAbilities, canUse, markUsed, castAbility, updateSpark, isUnlocked } from './abilities.js';
 
 const SPEED = 74;
@@ -68,21 +69,16 @@ function aimAngle(g, p) {
 }
 
 // Цель для смены состояния: ближайший переключаемый объект с учётом прицела.
+// Цель для смены состояния: кандидаты в радиусе, порядок — src/player/targeting.js.
+// Весь упорядоченный список сохраняется в p.shiftList — повторное Q переключает цели.
 export function pickShiftTarget(g, p) {
-  let best = null;
-  let bestScore = Infinity;
-  const consider = (obj, x, y, type, range = SHIFT_RANGE) => {
+  const cands = [];
+  const consider = (obj, x, y, type, range = SHIFT_RANGE, pinned = false) => {
     if (!obj.tl?.switchable) return;
     const d = dist(p.x, p.y - 6, x, y);
     if (d > range) return;
     const a = Math.atan2(y - (p.y - 6), x - p.x);
-    const off = Math.abs(angleDiff(p.aim, a));
-    // объект, у которого стоишь вплотную, важнее врага поодаль
-    const score = d + off * 26 + (type === 'prop' ? (d < 24 ? -24 : 6) : 0);
-    if (score < bestScore) {
-      bestScore = score;
-      best = { obj, type, x, y };
-    }
+    cands.push({ obj, type, x, y, d, off: Math.abs(angleDiff(p.aim, a)), pinned });
   };
   for (const e of g.enemies) if (!e.dead && e.spawn <= 0) consider(e, e.x, e.y - e.hitY, 'enemy');
   for (const pr of g.projectiles) {
@@ -92,10 +88,11 @@ export function pickShiftTarget(g, p) {
   for (const pr of g.props) {
     if (pr.hidden || (pr.canTarget && !pr.canTarget(g))) continue;
     const [cx, cy] = propCenter(pr);
-    consider(pr, cx, cy, 'prop', pr.def.flat ? SHIFT_RANGE + Math.max(pr.w, pr.h) / 2 : SHIFT_RANGE);
+    consider(pr, cx, cy, 'prop', pr.def.flat ? SHIFT_RANGE + Math.max(pr.w, pr.h) / 2 : SHIFT_RANGE, !!pr.canTarget);
   }
   if (g.bossTargets) for (const t of g.bossTargets(g)) consider(t.obj, t.x, t.y, t.type);
-  return best;
+  p.shiftList = rankTargets(cands);
+  return p.shiftList[0] || null;
 }
 
 export function applyShift(g, target, { free = false } = {}) {
@@ -359,7 +356,15 @@ export function updatePlayer(g, p, dt) {
 
   // ── смена состояния ──
   p.shiftTarget = locked ? null : pickShiftTarget(g, p);
-  if (!locked && inp.pressed('shift') && !p.channel) {
+  if (p.channel) p.shiftTarget = p.channel.target;
+  if (!locked && inp.pressed('shift') && p.channel && p.shiftList?.length > 1) {
+    const nt = nextTarget(p.shiftList, p.channel.target.obj);
+    if (nt && nt.obj !== p.channel.target.obj && canSpend(p.charges, shiftCost(nt.obj.tl, { free: p.echo > 0 || g.freeShift }))) {
+      p.channel = createChannel(nt, channelTime(nt.obj.tl, { speed: g.save.upgrades.quickSeam ? 0.75 : 1 }) || 0.3);
+      p.shiftTarget = nt;
+      g.audio.sfx.ui();
+    }
+  } else if (!locked && inp.pressed('shift') && !p.channel) {
     const t = p.shiftTarget;
     if (!t) {
       g.hint('Рядом нечего сдвигать. Подойди к объекту с янтарным или малиновым контуром.', 2.5);

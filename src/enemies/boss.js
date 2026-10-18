@@ -218,7 +218,7 @@ export function setupMel(g, cx, cy) {
     volley: 0, volleyT: 0, exposed: 0, dead: false, cinematic: false, marks: PHASE_MARKS, parts: [],
   };
   const bell = {
-    x: cx, y: cy - 92, r: 18, hitY: 16, dead: false, cracks: 0, ringing: 0,
+    name: 'Колокол', x: cx, y: cy - 92, r: 18, hitY: 16, dead: false, cracks: 0, ringing: 0,
     tl: createTimeline({ hold: 6, cost: 1, switchTime: 0.5 }),
   };
   bell.onReflect = (gg, pr) => {
