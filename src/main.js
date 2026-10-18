@@ -17,6 +17,7 @@ import { loadSave, hasProgress, parseSave } from './save/save.js';
 import { renderWorld } from './render.js';
 import { loadRoomArt } from './art/roomart.js';
 import { memoryList } from './story/memories.js';
+import { questBoard } from './story/quests.js';
 import { buildRoomCanvas } from './art/tiles.js';
 import { drawTitle } from './scenes/title.js';
 import { createTouch } from './mobile/touch.js';
@@ -139,10 +140,12 @@ function controlsMenu(back) {
     <b>ПКМ / Shift / K</b><span>уклонение</span>
     <b>Q</b><span>сменить состояние цели: Отпечаток ⇄ Шрам</span>
     <b>E</b><span>взаимодействие</span>
+    <b>V (удерживать)</b><span>взгляд Смотрителя: всё, с чем можно что-то сделать, и что будет после сдвига</span>
+    <b>R</b><span>Эхо: записать до 5 секунд действий</span>
     <b>Пробел</b><span>импульсный разлом (когда шкала полна)</span>
     <b>Esc</b><span>пауза</span>
   </div>
-  <div class="note">Геймпад: левый стик — движение, правый — прицел, X — удар, A — уклонение, Y — сдвиг, B — взаимодействие, RB — разлом.<br>Телефон: левый стик, ⚔ удар, ↷ уклонение, ⧗ сдвиг, ✦ разлом; тап по экрану — удар в точку, свайп — уклонение.</div>`;
+  <div class="note">Геймпад: левый стик — движение, правый — прицел, X — удар, A — уклонение, Y — сдвиг, B — взаимодействие, RB — разлом, L3 — взгляд, R3 — Эхо.<br>Телефон: левый стик, ⚔ удар, ↷ уклонение, ⧗ сдвиг, ✦ разлом, ◉ взгляд (удерживать), ◐ Эхо; тап по экрану — удар в точку, свайп — уклонение.</div>`;
   ui.menu({ title: 'Управление', extra: d, items: [{ text: 'Назад', on: back }], back });
 }
 
@@ -325,6 +328,44 @@ function mapMenu() {
     j.append(d);
   }
   wrap.append(j);
+  // доска воспоминаний: квест — воспоминание, которому не хватает кусочков
+  const qs = questBoard(save);
+  if (qs.length) {
+    const qb = document.createElement('div');
+    qb.className = 'journal board';
+    const qh = document.createElement('h2');
+    qh.textContent = 'Нити воспоминаний';
+    qb.append(qh);
+    for (const q of qs) {
+      const d = document.createElement('div');
+      d.className = `q${q.done ? ' done' : ''}${q.lost ? ' lost' : ''}`;
+      const t = document.createElement('b');
+      t.textContent = `${q.done ? '✓ ' : q.lost ? '✕ ' : ''}${q.name}`;
+      d.append(t);
+      for (const st of q.steps) {
+        const r = document.createElement('div');
+        r.className = `st${st.have ? ' have' : ''}`;
+        r.textContent = `${st.have ? '✓' : '?'} ${st.label}`;
+        if (!st.have && st === q.next) {
+          const w = document.createElement('small');
+          w.textContent = ` — искать: ${st.where}`;
+          r.append(w);
+        }
+        d.append(r);
+      }
+      if (q.done && q.result) {
+        const p = document.createElement('p');
+        p.textContent = q.result;
+        d.append(p);
+      } else if (q.lost) {
+        const p = document.createElement('p');
+        p.textContent = 'Нужное воспоминание уже отдано — эту нить не собрать.';
+        d.append(p);
+      }
+      qb.append(d);
+    }
+    wrap.append(qb);
+  }
   ui.menu({ title: 'Глава 1 · Колокол, который не помнит удара', extra: wrap, items: [{ text: 'Закрыть', on: close }], back: close });
 }
 

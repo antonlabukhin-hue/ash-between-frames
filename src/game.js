@@ -430,6 +430,7 @@ export function createGame({ input, audio, ui, storage, save }) {
       g.player.history = [];
       g.player.kx = g.player.ky = 0;
       g.player.falling = 0;
+      g.player.rewind = null;
       resetPlayerCombat(g.player);
       // между кадрами: немного здоровья и полный браслет
       g.player.hp = Math.min(g.player.maxHp, g.player.hp + Math.round(g.player.maxHp * 0.3));
@@ -751,6 +752,10 @@ export function createGame({ input, audio, ui, storage, save }) {
       g.slowT -= dt;
       dt *= 0.35;
     }
+    // Взгляд Смотрителя (удерживать): мир замедляется и гаснет, видно всё, с чем можно что-то сделать
+    g.gaze = !g.cinematic && !ui.mode && !!g.player && !g.player.dead && input.isDown('gaze');
+    g.gazeK = clamp((g.gazeK || 0) + (g.gaze ? dt * 6 : -dt * 8), 0, 1);
+    dt *= 1 - 0.7 * g.gazeK;
     const p = g.player;
     if (!g.cinematic) {
       updatePlayer(g, p, dt);

@@ -150,6 +150,55 @@ export function applyShift(g, target, { free = false, byShade = false } = {}) {
   return true;
 }
 
+// Перемотка после падения: ищем в пройденном пути последнюю точку на надёжной земле (не
+// ближе ~0,3 с до обрыва) и прокручиваем героя к ней. Если в памяти браслета её нет —
+// ближайшая надёжная земля.
+const REWIND_SKIP = 18;
+function startRewind(g, p) {
+  const ok = (x, y) => isStableGround(g, x, y) && !isPit(g, x, y) && !solidPropAt(g, x, y) && !isWall(g, x, y);
+  const h = p.history;
+  let idx = -1;
+  for (let i = h.length - 1 - REWIND_SKIP; i >= 0; i--) {
+    if (ok(h[i].x, h[i].y)) {
+      idx = i;
+      break;
+    }
+  }
+  let path;
+  if (idx >= 0) {
+    path = h.slice(idx).reverse().map(({ x, y }) => ({ x, y }));
+    p.history = h.slice(0, idx + 1);
+  } else {
+    const at = findNearest(ok, p.lastSafe.x, p.lastSafe.y) || g.room.markers['@']?.[0] || p.lastSafe;
+    path = [{ x: p.x, y: p.y }, { x: at.x, y: at.y }];
+  }
+  p.rewind = { path, t: 0, dur: Math.min(0.7, 0.3 + path.length / 400) };
+  p.invuln = 1.4;
+  g.audio.sfx.shift('past');
+  if (!g.flags.rewindHinted) {
+    g.flags.rewindHinted = true;
+    g.hint('Браслет помнит, где ты был, — и отмотал назад. Но память стоит здоровья.', 4);
+  }
+}
+
+function stepRewind(g, p, dt) {
+  const r = p.rewind;
+  r.t += dt;
+  const k = Math.min(1, r.t / r.dur);
+  const pt = r.path[Math.min(r.path.length - 1, Math.floor(k * (r.path.length - 1)))];
+  p.x = pt.x;
+  p.y = pt.y;
+  if (k < 1) return;
+  const end = r.path[r.path.length - 1];
+  p.x = end.x;
+  p.y = end.y;
+  p.lastSafe.x = end.x;
+  p.lastSafe.y = end.y;
+  p.rewind = null;
+  ringFx(g, p.x, p.y - 8, 4, 22, P.teal, 0.4);
+  g.hurtFallen();
+}
+
 // Конец записи: тень встаёт в начало пути и повторяет его в прошлом.
 function releaseEcho(g, p) {
   const rec = p.echoRec;
@@ -327,20 +376,14 @@ export function updatePlayer(g, p, dt) {
   p.dodgeCd = Math.max(0, p.dodgeCd - dt);
   if (tickCharges(p.charges, dt)) g.audio.sfx.flash();
 
-  // падение в пустоту
+  // падение в пустоту → браслет отматывает героя назад по его же пути (Braid, Sands of Time)
+  if (p.rewind) {
+    stepRewind(g, p, dt);
+    return;
+  }
   if (p.falling > 0) {
     p.falling -= dt;
-    if (p.falling <= 0) {
-      // вернуть на ближайшую надёжную землю: точка возврата могла и сама стереться
-      const ok = (x, y) => isStableGround(g, x, y) && !isPit(g, x, y) && !solidPropAt(g, x, y) && !isWall(g, x, y);
-      const at = findNearest(ok, p.lastSafe.x, p.lastSafe.y) || g.room.markers['@']?.[0] || p.lastSafe;
-      p.lastSafe.x = at.x;
-      p.lastSafe.y = at.y;
-      p.x = at.x;
-      p.y = at.y;
-      p.invuln = 1;
-      g.hurtFallen();
-    }
+    if (p.falling <= 0) startRewind(g, p);
     return;
   }
 
