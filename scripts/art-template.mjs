@@ -4,6 +4,8 @@
 //     guide.png     — то же с сеткой тайлов, стенами, пустотами, выходами и объектами;
 //     mask.png      — карта проходимости: белое — пол, серое — стены, чёрное — пустота,
 //                     прозрачное — небо (эти места на рисунке будут вырезаны);
+//     layout.png    — схема в плоских цветах (небо, балюстрада, дорога, стороны, провал):
+//                     лучшая картинка-основа для генераторов в приложениях Gemini и Grok;
 //     spec.json     — размеры, тайл, выходы и объекты.
 // Нужен запущенный dev-сервер (ABF_URL, по умолчанию http://localhost:5310/).
 import { chromium } from '@playwright/test';
@@ -72,6 +74,33 @@ const out = await page.evaluate(async (id) => {
     gx.fillStyle = '#ffd27a';
     gx.fillText(p.kind, f.x * RS, f.y * RS - 2);
   }
+  // схема раскладки: плоские цвета, без мелочей — генератор держит композицию, а не детали
+  const [lay, lx] = mk();
+  let geo = null;
+  if (id === 'road') geo = (await import('/src/art/road32.js')).roadGeometry(r);
+  for (let ty = 0; ty < r.h; ty++) {
+    for (let tx = 0; tx < r.w; tx++) {
+      const t = tile(tx, ty);
+      const wx = tx * TILE + 8;
+      const wy = ty * TILE + 8;
+      let c = '#2a2219';
+      if (t === T.WALL && ty === (r.def.skyRows ?? 0) - 1) c = '#5a6078'; // балюстрада под небом
+      else if (sky(tx, ty)) c = '#0e1430';
+      else if (t === T.WALL) c = '#5a6078';
+      else if (t === T.VOID) c = '#000000';
+      else if (t === T.ROAD) c = geo?.erased(wx, wy) ? '#3a2a34' : '#3d4560';
+      else if (geo?.erased(wx, wy)) c = '#4a1a2a';
+      else if (geo && wx > geo.mid) c = '#1f2a22';
+      else c = '#33281a';
+      lx.fillStyle = c;
+      lx.fillRect(tx * TILE * RS, ty * TILE * RS, TILE * RS, TILE * RS);
+    }
+  }
+  if (geo) {
+    lx.fillStyle = '#c8284a';
+    lx.fillRect(TILE * RS, geo.gap.y0 * RS, (r.pxW - TILE * 2) * RS, 2 * RS);
+    lx.fillRect(TILE * RS, geo.gap.y1 * RS - 2 * RS, (r.pxW - TILE * 2) * RS, 2 * RS);
+  }
   const exits = g.exits.map((e) => ({ to: e.to, ...e.rect }));
   for (const e of exits) {
     gx.fillStyle = 'rgba(80,255,140,0.4)';
@@ -81,6 +110,7 @@ const out = await page.evaluate(async (id) => {
     reference: ref.toDataURL('image/png'),
     guide: guide.toDataURL('image/png'),
     mask: mask.toDataURL('image/png'),
+    layout: lay.toDataURL('image/png'),
     spec: { room: id, title: r.def.title, size: [W, H], world: [r.pxW, r.pxH], rs: RS, tile: TILE * RS, skyRows: r.def.skyRows ?? 0, exits, props },
   };
 }, room);
@@ -88,6 +118,7 @@ const png = (d) => Buffer.from(d.split(',')[1], 'base64');
 writeFileSync(`${dir}/reference.png`, png(out.reference));
 writeFileSync(`${dir}/guide.png`, png(out.guide));
 writeFileSync(`${dir}/mask.png`, png(out.mask));
+writeFileSync(`${dir}/layout.png`, png(out.layout));
 writeFileSync(`${dir}/spec.json`, JSON.stringify(out.spec, null, 2));
 console.log(`${dir}: ${out.spec.size.join('×')} px, тайл ${out.spec.tile} px, объектов ${out.spec.props.length}`);
 await browser.close();
