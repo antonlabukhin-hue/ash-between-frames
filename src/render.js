@@ -16,6 +16,7 @@ import { atlas, hd, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js
 import { blit } from './art/atlas.js';
 import { softMask, glow } from './art/glow.js';
 import { drawWet, drawFog, drawRain, drawLeaves, drawVignette } from './art/atmo.js';
+import { drawArtOver } from './art/roomart.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 
 const OUTLINE = '#05060c';
@@ -32,7 +33,7 @@ function ensureLight() {
 
 export const lightLayerBytes = () => (lightCanvas ? lightCanvas.width * lightCanvas.height * 4 : 0);
 
-const SHADOW_W = { hollow: 12, framer: 8, ringer: 14, shadow: 18, eater: 22 };
+const SHADOW_W = { hollow: 12, framer: 12, ringer: 14, shadow: 18, eater: 22 };
 
 // Видимая область мира с полем (высокие спрайты торчат вверх).
 let view = { x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -999,6 +1000,7 @@ export function renderWorld(g, ctx) {
   ctx.globalAlpha = 1;
   sec('снаряды+частицы');
   for (const f of g.fx) drawFxItem(ctx, f);
+  drawArtOver(g, ctx, cx, cy, W, H);
   room.def.drawOver?.(g, ctx, q);
   ctx.restore();
   sec('эффекты');

@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 const URL = process.env.ABF_URL || 'http://localhost:5310/';
 const SCENES = {
   title: null,
-  road: "g.player.x = 10*16; g.player.y = 7*16+4; g.props.find(p=>p.kind==='sign').tl.phase='past'",
+  road: "g.player.x = 232; g.player.y = 600; g.props.find(p=>p.kind==='sign').tl.phase='past'",
   tornRoad: "g.player.x = 12*16; g.player.y = 9*16; g.room.flickerStart = g.time - 2; g.spawnWave([{kind:'hollow',x:20*16,y:6*16},{kind:'framer',x:18*16,y:11*16}])",
   camp: "g.player.x = 10*16; g.player.y = 7*16; g.props.find(p=>p.kind==='campfire').tl.phase='past'; g.campNpc.sena.hidden=false",
   square: "g.player.x = 240; g.player.y = 300",

@@ -5,6 +5,19 @@ import { upscaleCanvas } from './upscale.js';
 import { RS } from '../core/frame.js';
 import { hd } from './hdflag.js';
 import { paintTilesHd } from './tiles32.js';
+import { artFor } from './roomart.js';
+
+// Холст из рисованного слоя (public/art/rooms): масштаб к плотной сетке без сглаживания.
+function fromArt(img, room) {
+  const c = document.createElement('canvas');
+  c.width = room.w * TILE * RS;
+  c.height = room.h * TILE * RS;
+  c.rs = RS;
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = false;
+  x.drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
 
 export const TILE = 16;
 
@@ -272,6 +285,13 @@ export function drawTile(ctx, room, tx, ty) {
 // Комната печатается в логических пикселях и удваивается Scale2x в 32-битную сетку
 // (холст помечен полем rs — во сколько раз он плотнее мира).
 export function buildRoomCanvas(room) {
+  // гибридный конвейер: если для комнаты есть согласованный рисованный пол — берём его
+  const art = artFor(room.id, 'floor', 'present');
+  if (art) {
+    const past = artFor(room.id, 'floor', 'past');
+    if (past) room.pastCanvas = fromArt(past, room);
+    return fromArt(art, room);
+  }
   // обычная комната в 32-битном режиме печатается сразу в плотной сетке
   if (hd.on && RS > 1 && !room.def?.paint) {
     const out = document.createElement('canvas');

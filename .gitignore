@@ -4,3 +4,8 @@ test-results
 playwright-report
 *.log
 shots
+
+# конвейер рисованного арта: ключи API и черновики генерации
+.env.local
+art/inbox
+art/templates

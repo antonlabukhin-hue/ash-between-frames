@@ -19,21 +19,21 @@ await page.goto(process.env.ABF_URL || 'http://localhost:5310/');
 await page.waitForFunction(() => window.__abf);
 
 const SHOTS = {
-  'road-west': ['road', 'g.player.x = 300; g.player.y = 122; g.player.aim = 0;'],
-  'road-gap': ['road', 'g.player.x = 470; g.player.y = 118; g.player.aim = 0;'],
-  'road-east': ['road', "g.player.x = 780; g.player.y = 124; g.player.dir='side'; g.spawnWave([{kind:'hollow',x:820,y:104},{kind:'framer',x:740,y:150}]);"],
-  'road-fight': ['road', "g.player.x = 250; g.player.y = 124; g.spawnWave([{kind:'hollow',x:300,y:110},{kind:'ringer',x:200,y:150},{kind:'framer',x:330,y:140}]);"],
+  'road-start': ['road', 'g.player.x = 232; g.player.y = 620; g.player.aim = -Math.PI / 2; g.player.dir = "up";'],
+  'road-gap': ['road', 'g.player.x = 240; g.player.y = 400; g.player.aim = -Math.PI / 2; g.player.dir = "up";'],
+  'road-gate': ['road', "g.player.x = 240; g.player.y = 150; g.player.aim = -Math.PI / 2; g.player.dir = 'up'; g.spawnWave([{kind:'hollow',x:210,y:170},{kind:'framer',x:275,y:180}]);"],
+  'road-fight': ['road', "g.player.x = 240; g.player.y = 540; g.player.dir = 'up'; g.spawnWave([{kind:'hollow',x:205,y:500},{kind:'ringer',x:280,y:490},{kind:'framer',x:260,y:560}]);"],
   square: ['square', 'g.player.x = 240; g.player.y = 300; g.player.aim = -Math.PI / 2;'],
   belfry: ['belfry', 'g.player.x = 256; g.player.y = 260; if (g.boss) g.boss.cinematic = false;'],
   tornRoad: ['tornRoad', ''],
   camp: ['camp', "const f=g.props.find(p=>p.kind==='campfire'); if(f){f.tl.phase='past'; f.tl.left=99;}"],
   kitchen: ['kitchen', ''],
-  'sign-target': ['road', "g.player.x=152; g.player.y=112; g.player.aim=-Math.PI/2; g.ui.dialogue && 0;"],
-  'bridge-target': ['road', "g.player.x=500; g.player.y=120; g.player.aim=0;"],
+  'sign-target': ['road', "g.player.x=200; g.player.y=620; g.player.aim=Math.PI; g.player.dir='side'; g.player.flip=true;"],
+  'bridge-target': ['road', "g.player.x=240; g.player.y=372; g.player.aim=-Math.PI/2; g.player.dir='up';"],
   shadowArena: ['shadowArena', "if(!g.enemies.some(e=>e.kind==='shadow')) g.spawnEnemy('shadow', g.player.x, g.player.y-60, {spawn:0});"],
   'square-past': ['square', "g.player.x=240; g.player.y=262; const keep=(o)=>{o.tl.phase='past'; o.tl.left=Infinity;}; keep(g.statue); g.statue.onShift?.(g, g.statue, 'past'); (g.squareGhosts||[]).forEach(v=>v.hidden=false);"],
   ruins: ['ruins', "g.spawnWave([{kind:'eater',x:g.player.x+60,y:g.player.y},{kind:'hollow',x:g.player.x-50,y:g.player.y+10}]); for(let i=0;i<4;i++) g.spawnPickup(['ash','shard','heal','fragment'][i], g.player.x+20+i*12, g.player.y+20, {vx:0,vy:0});"],
-  pickups: ['road', "g.player.x=320; g.player.y=124; for(let i=0;i<5;i++) g.spawnPickup(['ash','shard','heal','fragment','scrap'][i], 340+i*14, 130, {vx:0,vy:0});"],
+  pickups: ['road', "g.player.x=240; g.player.y=560; for(let i=0;i<5;i++) g.spawnPickup(['ash','shard','heal','fragment','scrap'][i], 210+i*14, 530, {vx:0,vy:0});"],
 };
 for (const [name, [room, setup]] of Object.entries(SHOTS)) {
   if (only && !only.includes(name)) continue;

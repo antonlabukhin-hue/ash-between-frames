@@ -23,7 +23,7 @@ export const ENEMY_DEFS = {
   },
   framer: {
     name: 'Кадровик',
-    hp: 22, r: 4, ash: 2,
+    hp: 22, r: 4, ash: 2, hitY: 18,
     timeline: { hold: 7, cost: 1, switchTime: 0.7 },
     stats: {
       past: { speed: 34, dmgMul: 1, comboMul: 1, phased: false, windup: 0.45, dmg: 5 },

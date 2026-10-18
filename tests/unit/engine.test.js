@@ -136,3 +136,20 @@ describe('Пикселизация HD-кадров', () => {
     for (const i of [0, 1, 2, 8, 9, 10]) expect(d[i] % 8).toBe(0);
   });
 });
+
+describe('Рисованные слои комнат', () => {
+  it('манифест: берутся только известные слои, фазы и картинки', async () => {
+    const { parseRoomArt } = await import('../../src/art/roomart.js');
+    const r = parseRoomArt({
+      version: 1,
+      rooms: {
+        road: { floor: { present: 'road/floor-present.png', past: 'road/floor-past.webp' }, over: { present: 'road/over.png', future: 'x.png' }, junk: { present: 'a.png' } },
+        bad: { floor: { present: 'evil.js' } },
+        none: null,
+      },
+    });
+    expect(r).toEqual({ road: { floor: { present: 'road/floor-present.png', past: 'road/floor-past.webp' }, over: { present: 'road/over.png' } } });
+    expect(parseRoomArt(null)).toEqual({});
+    expect(parseRoomArt({ rooms: 'нет' })).toEqual({});
+  });
+});

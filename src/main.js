@@ -15,6 +15,8 @@ import { createUI } from './ui/overlay.js';
 import { createGame } from './game.js';
 import { loadSave, hasProgress, parseSave } from './save/save.js';
 import { renderWorld } from './render.js';
+import { loadRoomArt } from './art/roomart.js';
+import { buildRoomCanvas } from './art/tiles.js';
 import { drawTitle } from './scenes/title.js';
 import { createTouch } from './mobile/touch.js';
 import { ROOMS, CHAPTER1 } from './scenes/rooms.js';
@@ -436,6 +438,10 @@ titleMenu();
 requestAnimationFrame(frame);
 // ручные PNG-спрайты (public/sprites), если есть — заменяют кодовые кадры
 loadSpriteOverrides(import.meta.env.BASE_URL);
+// рисованные слои комнат (public/art/rooms), если есть — заменяют кодовый пол
+loadRoomArt(import.meta.env.BASE_URL, () => {
+  if (game.room) game.roomCanvas = buildRoomCanvas(game.room);
+});
 if (save.settings.perfOverlay || new URLSearchParams(location.search).has('debug')) toggleOverlay(true);
 
 if (__DEBUG__) {
