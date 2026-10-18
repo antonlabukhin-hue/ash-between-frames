@@ -1031,6 +1031,8 @@ export function renderWorld(g, ctx) {
   // а имя и действие пишутся табличкой над ним (HTML-слой, src/ui/overlay.js)
   if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
   g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
+  // реплики призраков в сценах прошлого
+  g.ui.setBarks?.(!g.ui.mode ? (g.barkList || []).map((b) => ({ x: (b.x - cx) / W, y: (b.y - cy) / H, who: b.who, text: b.text })) : []);
   for (const t of g.texts) {
     const k = Math.min(1, (t.life / t.max) * 2);
     ctx.globalAlpha = k;

@@ -17,13 +17,14 @@ import { P } from './art/palette.js';
 import { ROOMS } from './scenes/rooms.js';
 import { createParticlePool, clearParticles, resizePool } from './world/particles.js';
 import { PROFILES } from './core/quality.js';
+import { MEMORIES, addMemory, hasMemory, memoryList, createScene, stepScene } from './story/memories.js';
 
 export function createGame({ input, audio, ui, storage, save }) {
   const g = {
     input, audio, ui, storage, save, flags: save.flags,
     scene: 'title', time: 0, room: null, roomCanvas: null,
     player: null, enemies: [], props: [], projectiles: [], pickups: [], fx: [], texts: [], voidZones: [], drawables: [],
-    exits: [], lights: [], cam: { x: 0, y: 0, shakeA: 0, shakeT: 0 },
+    exits: [], lights: [], scenes: [], barkList: [], cam: { x: 0, y: 0, shakeA: 0, shakeT: 0 },
     cinematic: false, inputLocked: false, paused: false, hitstopT: 0, slowT: 0,
     waiters: [], scriptToken: 0, bossBar: null, interactTarget: null, freeShift: false, glitch: 0.015,
     transitioning: false, frame: 0,
@@ -61,6 +62,62 @@ export function createGame({ input, audio, ui, storage, save }) {
         /* нет вибрации */
       }
     }
+  };
+
+  // ── воспоминания (docs/TIME_DESIGN.md, П5) ───────────────────────────
+  g.remember = (id) => {
+    if (!addMemory(save, id)) return false;
+    const m = MEMORIES[id];
+    ui.card('Воспоминание · в дневнике (Tab)', m.name, m.text, 4.6);
+    audio.sfx.shift('past');
+    g.persist();
+    return true;
+  };
+  g.hasMemory = (id) => hasMemory(save, id);
+
+  // Сцена прошлого: призраки говорят репликами над головой, пока cond(g) истинно.
+  // Досмотрел — воспоминание. Ушёл или прошлое погасло — сцена рассыпается и начнётся снова.
+  // lines: [{ at: объект|{x,y}|() => {x,y}, who, text, dur }]
+  g.pastScene = ({ memory, cond, lines, onDone }) => {
+    if (memory && (hasMemory(save, memory) || save.spentMemories?.includes(memory))) return null;
+    const sc = { ...createScene(lines), memory, cond, onDone, tok: g.scriptToken };
+    g.scenes.push(sc);
+    return sc;
+  };
+  g.barks = [];
+  const anchorOf = (at) => (typeof at === 'function' ? at() : at);
+  function updateScenes(dt) {
+    for (const sc of g.scenes) {
+      if (sc.done || sc.tok !== g.scriptToken) continue;
+      const ev = stepScene(sc, !g.cinematic && !g.paused && !!sc.cond(g), dt);
+      if (ev === 'line') {
+        const l = sc.lines[sc.i];
+        g.barks = [{ at: l.at, who: l.who, text: l.text, sc }];
+      } else if (ev === 'reset') {
+        g.barks = g.barks.filter((b) => b.sc !== sc);
+        const p = g.player;
+        if (p) addText(g, p.x, p.y - 30, 'сцена рассеялась', P.ash4);
+      } else if (ev === 'done') {
+        g.barks = g.barks.filter((b) => b.sc !== sc);
+        if (sc.memory) g.remember(sc.memory);
+        sc.onDone?.(g);
+      }
+    }
+    g.barkList = g.barks.map((b) => ({ ...anchorOf(b.at), who: b.who, text: b.text }));
+  }
+  g.updateScenes = updateScenes;
+
+  // Предъявить воспоминание: выбор из дневника; reactions[id] — что делает собеседник.
+  // Возвращает id показанного или null.
+  g.present = async (prompt, reactions = {}, fallback = 'Это ни о чём мне не говорит.', who = '') => {
+    const list = memoryList(save);
+    if (!list.length) return null;
+    const i = await g.choose(prompt, [...list.map((m) => ({ text: m.name, sub: m.place })), { text: 'Ничего не показывать' }]);
+    const m = list[i];
+    if (!m) return null;
+    if (reactions[m.id]) await reactions[m.id](g);
+    else await g.say([{ who, text: fallback }]);
+    return m.id;
   };
 
   g.giveFragment = (id) => {
@@ -195,6 +252,9 @@ export function createGame({ input, audio, ui, storage, save }) {
     g.fx = [];
     clearParticles(g.particles);
     g.texts = [];
+    g.scenes = [];
+    g.barks = [];
+    g.barkList = [];
     g.voidZones = [];
     g.drawables = [];
     g.exits = [];
@@ -371,9 +431,7 @@ export function createGame({ input, audio, ui, storage, save }) {
         else if (pk.kind === 'fragment') g.giveFragment(pk.id);
         else if (pk.kind === 'scrap') {
           g.flags.nameScrap = true;
-          ui.card('Находка', 'Обрывок имени', 'Клочок, на котором чьё-то имя ещё держится. Пригодится, чтобы кого-то не стереть.', 3.6);
-          audio.sfx.shard();
-          g.persist();
+          g.remember('nameScrap');
         }
         pk.onTake?.(g);
       }
@@ -516,6 +574,7 @@ export function createGame({ input, audio, ui, storage, save }) {
       p.moving = false;
     }
     updateFx(g, dt);
+    updateScenes(dt);
     g.lights = collectLights(g);
     // интерактив
     const found = !g.cinematic && p && !p.dead ? findInteract() : { target: null, near: null };
