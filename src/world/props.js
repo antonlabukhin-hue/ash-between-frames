@@ -7,6 +7,8 @@ import { createTimeline, PAST, PRESENT } from '../timeline/timeline.js';
 import { hash2 } from '../core/math.js';
 import { drawMemoryNodeHd, drawWeightPlateHd, drawKettleHd, drawHatchHd, drawHandLanternHd, drawChestHd, drawRubbleHd, drawSignHd, drawMemoryStoneHd, drawLanternHd, drawCampfireHd, drawPillarHd, drawCandlesHd, drawStoveHd, drawTableHd, drawWindowHd, drawPortraitsHd, drawShelfHd, drawBoxHd, drawGateHd } from '../art/props32.js';
 import { drawMara64, drawGhost64 } from '../art/npcs64.js';
+import { drawTik64, drawDog64, drawBrassBoy64 } from '../art/chars64.js';
+import { ART64 } from '../art/style64.js';
 import { drawTik32, drawMara32, drawDog32, drawGhost32, drawBrassBoy32, drawVillager32, drawStillOne32 } from '../art/npcs32.js';
 import { drawTik, drawMara, drawDog } from '../art/sprites.js';
 import { drawLampHd, drawBannerHd, drawTreeHd, drawDeadTreeHd, drawGraveHd, drawGateTowerHd } from '../art/road32.js';
@@ -594,14 +596,13 @@ for (const k of Object.keys(HD)) PROP_KINDS[k].drawHd = HD[k];
 // NPC и фигуры-воспоминания: 16-битный маляр → 32-битный
 const FIGURE_HD = new Map([[drawTik, drawTik32], [drawMara, drawMara32], [drawDog, drawDog32], [drawGhost, drawGhost32], [drawBrassBoy, drawBrassBoy32]]);
 export const registerFigureHd = (fn, hdFn) => FIGURE_HD.set(fn, hdFn);
-// вариант «64 бита» на согласование: ?npc=64 — новые Мара и призраки (src/art/npcs64.js)
-try {
-  if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('npc') === '64') {
-    FIGURE_HD.set(drawMara, drawMara64);
-    FIGURE_HD.set(drawGhost, drawGhost64);
-  }
-} catch {
-  /* без окна (тесты) — прежние кадры */
+// вариант «64 бита» (src/art/style64.js): новые NPC
+if (ART64) {
+  FIGURE_HD.set(drawMara, drawMara64);
+  FIGURE_HD.set(drawGhost, drawGhost64);
+  FIGURE_HD.set(drawTik, drawTik64);
+  FIGURE_HD.set(drawDog, drawDog64);
+  FIGURE_HD.set(drawBrassBoy, drawBrassBoy64);
 }
 const figureHd = (ctx, p, g) => (FIGURE_HD.get(p.drawFn) || p.drawFn)(ctx, p.x, p.y, { t: g.time + (p.id % 7), ...(p.drawOpts || {}) });
 PROP_KINDS.npc.drawHd = figureHd;

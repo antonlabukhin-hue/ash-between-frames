@@ -7,6 +7,8 @@ import { RS } from '../core/frame.js';
 import { drawHero32 } from './hero32.js';
 import { drawHollow32, drawFramer32, drawRinger32, drawEater32 } from './enemies32.js';
 import { drawShadow32, drawMel32 } from './npcs32.js';
+import { ART64 } from './style64.js';
+import { drawHollow64, drawFramer64, drawRinger64, drawEater64, drawShadow64, drawMel64 } from './chars64.js';
 
 import { hd } from './hdflag.js';
 
@@ -68,10 +70,10 @@ export function drawHeroC(ctx, x, y, o, variant = null) {
 
 // ── враги ─────────────────────────────────────────────────────────────
 const ENEMY = {
-  hollow: { w: 24, h: 34, ax: 12, ay: 30, fn: drawHollow, hd: drawHollow32, label: (q) => (q.lunge ? 'lunge' : q.windup ? 'windup' : `walk${Math.round(q.walk * 4)}`), q: (o) => ({ walk: Math.floor((o.walk || 0) * 4) / 4, t: (Math.floor((o.t || 0) * 12) % 4) / 12, windup: o.windup, lunge: o.lunge }) },
-  framer: { w: 30, h: 40, ax: 14, ay: 37, fn: drawFramer, hd: drawFramer32, label: (q) => `f${Math.round(q.t * 10)}${q.look ? `l${q.look}` : ''}`, q: (o) => ({ t: (Math.floor((o.t || 0) * 10) & 1) / 10, look: o.look || 0 }) },
-  ringer: { w: 22, h: 30, ax: 11, ay: 27, fn: drawRinger, hd: drawRinger32, label: (q) => (q.charge ? `charge${Math.round((q.t - 0.05) * 30)}` : 'idle'), q: (o) => ({ t: o.charge ? (Math.floor((o.t || 0) * 30) & 1) / 30 + 0.05 : 0, charge: o.charge }) },
-  eater: { w: 28, h: 26, ax: 14, ay: 23, fn: drawEater, hd: drawEater32, label: (q) => (q.windup ? 'bite' : `f${Math.round(q.t * 8)}`), q: (o) => ({ t: (Math.floor((o.t || 0) * 8) % 10) / 8, windup: o.windup }) },
+  hollow: { w: 24, h: 34, ax: 12, ay: 30, fn: drawHollow, hd: ART64 ? drawHollow64 : drawHollow32, label: (q) => (q.lunge ? 'lunge' : q.windup ? 'windup' : `walk${Math.round(q.walk * 4)}`), q: (o) => ({ walk: Math.floor((o.walk || 0) * 4) / 4, t: (Math.floor((o.t || 0) * 12) % 4) / 12, windup: o.windup, lunge: o.lunge }) },
+  framer: { w: 30, h: 40, ax: 14, ay: 37, fn: drawFramer, hd: ART64 ? drawFramer64 : drawFramer32, label: (q) => `f${Math.round(q.t * 10)}${q.look ? `l${q.look}` : ''}`, q: (o) => ({ t: (Math.floor((o.t || 0) * 10) & 1) / 10, look: o.look || 0 }) },
+  ringer: { w: 22, h: 30, ax: 11, ay: 27, fn: drawRinger, hd: ART64 ? drawRinger64 : drawRinger32, label: (q) => (q.charge ? `charge${Math.round((q.t - 0.05) * 30)}` : 'idle'), q: (o) => ({ t: o.charge ? (Math.floor((o.t || 0) * 30) & 1) / 30 + 0.05 : 0, charge: o.charge }) },
+  eater: { w: 28, h: 26, ax: 14, ay: 23, fn: drawEater, hd: ART64 ? drawEater64 : drawEater32, label: (q) => (q.windup ? 'bite' : `f${Math.round(q.t * 8)}`), q: (o) => ({ t: (Math.floor((o.t || 0) * 8) % 10) / 8, windup: o.windup }) },
 };
 
 export function drawEnemyC(ctx, kind, x, y, o, variant = null) {
@@ -92,7 +94,7 @@ function drawShadowC(ctx, x, y, o, variant) {
   const key = `shadow|${o.phase}|${f}|${o.shield ? 1 : 0}|${o.layer || ''}`;
   const args = { phase: o.phase, t, shield: o.shield, layer: o.layer, noShadow: true };
   put(ctx, key, 44, 46, 22, 42, (c, ax, ay) => drawShadow(c, ax, ay, args), x, y, variant, !o.layer, enemyOverrideKey('shadow', o.phase, `f${f}${o.layer ? 'front' : ''}`),
-    false, (c, ax, ay) => drawShadow32(c, ax, ay, args));
+    false, (c, ax, ay) => (ART64 ? drawShadow64 : drawShadow32)(c, ax, ay, args));
 }
 
 export function drawMelC(ctx, x, y, o, variant = null) {
@@ -100,7 +102,7 @@ export function drawMelC(ctx, x, y, o, variant = null) {
   const key = `mel|${o.version || 'w'}|${f}|${o.windup ? 1 : 0}`;
   const args = { t: f / 4, version: o.version, windup: o.windup, noShadow: true };
   put(ctx, key, 76, 84, 38, 80, (c, ax, ay) => drawMel(c, ax, ay, args), x, y, variant, true, `mel/${o.version || 'w'}/f${f - (f % 4)}`,
-    false, (c, ax, ay) => drawMel32(c, ax, ay, args));
+    false, (c, ax, ay) => (ART64 ? drawMel64 : drawMel32)(c, ax, ay, args));
 }
 
 export const atlasStats = () => ({ frames: atlas.count(), pages: atlas.pages.length, bytes: atlas.memory(), baked: atlas.stats.baked });

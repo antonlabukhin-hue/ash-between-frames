@@ -17,12 +17,14 @@ import { atlas } from '../art/spritecache.js';
 import { blit } from '../art/atlas.js';
 import { line, px } from '../art/sprites.js';
 import { registerFigureHd } from '../world/props.js';
+import { ART64 } from '../art/style64.js';
+import { drawVillager64, drawStillOne64 } from '../art/chars64.js';
 import { drawVillager32, drawStillOne32 } from '../art/npcs32.js';
 import { paintRoadBase, paintRoadHd, drawRoadParallax, drawRoadOver } from '../art/road32.js';
 import { hasArt } from '../art/roomart.js';
 
-registerFigureHd(drawVillager, drawVillager32);
-registerFigureHd(drawStillOne, drawStillOne32);
+registerFigureHd(drawVillager, ART64 ? drawVillager64 : drawVillager32);
+registerFigureHd(drawStillOne, ART64 ? drawStillOne64 : drawStillOne32);
 
 const REN = (text) => ({ who: 'Рен', text, portrait: 'ren', style: 'white' });
 const TIK = (text) => ({ who: 'Тик', text, portrait: 'tik' });

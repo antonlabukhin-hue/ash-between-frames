@@ -78,11 +78,14 @@ export function drawGhost64(ctx, x, y, o = {}) {
   const fill = (x0, y0, x1, y1) => lin(ctx, x0, y0, x1, y1, [[0, C.hi], [0.35, C.base], [0.75, C.mid], [1, C.lo]]);
   if (o.dress) {
     // Сена: длинная юбка, шаль на плечах, в руке — фонарь
-    poly(ctx, [x - 2.6, y - 12, x + 2.6, y - 12, x + 5.4, y - 0.6, x + 2, y - 0.2, x - 2, y - 0.2, x - 5.4, y - 0.6], fill(x - 5, y - 12, x + 5, y));
+    const skirt = [x - 2.6, y - 12, x + 2.6, y - 12, x + 5.4, y - 0.6, x + 2, y - 0.2, x - 2, y - 0.2, x - 5.4, y - 0.6];
+    poly(ctx, skirt, lin(ctx, x - 5, y - 12, x + 5, y, [[0, C.base], [0.45, C.mid], [1, C.lo]]));
+    path(ctx, [...skirt, skirt[0], skirt[1]], C.lo, 0.35); // тёмная кромка: силуэт читается на светлом
     for (const [a, b] of [[-1.2, -3], [1.2, 2.8]]) path(ctx, [x + a, y - 11, x + b, y - 1], C.lo, 0.35);
     const top = y - 19 + sway * 0.3;
     poly(ctx, [x - 3, top, x + 3, top, x + 2.6, y - 12, x - 2.6, y - 12], fill(x - 3, top, x + 3, y - 12));
     poly(ctx, [x - 4.2, top + 0.4, x + 4.2, top + 0.4, x + 3.4, top + 3.4, x, top + 6, x - 3.4, top + 3.4], C.lo);
+    path(ctx, [x - 3.4, top + 3.4, x, top + 6, x + 3.4, top + 3.4], '#2a1606', 0.3);
     for (let i = -3; i <= 3; i += 1.5) path(ctx, [x + i, top + 3.6 - Math.abs(i) * 0.4, x + i * 0.9, top + 5.2 - Math.abs(i) * 0.6], C.mid, 0.35); // бахрома шали
     path(ctx, [x - 3.6, top + 1, x - 4.2, top + 5, x - 3.4, y - 11], C.base, 1.3);
     // фонарь в правой руке
