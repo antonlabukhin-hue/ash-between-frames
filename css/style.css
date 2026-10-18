@@ -731,3 +731,13 @@ body { font-family: var(--font-body); font-weight: 500; }
 .gtag.use { color: #ffe9b0; }
 .gtag.time { color: var(--amber-hi); }
 .gtag.hidden { display: none; }
+
+/* доска воспоминаний в дневнике */
+.journal.board .q { padding: calc(var(--px) * 1.5) 0; border-top: 1px solid rgba(176, 138, 58, 0.25); }
+.journal.board .q b { font-family: var(--font-title); color: var(--amber-hi); }
+.journal.board .q.done b { color: var(--teal); }
+.journal.board .q.lost b { color: var(--ash); text-decoration: line-through; }
+.journal.board .st { color: var(--ash); font-size: 0.92em; }
+.journal.board .st.have { color: var(--milk); }
+.journal.board .st small { color: var(--amber); }
+.journal.board .q p { margin: 0.2em 0 0; color: var(--milk); font-size: 0.9em; font-style: italic; }
