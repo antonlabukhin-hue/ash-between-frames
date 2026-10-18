@@ -5,7 +5,8 @@ import { createCharges, tickCharges, spend, canSpend, hasten, gain } from '../ti
 import { createHeat, heatCost, addHeat, notePaid, cancelRefund, isOverheated } from '../timeline/heat.js';
 import { shiftTimeline, shiftCost, channelTime, createChannel, tickChannel, isShifted, PAST } from '../timeline/timeline.js';
 import { moveBox } from '../world/room.js';
-import { heroBlocked, isPit } from '../world/world.js';
+import { heroBlocked, isPit, isStableGround, isWall, solidPropAt } from '../world/world.js';
+import { findNearest } from '../world/safe.js';
 import { enemyMods, isPhased, stats } from '../enemies/enemies.js';
 import { projectileAnchor } from '../combat/projectiles.js';
 import { burst, ringFx, slashFx, addText, boltFx } from '../world/fx.js';
@@ -330,8 +331,13 @@ export function updatePlayer(g, p, dt) {
   if (p.falling > 0) {
     p.falling -= dt;
     if (p.falling <= 0) {
-      p.x = p.lastSafe.x;
-      p.y = p.lastSafe.y;
+      // вернуть на ближайшую надёжную землю: точка возврата могла и сама стереться
+      const ok = (x, y) => isStableGround(g, x, y) && !isPit(g, x, y) && !solidPropAt(g, x, y) && !isWall(g, x, y);
+      const at = findNearest(ok, p.lastSafe.x, p.lastSafe.y) || g.room.markers['@']?.[0] || p.lastSafe;
+      p.lastSafe.x = at.x;
+      p.lastSafe.y = at.y;
+      p.x = at.x;
+      p.y = at.y;
       p.invuln = 1;
       g.hurtFallen();
     }
@@ -532,7 +538,7 @@ export function updatePlayer(g, p, dt) {
     p.channel = null;
     g.audio.sfx.fall();
     burst(g, p.x, p.y, [P.blue, P.ink, P.crimson], 10, 30);
-  } else if (!isPit(g, p.x - 6, p.y) && !isPit(g, p.x + 6, p.y) && !isPit(g, p.x, p.y - 5) && !isPit(g, p.x, p.y + 5)) {
+  } else if (isStableGround(g, p.x, p.y) && !isPit(g, p.x - 6, p.y) && !isPit(g, p.x + 6, p.y) && !isPit(g, p.x, p.y - 5) && !isPit(g, p.x, p.y + 5)) {
     p.lastSafe.x = p.x;
     p.lastSafe.y = p.y;
   }
