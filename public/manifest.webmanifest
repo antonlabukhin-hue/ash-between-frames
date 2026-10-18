@@ -1,0 +1,13 @@
+{
+  "name": "Пепел между кадрами",
+  "short_name": "Пепел",
+  "description": "Пиксельная action-RPG о мире, который забывает самого себя.",
+  "lang": "ru",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#030308",
+  "theme_color": "#07080f",
+  "start_url": ".",
+  "scope": ".",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -49,6 +49,8 @@ export function createRenderer(canvas, stage) {
     stage.style.height = `${chh}px`;
     // размер HTML-интерфейса — от высоты сцены, а не от логического кадра
     stage.style.setProperty('--px', `${chh / 224}px`);
+    // масштаб сенсорных кнопок от ширины сцены (телефон — меньше, планшет — крупнее)
+    stage.style.setProperty('--ui-scale', `${Math.max(0.82, Math.min(1.18, cw / 760))}`);
     const rect = stage.getBoundingClientRect();
     r.ox = rect.left;
     r.oy = rect.top;
