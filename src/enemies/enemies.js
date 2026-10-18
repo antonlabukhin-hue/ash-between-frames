@@ -163,8 +163,9 @@ function move(g, e, vx, vy, dt, flying = false) {
   return r;
 }
 
+// Цель врага: герой или Эхо, если тень ближе (П4 — «отвлечь врага»).
 const toHero = (g, e) => {
-  const h = g.player;
+  const h = e.decoy || g.player;
   return { dx: h.x - e.x, dy: h.y - e.y, d: dist(e.x, e.y, h.x, h.y) };
 };
 
@@ -196,7 +197,10 @@ function aiHollow(g, e, dt) {
     if (!e.hitDone) {
       const hx = e.x + Math.cos(e.lock) * 8;
       const hy = e.y + Math.sin(e.lock) * 6;
-      if (dist(hx, hy, g.player.x, g.player.y) < 11) {
+      if (e.decoy && dist(hx, hy, e.decoy.x, e.decoy.y) < 11) {
+        g.hitShade?.();
+        e.hitDone = true;
+      } else if (dist(hx, hy, g.player.x, g.player.y) < 11) {
         g.hurtPlayer(s.dmg, e.x, e.y, 'melee');
         e.hitDone = true;
       }
@@ -458,6 +462,8 @@ export function updateEnemies(g, dt) {
       else continue;
     }
     if (g.player.dead) continue;
+    const sh = g.echoShade;
+    e.decoy = sh && !sh.done && dist(e.x, e.y, sh.x, sh.y) < Math.min(110, dist(e.x, e.y, g.player.x, g.player.y)) ? sh : null;
     // дальние враги (за экраном от края кадра) думают раз в 4 кадра с накопленным временем
     const far = Math.abs(e.x - (g.cam.x + W / 2)) > W || Math.abs(e.y - (g.cam.y + H / 2)) > H;
     e.aiAcc = (e.aiAcc || 0) + dt;

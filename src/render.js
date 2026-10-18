@@ -20,6 +20,7 @@ import { drawArtOver } from './art/roomart.js';
 import { heatCost } from './timeline/heat.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 import { threadList, chainOf } from './timeline/threads.js';
+import { shadeFade, recordLeft, ECHO_TIME } from './player/echo.js';
 
 const OUTLINE = '#05060c';
 let lightCanvas = null;
@@ -546,6 +547,18 @@ function paintSlash(ctx, x, y, angle, span, radius, c) {
   }
 }
 
+// Запись Эха: бирюзовый след пути и убывающее кольцо у ног героя.
+function drawEchoRec(g, ctx, p) {
+  const rec = p.echoRec;
+  ctx.globalAlpha = 0.7;
+  rec.frames.forEach((f, i) => {
+    if (i % 4 === 0) px(ctx, Math.round(f.x), Math.round(f.y), 1, 1, P.teal);
+  });
+  ctx.globalAlpha = 1;
+  const left = recordLeft(rec) / ECHO_TIME;
+  ring(ctx, p.x, p.y, 4 + 10 * left, P.tealHi, 0.5, 1);
+}
+
 // ── нити причин (П3) ─────────────────────────────────────────────────────
 // Пока герой целится сдвигом, видна цепочка цели: тонкая янтарная нить с провисом; натянутая
 // (причина работает) — яркая, с бегущими бусинами. Без прицела — только натянутые, бледно.
@@ -558,10 +571,12 @@ function drawThreads(g, ctx, p) {
   const chain = target ? new Set(chainOf(g.props, target).map(key)) : null;
   for (const t of all) {
     if (t.from.hidden || t.to.hidden) continue;
-    const hot = chain?.has(key(t));
-    if (!hot && !t.on) continue;
     const [x0, y0] = threadAnchor(t.from);
     const [x1, y1] = threadAnchor(t.to);
+    // рядом с героем нить видна и без прицела
+    const near = Math.min(Math.hypot(p.x - x0, p.y - y0), Math.hypot(p.x - x1, p.y - y1)) < 80;
+    const hot = chain?.has(key(t)) || near;
+    if (!hot && !t.on) continue;
     const len = Math.hypot(x1 - x0, y1 - y0);
     const sag = Math.min(18, len * 0.12);
     const n = Math.max(6, Math.floor(len / 3));
@@ -1085,6 +1100,7 @@ export function renderWorld(g, ctx) {
   // как в Diablo: на земле под объектом маркеров нет — светится сам объект,
   // а имя и действие пишутся табличкой над ним (HTML-слой, src/ui/overlay.js)
   if (p && !p.dead && !g.cinematic) drawThreads(g, ctx, p);
+  if (p?.echoRec) drawEchoRec(g, ctx, p);
   if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
   g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
   // реплики призраков в сценах прошлого
@@ -1147,6 +1163,19 @@ function reflectFigures(g) {
   const out = [];
   const p = g.player;
   if (p && !p.dead && !(p.falling > 0)) out.push({ y: p.y, draw: (c) => drawHeroC(c, p.x, p.y, heroOpts(g, p)) });
+  // Эхо: полупрозрачная бирюзовая тень героя
+  const sh = g.echoShade;
+  if (sh && !sh.done) {
+    const ps = sh.pose;
+    out.push({
+      y: sh.y,
+      draw: (c) => {
+        c.globalAlpha = 0.5 * shadeFade(sh) + 0.15;
+        drawHeroC(c, sh.x, sh.y, { dir: ps.dir, flip: ps.flip, t: g.time, walk: (sh.t * 2.2) % 1, moving: !sh.linger, aim: ps.aim, charges: 0 }, P.teal);
+        c.globalAlpha = 1;
+      },
+    });
+  }
   for (const e of g.enemies) {
     if (e.spawn > 0 || e.dead || e.draw || e.kind === 'echo' || !visible(e.x, e.y, 48)) continue;
     if (e.kind === 'framer' && isPhased(g, e)) continue;

@@ -238,6 +238,29 @@ export function drawHatchHd(ctx, p, g) {
   }
 }
 
+// ── плита-противовес (плоская): нажата — фаза «прошлое», утоплена и светится янтарём;
+// p.echoOnly — плита есть только в прошлом: пока её не держит Эхо, видна призрачным контуром ──
+export function drawWeightPlateHd(ctx, p, g) {
+  const down = ph(p) === PAST;
+  const x = p.x;
+  const y = p.y;
+  const w = p.w;
+  const h = p.h;
+  const ghost = p.echoOnly && !down;
+  if (ghost) {
+    const a = 0.35 + Math.sin((g.time || 0) * 3) * 0.1;
+    path(ctx, [x + 1, y + 1, x + w - 1, y + 1, x + w - 1, y + h - 1, x + 1, y + h - 1, x + 1, y + 1], `rgba(111,242,224,${a})`, 0.8);
+    path(ctx, [x + w / 2, y + 4, x + w / 2 + 3, y + h / 2, x + w / 2, y + h - 4, x + w / 2 - 3, y + h / 2, x + w / 2, y + 4], `rgba(111,242,224,${a})`, 0.6);
+    return;
+  }
+  const d = down ? 1.5 : 0;
+  rect(ctx, x, y, w, h, STONE[0]);
+  rect(ctx, x + 1, y + 1 + d, w - 2, h - 2 - d, lin(ctx, 0, y, 0, y + h, [[0, STONE[3]], [1, STONE[1]]]));
+  const c = down ? '#ffd27a' : STONE[4];
+  path(ctx, [x + w / 2, y + 4 + d, x + w / 2 + 3, y + h / 2 + d, x + w / 2, y + h - 4, x + w / 2 - 3, y + h / 2 + d, x + w / 2, y + 4 + d], c, 0.7);
+  if (down) rect(ctx, x + 2, y + h - 2, w - 4, 1, 'rgba(255,190,110,0.5)');
+}
+
 // ── костёр ────────────────────────────────────────────────────────────
 export function drawCampfireHd(ctx, p, g) {
   const past = ph(p) === PAST;
