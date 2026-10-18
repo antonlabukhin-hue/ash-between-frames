@@ -5,6 +5,7 @@ import { upscaleCanvas } from '../art/upscale.js';
 import { drawHero32 } from '../art/hero32.js';
 import { crispen } from '../art/hd.js';
 import { glow, vignette, fogTexture, FOG_W, FOG_H } from '../art/glow.js';
+import { drawKeyArt } from './keyart.js';
 import { P } from '../art/palette.js';
 import { px, line, ring } from '../art/sprites.js';
 import { mulberry32, hash2, clamp } from '../core/math.js';
@@ -331,6 +332,8 @@ function banner(ctx, x, y, t) {
 
 let heroBuf = null;
 export function drawTitle(ctx, t) {
+  // ключевой арт (прошлое ↔ настоящее) с живыми слоями; пока не загружен — кодовый титул
+  if (drawKeyArt(ctx, t, W, H, import.meta.env.BASE_URL)) return;
   if (!bg || bg.lw !== W || bg.lh !== H) buildBackground();
   ctx.drawImage(bg, 0, 0, W, H);
   ctx.save();
