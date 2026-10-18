@@ -33,30 +33,26 @@ function npc(g, drawFn, x, y, o = {}) {
 }
 
 // Стирающиеся плиты: две группы по очереди уходят в пустоту.
-function makeFlicker(room, period = 9, bands = 3) {
-  const slot = period / bands;
-  const phaseAt = (g, tx, ty) => {
-    if (room.flickerStart == null || g.time < room.flickerStart) return 'solid';
-    const grp = Math.floor(tx / 3) % bands;
-    const t = (g.time - room.flickerStart) % period;
-    const start = grp * slot;
-    if (t >= start && t < start + slot) return 'void';
-    const before = (start - t + period) % period;
-    if (before <= 1.2) return 'warn';
-    return 'solid';
+// Эрозия (Разорванная дорога): стирание идёт от x1 к x0 по столбцам и не возвращается —
+// плиты держат только острова памяти. step — секунд на столбец.
+function makeErosion(room, { x0, x1, step = 0.25, warn = 1.2 }) {
+  const at = (tx) => room.flickerStart + Math.max(0, x1 - tx) * step;
+  const phaseAt = (g, tx) => {
+    if (room.flickerStart == null || tx < x0 || tx > x1) return 'solid';
+    const t = g.time - at(tx);
+    if (t >= 0) return 'void';
+    return t > -warn ? 'warn' : 'solid';
   };
-  room.flickerOn = (g, tx, ty) => phaseAt(g, tx, ty) === 'void';
+  room.flickerOn = (g, tx) => phaseAt(g, tx) === 'void';
   room.flickerState = (g, tx, ty) => {
-    const s = phaseAt(g, tx, ty);
-    if (s === 'void' && !room.flickerOn(g, tx, ty)) return 'solid';
-    // камень памяти удерживает плиты рядом — не показываем пустоту
-    if (s !== 'solid') {
-      const cx = tx * 16 + 8;
-      const cy = ty * 16 + 8;
-      for (const p of g.props) {
-        const r = p.def.protect?.[p.tl.phase];
-        if (r && dist(cx, cy, p.x, p.y) < r) return 'solid';
-      }
+    const s = phaseAt(g, tx);
+    if (s === 'solid') return s;
+    const cx = tx * 16 + 8;
+    const cy = ty * 16 + 8;
+    if (g.memIslands?.length && inIslands(g.memIslands, cx, cy)) return 'solid';
+    for (const p of g.props) {
+      const r = p.def.protect?.[p.tl.phase];
+      if (r && dist(cx, cy, p.x, p.y) < r) return 'solid';
     }
     return s;
   };
@@ -188,7 +184,9 @@ export const road = {
       if (phase === PAST) g.flags.signShifted = true;
     };
 
-    g.addProp('bridge', TOP(12), RT(18) - 4, { w: 96, h: (R(22) - R(18)) * 16 + 8 });
+    const bridge = g.addProp('bridge', TOP(12), RT(18) - 4, { w: 96, h: (R(22) - R(18)) * 16 + 8 });
+    // Узел памяти у начала моста: отдай воспоминание — мост цел навсегда
+    g.memoryNode(bridge, 'bridge', { x: bridge.x + bridge.w / 2 - 22, y: bridge.y + bridge.h + 4, w: 44, h: 18 });
     const chest = g.addProp('chest', T(6), RT(24) - 2, { prompt: 'Открыть сундук' });
     chest.onInteract = () => {
       chest.open = true;
@@ -312,9 +310,10 @@ export const tornRoad = {
   facing: 0,
   exits: [{ marker: '>', to: 'camp', gate: true }],
   setup(g, room) {
-    makeFlicker(room);
-    const stone = g.addProp('memoryStone', T(16), TOP(9) + 6, { prompt: null });
-    void stone;
+    // дорога стирается навстречу и не возвращается (карта зоны 4.2): держат только камни памяти.
+    // Первый камень виден с берега; каждый следующий проступает лишь в свете предыдущего.
+    makeErosion(room, { x0: 8, x1: 23 });
+    g.tornStones = [10, 15, 20].map((tx, i) => g.addProp('memoryStone', T(tx), TOP(9) + 6, { prompt: null, inAura: i > 0, hidden: i > 0 }));
     for (const [x, y] of [[5, 3], [26, 15], [4, 15]]) g.addProp('pillar', T(x), TOP(y + 1), { tall: 30, broken: true });
     for (const [x, y] of [[2, 2], [29, 15], [11, 16]]) g.addProp('deadTree', T(x), TOP(y + 1));
     if (!g.flags.nameScrap) g.spawnPickup('scrap', T(29), T(1), { vx: 0, vy: 0 });
@@ -325,21 +324,20 @@ export const tornRoad = {
   async script(g) {
     const p = g.player;
     await g.waitUntil(() => p.x > T(6));
-    g.room.flickerStart = g.time + 2.5;
+    g.room.flickerStart = g.time + 1;
     g.spawnWave([
       { kind: 'hollow', x: T(26), y: T(5) },
       { kind: 'hollow', x: T(27), y: T(13) },
       { kind: 'hollow', x: T(28), y: T(9) },
       { kind: 'framer', x: T(25), y: T(9) },
     ]);
-    g.hint('Дорогу стирает. Камень памяти в центре удержит плиты рядом, если вернуть его в прошлое.', 6);
+    g.hint(`Дорогу стирает — и она не вернётся. ${key(g, 'shift')} по камню памяти: в его свете плиты целы и виден следующий камень.`, 6);
     await g.wait(6);
     if (g.enemies.some((e) => e.kind === 'framer')) {
       g.hint(`Кадровик пропускает кадры — удары проходят насквозь. ${key(g, 'shift')} по нему: в прошлом он целый.`, 6);
     }
     await g.waitUntil(() => g.clearedRoom());
-    g.room.flickerStart = null;
-    g.spawnPickup('fragment', T(16), T(11), { id: 'backHeat', vx: 0, vy: 0 });
+    g.spawnPickup('fragment', T(15), T(11), { id: 'backHeat', vx: 0, vy: 0 });
     g.toast('Что-то осталось на дороге');
     unlockAbility(g, 0);
     g.openExits(true);
@@ -375,7 +373,13 @@ export const camp = {
     const arno = g.addProp('ghostNpc', T(9), TOP(4) + 8, { drawFn: drawGhost, drawOpts: { hat: true }, prompt: 'Поговорить с силуэтом', markY: 28 });
     const sena = g.addProp('ghostNpc', T(13), TOP(4) + 8, { drawFn: drawGhost, drawOpts: { dress: true, color: P.amberHi }, hidden: true, markY: 28 });
     g.campNpc = { arno, sena, fire };
+    g.campNode = g.memoryNode(fire, 'campfire', { w: 52, h: 22, x: fire.x - 26, y: fire.y - 9, interact: false, closedText: 'Руны гаснут: у этого костра выбор уже сделан.' });
+    g.campNode.canInteract = () => !!g.flags.camp; // до выбора не отвлекать от силуэта
     arno.onInteract = async () => {
+      if (g.flags.camp === 'fixed') {
+        await g.say([{ who: 'Арно', text: 'Странная женщина у костра. Добрая. Кажется, я её где-то видел…', portrait: 'arno' }]);
+        return;
+      }
       if (g.flags.camp) {
         await g.say([{ who: 'Арно', text: 'Дорога ещё помнит нас. Иди, Смотритель.', portrait: 'arno' }]);
         return;
@@ -442,10 +446,21 @@ export const camp = {
         sub: !hasScrap ? 'Нужна записка «…но, жди у ворот» — она осталась на Разорванной дороге' : !hasCharge ? 'Нужен заряд браслета' : 'Сохранить обоих: записка и заряд браслета',
         disabled: !hasScrap || !hasCharge,
       },
+      {
+        text: 'Закрепить костёр',
+        sub: g.hasMemory('campfire') ? 'Узел памяти: отдать «Вечер у костра». Останутся оба — но чужими друг другу' : 'Нужно воспоминание «Вечер у костра»',
+        disabled: !g.hasMemory('campfire'),
+      },
     ]);
-    const choice = ['arno', 'sena', 'both'][i];
+    const choice = ['arno', 'sena', 'both', 'fixed'][i];
     g.flags.camp = choice;
-    if (choice === 'both') {
+    if (choice === 'fixed') {
+      await g.campNode.fix('campfire');
+      await g.say([
+        SENA('…Простите. Мы знакомы?'),
+        ARNO('Не думаю. Но у вашего костра тепло. Можно, я посижу?'),
+      ]);
+    } else if (choice === 'both') {
       g.player.charges.n -= 1;
       await g.say([
         SENA('«…но, жди меня у ворот. С.» Это мой почерк.'),
@@ -466,6 +481,7 @@ export const camp = {
       arno: [ARNO('…Я один. Наверное, так и было. Спасибо, Смотритель. Если найдёшь Кухню — я приду.')],
       sena: [SENA('Он был тёплый. Я сохраню это за двоих. Найди Кухню Мары — я буду там.')],
       both: [SENA('Мы оба?.. Значит, дорога длиннее, чем мы думали.'), ARNO('Встретимся у Мары. Там тепло — по-настоящему.')],
+      fixed: [SENA('Хороший костёр. Будто горел всегда.'), ARNO('Говорят, у Мары кормят. Пойдёмте туда — каждый своей дорогой.')],
     };
     await g.say(lines[choice]);
     g.openExits();
@@ -920,6 +936,11 @@ export const ascent = {
     const echo = g.addProp('memoryStone', T(13), TOP(7) + 4, { timeline: { hold: 9, cost: 0, switchTime: 0.5 } });
     g.cityEcho = echo;
     const mara = npc(g, drawMara, T(24), TOP(7) + 4, { prompt: 'Поговорить с Марой' });
+    // печь Мары остывает в Шраме; Узел памяти под ней держит прошлое навсегда
+    const oven = g.addProp('maraOven', T(24), TOP(5) + 6);
+    g.memoryNode(oven, 'oven', { w: 46, h: 18, x: oven.x - 23, y: oven.y - 6, onFix: async (gg, o, silent) => {
+      if (!silent) await gg.say([{ who: 'Мара', text: 'Печь… тёплая. Как в тот вечер. Теперь хлеб не остынет — ни здесь, ни на Кухне.', portrait: 'mara' }]);
+    } });
     mara.onInteract = async () => {
       if (g.flags.bread) {
         await g.say([{ who: 'Мара', text: 'Наверху Брат Мел. Звонит в пустоту. Не дай ему дозвониться.', portrait: 'mara' }]);

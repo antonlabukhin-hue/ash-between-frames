@@ -261,6 +261,25 @@ export function drawWeightPlateHd(ctx, p, g) {
   if (down) rect(ctx, x + 2, y + h - 2, w - 4, 1, 'rgba(255,190,110,0.5)');
 }
 
+// ── Узел памяти (плоский): каменный круг с рунами; p.fixed — руны горят ровно ──
+export function drawMemoryNodeHd(ctx, p, g) {
+  const cx = p.x + p.w / 2;
+  const cy = p.y + p.h / 2;
+  const rx = p.w / 2;
+  const ry = p.h / 2;
+  const t = g.time || 0;
+  const n = 12;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const x = cx + Math.cos(a) * rx;
+    const y = cy + Math.sin(a) * ry;
+    oval(ctx, x, y, 2.2, 1.3, lin(ctx, x - 2, y - 1, x + 2, y + 1, [[0, STONE[3]], [1, STONE[1]]]));
+    const on = p.fixed ? 0.95 : 0.35 + 0.35 * Math.max(0, Math.sin(t * 2.2 - i * 0.7));
+    path(ctx, [x - 0.8, y - 0.6, x, y + 0.4, x + 0.8, y - 0.6], `rgba(255,200,110,${on})`, 0.5);
+  }
+  if (p.fixed) oval(ctx, cx, cy, rx - 3, ry - 2, 'rgba(255,190,100,0.10)');
+}
+
 // ── костёр ────────────────────────────────────────────────────────────
 export function drawCampfireHd(ctx, p, g) {
   const past = ph(p) === PAST;

@@ -6,13 +6,21 @@
 import { rainDrop, glow, fogTexture, FOG_W, FOG_H, vignette } from '../art/glow.js';
 import { hash2 } from '../core/math.js';
 
-const art = { past: null, present: null, tried: false };
+const art = { past: null, present: null, tried: false, t0: 0, ready: 0, failed: false };
+// Сколько ждать картинку, прежде чем показать запасной кодовый титул (медленная сеть).
+const WAIT = 6000;
+const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 function load(base) {
   art.tried = true;
+  art.t0 = now();
   for (const k of ['past', 'present']) {
     const img = new Image();
-    img.onload = () => (art[k] = img);
+    img.onload = () => {
+      art[k] = img;
+      if (art.past && art.present) art.ready = now();
+    };
+    img.onerror = () => (art.failed = true);
     img.src = `${base}art/title/${k}.webp`;
   }
 }
@@ -40,7 +48,13 @@ function cover(ctx, img, W, H, zoom, panX) {
 
 export function drawKeyArt(ctx, t, W, H, base = './') {
   if (!art.tried) load(base);
-  if (!art.past || !art.present) return false;
+  if (!art.past || !art.present) {
+    // пока грузится — тёмный кадр, а не прежний титул; запасной титул — только если картинки не пришли
+    if (art.failed || now() - art.t0 > WAIT) return false;
+    ctx.fillStyle = '#07080f';
+    ctx.fillRect(0, 0, W, H);
+    return true;
+  }
   const zoom = 1.02 + Math.sin(t * 0.05) * 0.02;
   const r = cover(ctx, art.present, W, H, zoom, Math.sin(t * 0.04) * 4);
   const mix = keyartMix(t);
@@ -103,5 +117,10 @@ export function drawKeyArt(ctx, t, W, H, base = './') {
   ctx.globalAlpha = 1;
   ctx.drawImage(vignette(W, H, 0.45), 0, 0, W, H);
   ctx.restore();
+  const fade = Math.min(1, (now() - art.ready) / 700);
+  if (fade < 1) {
+    ctx.fillStyle = `rgba(7,8,15,${1 - fade})`;
+    ctx.fillRect(0, 0, W, H);
+  }
   return true;
 }
