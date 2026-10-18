@@ -3,7 +3,9 @@ import { P } from '../art/palette.js';
 import { px, disc, ring } from '../art/sprites.js';
 import { regenProgress } from '../timeline/charges.js';
 import { FRAGMENTS } from '../items/fragments.js';
-import { W } from '../core/renderer.js';
+import { W, H } from '../core/renderer.js';
+import { atlas } from '../art/spritecache.js';
+import { blit } from '../art/atlas.js';
 import { ABILITIES, isUnlocked, cooldownLeft } from '../player/abilities.js';
 
 // Цифры 3×5.
@@ -14,13 +16,18 @@ const DIGITS = {
   '/': '001001010100100', '×': '000101010101000',
 };
 
+// Глифы цифр печатаются в атлас один раз: один drawImage на символ.
 export function drawDigits(ctx, x, y, str, c, scale = 1) {
   str = String(str);
   let cx = Math.round(x);
   for (const ch of str) {
     const m = DIGITS[ch];
     if (m) {
-      for (let i = 0; i < 15; i++) if (m[i] === '1') px(ctx, cx + (i % 3) * scale, y + Math.floor(i / 3) * scale, scale, scale, c);
+      const e = atlas.sprite(`dg|${ch}|${c}|${scale}`, 3 * scale, 5 * scale, 0, 0, (b) => {
+        b.fillStyle = c;
+        for (let i = 0; i < 15; i++) if (m[i] === '1') b.fillRect((i % 3) * scale, Math.floor(i / 3) * scale, scale, scale);
+      });
+      blit(ctx, e, cx, Math.round(y));
     }
     cx += 4 * scale;
   }
@@ -36,9 +43,49 @@ function bar(ctx, x, y, w, h, v, fill, back = P.ink, edge = P.ash1) {
   if (fw > 0) px(ctx, x, y, fw, h, fill);
 }
 
+// HUD — слой-полоса сверху: перерисовывается только когда меняются значения
+// (мигания квантованы по времени), в остальные кадры — один drawImage.
+let layer = null;
+let layerKey = '';
+const HUD_H = 48;
+
+function hudKey(g) {
+  const p = g.player;
+  const t = g.time;
+  const c = p.charges;
+  const hpv = p.hp / p.maxHp;
+  const ab = ABILITIES.map((a, i) => (isUnlocked(g.flags, i) ? Math.ceil(7 * cooldownLeft(p.abilities, i)) : 'x')).join('');
+  return [
+    W, Math.ceil(p.hp), p.maxHp, hpv < 0.3 ? Math.floor(t * 4) % 2 : 0,
+    c.n, c.max, Math.floor(regenProgress(c) * 12), ab,
+    Math.round(p.rift * 30), p.rift >= 1 ? Math.floor(t * 6) % 2 : 0,
+    p.echo > 0 ? 1 + (Math.floor(t * 10) % 2) : 0,
+    g.save.fragments.join(','), g.save.ash, g.save.shards,
+  ].join('|');
+}
+
 export function drawHud(g, ctx) {
   const p = g.player;
   if (!p) return;
+  const key = hudKey(g);
+  if (!layer || layer.width !== W) {
+    layer = document.createElement('canvas');
+    layer.width = W;
+    layer.height = HUD_H;
+    layerKey = '';
+  }
+  if (key !== layerKey) {
+    layerKey = key;
+    const lc = layer.getContext('2d');
+    lc.clearRect(0, 0, W, HUD_H);
+    paintHud(g, lc);
+  }
+  ctx.drawImage(layer, 0, 0);
+  drawBossBar(g, ctx);
+}
+
+function paintHud(g, ctx) {
+  const p = g.player;
   const t = g.time;
   // здоровье: молочно-янтарное, не красное
   const hpv = p.hp / p.maxHp;
@@ -93,7 +140,7 @@ export function drawHud(g, ctx) {
 
   // Окно Эха
   if (p.echo > 0) {
-    ring(ctx, 48, 29, 3 + Math.sin(t * 20), P.tealHi);
+    ring(ctx, 48, 29, 3 + (Math.floor(t * 10) % 2), P.tealHi);
     px(ctx, 47, 28, 3, 3, P.tealHi);
   }
 
@@ -125,12 +172,14 @@ export function drawHud(g, ctx) {
     px(ctx, x - 6, 18, 1, 1, P.tealHi);
   }
 
-  // полоса босса
+}
+
+function drawBossBar(g, ctx) {
   const b = g.bossBar;
   if (b) {
     const w = 200;
     const bx = (W - w) / 2;
-    const by = 206;
+    const by = H - 10;
     bar(ctx, bx, by, w, 4, b.hp / b.max, P.ash4, P.ink, P.ash1);
     px(ctx, bx, by, Math.round((w * b.hp) / b.max), 1, P.milk);
     for (const m of b.marks || []) px(ctx, bx + Math.round(w * m), by - 1, 1, 6, P.amber);

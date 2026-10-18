@@ -12,7 +12,9 @@ export function defaultSettings() {
     autoAim: true,
     buttonScale: 1,
     stickOpacity: 0.5,
-    integerScale: true,
+    quality: 'auto', // auto | low | medium | high
+    fps30: false,
+    perfOverlay: false,
     screenShake: true,
   };
 }

@@ -14,7 +14,9 @@ import { killEnemy, createEnemy } from './enemies.js';
 import { moveBox } from '../world/room.js';
 import { enemyBlocked } from '../world/world.js';
 import { dist, norm } from '../core/math.js';
-import { whiteK } from '../art/sprites.js';
+import { drawMelC, atlas } from '../art/spritecache.js';
+import { blit } from '../art/atlas.js';
+import { shadow } from '../art/sprites.js';
 
 export const MEL_HP = 1000;
 export const PHASE_MARKS = [2 / 3, 1 / 3];
@@ -83,12 +85,13 @@ function drawPart(ctx, boss, part, g) {
   const o = { t: part.t, version: part.version === 'whole' ? undefined : part.version, windup: part.state === 'windup' };
   if (ghost && !enraged) ctx.globalAlpha = 0.3 + Math.sin(g.time * 6) * 0.08;
   if (enraged) {
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) drawMel(ctx, part.x + dx, part.y + dy, { ...o, k: () => P.crimsonHi });
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1]]) drawMelC(ctx, part.x + dx, part.y + dy, o, P.crimsonHi);
   }
   if (part.version === 'whole' && isShifted(part.tl)) {
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) drawMel(ctx, part.x + dx, part.y + dy, { ...o, k: () => PHASE_COLOR[part.tl.phase] });
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1]]) drawMelC(ctx, part.x + dx, part.y + dy, o, PHASE_COLOR[part.tl.phase]);
   }
-  drawMel(ctx, part.x, part.y, { ...o, k: part.flash > 0 ? whiteK : undefined });
+  shadow(ctx, part.x, part.y, 34, 0.5);
+  drawMelC(ctx, part.x, part.y, o, part.flash > 0 ? '#ffffff' : null);
   ctx.globalAlpha = 1;
   if (boss.exposed > 0 && part.version === 'whole') {
     ring(ctx, part.x, part.y - 30, 18 + Math.sin(g.time * 10) * 2, P.milk, 0.5, 2);
@@ -242,9 +245,9 @@ export function setupMel(g, cx, cy) {
     kind: 'extra',
     draw: (ctx, gg) => {
       if (isShifted(bell.tl)) {
-        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) drawGreatBell(ctx, bell.x + dx, bell.y + dy, { phase: bell.tl.phase, t: gg.time, k: () => PHASE_COLOR[bell.tl.phase] });
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1]]) bellC(ctx, bell, gg, dx, dy, PHASE_COLOR[bell.tl.phase]);
       }
-      drawGreatBell(ctx, bell.x, bell.y + (boss.dead ? boss.fall : 0), { phase: bell.tl.phase, t: gg.time, ringing: bell.ringing > 0, cracks: Math.min(4, bell.cracks) });
+      bellC(ctx, bell, gg, 0, boss.dead ? boss.fall : 0, null);
     },
   });
   boss.parts.push(makePart(g, boss, 'whole', cx, cy - 20));
@@ -439,3 +442,18 @@ export function drawHazards(g, ctx) {
 }
 
 export { createEnemy };
+
+// Колокол через атлас: нить — одним прямоугольником, тело — кадр по качанию.
+function bellC(ctx, bell, g, dx, dy, tint) {
+  const ringing = bell.ringing > 0;
+  const f = Math.floor(g.time * 6) % 12;
+  const sw = Math.round(Math.sin((f / 6) * 1.3) * (ringing ? 3 : 1));
+  const cracks = Math.min(4, bell.cracks);
+  if (!tint) {
+    ctx.fillStyle = P.void;
+    ctx.fillRect(Math.round(bell.x) + dx, Math.round(bell.y) - 200 + dy, 2, 166);
+  }
+  const key = `bell|${bell.tl.phase}|${sw}|${cracks}`;
+  const e = atlas.sprite(key, 48, 44, 24, 40, (c, ax, ay) => drawGreatBell(c, ax - sw, ay, { phase: bell.tl.phase, t: 0, ringing: false, cracks, noThread: true, sw }), { outline: '#05060c' });
+  blit(ctx, tint ? atlas.tinted(key, e, tint) : e, bell.x + dx, bell.y + dy);
+}

@@ -1,45 +1,45 @@
-// Отрисовка комнаты: пол, пустоты, объекты, персонажи по глубине, эффекты, свет, HUD.
+// Отрисовка комнаты: параллакс, пол, пустоты, объекты, персонажи по глубине, эффекты, свет, HUD.
+// Персонажи и декор выводятся из атласа (src/art/spritecache.js), невидимое отсекается,
+// частицы — из пула, свет — ступенчатые маски. Лимиты — docs/PERFORMANCE_BUDGET.md.
 import { W, H } from './core/renderer.js';
 import { P, PHASE_COLOR } from './art/palette.js';
 import { TILE, T } from './art/tiles.js';
 import { tileAt } from './world/room.js';
-import { px, line, disc, ring, drawHero, drawHollow, drawFramer, drawRinger, drawShadow, drawEater, whiteK } from './art/sprites.js';
+import { px, line, disc, ring, setShadowStyle, shadow } from './art/sprites.js';
 import { propSortY, propCenter } from './world/props.js';
 import { isPhased } from './enemies/enemies.js';
-import { isShifted, isFading, PAST, channelProgress } from './timeline/timeline.js';
+import { isShifted, isFading, PAST, PRESENT, otherPhase, channelProgress } from './timeline/timeline.js';
 import { inPerfectWindow } from './combat/combo.js';
-import { revealedAt } from './world/world.js';
 import { drawHud, drawDigits, digitsWidth } from './ui/hud.js';
 import { hash2 } from './core/math.js';
+import { atlas, drawHeroC, drawEnemyC, drawMelC } from './art/spritecache.js';
+import { blit } from './art/atlas.js';
+import { lightMask } from './art/lightmask.js';
 
+const OUTLINE = '#05060c';
 let lightCanvas = null;
 let lightCtx = null;
 
 function ensureLight() {
-  if (lightCanvas && lightCanvas.width === W / 2) return;
+  if (lightCanvas && lightCanvas.width === W / 2 && lightCanvas.height === H / 2) return;
   lightCanvas = document.createElement('canvas');
   lightCanvas.width = W / 2;
   lightCanvas.height = H / 2;
   lightCtx = lightCanvas.getContext('2d');
 }
 
-const ENEMY_DRAW = { hollow: drawHollow, framer: drawFramer, ringer: drawRinger, shadow: drawShadow, eater: drawEater };
+export const lightLayerBytes = () => (lightCanvas ? lightCanvas.width * lightCanvas.height * 4 : 0);
 
-// Двойной контур фазы: силуэт цвета фазы со сдвигом на пиксель.
-function withOutline(ctx, color, fn) {
-  const k = () => color;
-  for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-    ctx.save();
-    ctx.translate(dx, dy);
-    fn(k);
-    ctx.restore();
-  }
-  fn(null);
-}
+const SHADOW_W = { hollow: 12, framer: 8, ringer: 14, shadow: 18, eater: 22 };
+
+// Видимая область мира с полем (высокие спрайты торчат вверх).
+let view = { x0: 0, y0: 0, x1: 0, y1: 0 };
+const visible = (x, y, up = 64, side = 40) => x > view.x0 - side && x < view.x1 + side && y > view.y0 - 8 && y - up < view.y1;
 
 function drawVoidLayer(g, ctx, x0, y0, x1, y1) {
   const room = g.room;
   const t = g.time;
+  const per = g.quality.id === 'low' ? 1 : g.quality.id === 'medium' ? 2 : 3;
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
       const tile = tileAt(room, tx, ty);
@@ -55,33 +55,206 @@ function drawVoidLayer(g, ctx, x0, y0, x1, y1) {
         } else if (st === 'void') {
           ctx.fillStyle = P.void;
           ctx.fillRect(x, y, TILE, TILE);
-          voidSquares(ctx, x, y, tx, ty, t);
+          voidSquares(ctx, x, y, tx, ty, t, per);
         }
         continue;
       }
-      if (tile !== T.VOID) continue;
-      voidSquares(ctx, x, y, tx, ty, t);
     }
   }
 }
 
-// Дрейфующие квадраты Стирания в пустоте.
-function voidSquares(ctx, x, y, tx, ty, t) {
-  for (let i = 0; i < 3; i++) {
+// Дрейфующие квадраты Стирания в пустоте (число на тайл — по профилю).
+function voidSquares(ctx, x, y, tx, ty, t, per) {
+  for (let i = 0; i < per; i++) {
     const r = hash2(tx * 3 + i, ty * 7, 11);
+    if (per < 3 && r < 0.3) continue;
     const speed = 4 + r * 8;
     const yy = (y + 16 - ((t * speed + r * 16) % 16)) | 0;
     const xx = (x + hash2(tx, ty * 5 + i, 3) * 15) | 0;
-    const c = r > 0.8 ? P.crimson1 : r > 0.4 ? P.crimson0 : '#0d0a18';
-    ctx.fillStyle = c;
+    ctx.fillStyle = r > 0.8 ? P.crimson1 : r > 0.4 ? P.crimson0 : '#0d0a18';
     ctx.fillRect(xx, yy, r > 0.85 ? 2 : 1, r > 0.85 ? 2 : 1);
   }
 }
 
+// Анимированное поле пустоты: плитка 64×64, 8 кадров дрейфа квадратов, якорь — мир.
+const voidFrames = [];
+function voidFrame(i) {
+  if (voidFrames[i]) return voidFrames[i];
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const v = c.getContext('2d');
+  v.fillStyle = P.void;
+  v.fillRect(0, 0, 64, 64);
+  for (let k = 0; k < 26; k++) {
+    const r = hash2(k, 3, 11);
+    const yy = Math.floor((hash2(k, 7, 2) * 64 - i * (2 + r * 3)) % 64 + 64) % 64;
+    v.fillStyle = r > 0.8 ? P.crimson1 : r > 0.45 ? P.crimson0 : '#0d0a18';
+    const sz = r > 0.86 ? 2 : 1;
+    v.fillRect(Math.floor(hash2(k, 5, 3) * 64), yy, sz, sz);
+  }
+  voidFrames[i] = { canvas: c, pattern: null };
+  return voidFrames[i];
+}
+
+function drawVoidField(g, ctx, cx, cy) {
+  const n = g.quality.decorAnim ? 8 : 2;
+  const f = voidFrame(Math.floor(g.time * 4) % n);
+  if (!f.pattern) f.pattern = ctx.createPattern(f.canvas, 'repeat');
+  ctx.save();
+  ctx.translate(-cx, -cy);
+  ctx.fillStyle = f.pattern;
+  ctx.fillRect(cx, cy, W, H);
+  ctx.restore();
+}
+
+// ── объекты через атлас ─────────────────────────────────────────────────
+// Кадр декора: цикл по fps; в Шраме каждый третий кадр пропускается (рывки), на Low — реже.
+function propFrame(g, c, phase) {
+  if (!c.frames || c.frames <= 1) return 0;
+  const fps = g.quality.decorAnim ? c.fps : c.fps / 3;
+  let f = Math.floor(g.time * fps);
+  if (phase === PRESENT && f % 3 === 2) f -= 1;
+  return f % c.frames;
+}
+
+function propEntry(g, p, phase) {
+  const c = p.def.cache;
+  const frame = propFrame(g, c, phase);
+  const inst = c.inst ? c.inst(p) : '';
+  // состояние, зависящее от окружения (свет фонаря возвращает прошлое декору)
+  const state = c.state ? c.state(p, g) : undefined;
+  const key = `p|${p.kind}|${phase}|${frame}|${inst}|${state ?? ''}`;
+  return atlas.sprite(key, c.w, c.h, c.ax, c.ay, (bctx, ax, ay) => {
+    const tl = { ...p.tl, phase };
+    p.def.draw(bctx, { ...p, x: ax, y: ay, tl, state }, { time: c.fps ? frame / c.fps : 0, quality: g.quality });
+  });
+}
+
+export function drawProp(g, ctx, p) {
+  const c = p.def.cache;
+  if (!c || p.nocache) {
+    p.def.draw(ctx, p, g);
+    return;
+  }
+  const tl = p.tl;
+  const e = propEntry(g, p, tl.phase);
+  if (tl.flash > 0 && tl.switchable) {
+    transition(g, ctx, e, propEntry(g, p, otherPhase(tl.phase)), p.x, p.y, tl, `p${p.id}`);
+    return;
+  }
+  blit(ctx, e, p.x, p.y);
+}
+
+// Переход между состояниями — 8 кадров (≈0,27 с): янтарный контур → двойной контур →
+// сдвиг старой версии → малиновые трещины → кадр без деталей → новая версия → след.
+function transition(g, ctx, cur, old, x, y, tl, id) {
+  const f = Math.min(7, Math.floor((1 - tl.flash) * 8));
+  const amber = (e) => atlas.tinted(e.key, e, P.amber);
+  const crimson = (e) => atlas.tinted(e.key, e, P.crimson);
+  if (f === 0) {
+    blit(ctx, amber(old), x - 1, y);
+    blit(ctx, amber(old), x + 1, y);
+    blit(ctx, old, x, y);
+  } else if (f === 1) {
+    blit(ctx, amber(old), x - 2, y);
+    blit(ctx, crimson(old), x + 2, y);
+    blit(ctx, old, x + 1, y);
+  } else if (f === 2) {
+    blit(ctx, old, x + 1, y);
+    for (let i = 0; i < 6; i++) {
+      const hx = x - old.ax + hash2(i, tl.flash * 100, 3) * old.w;
+      const hy = y - old.ay + hash2(tl.flash * 100, i, 4) * old.h;
+      px(ctx, hx, hy, 1, 3, P.crimsonHi);
+      px(ctx, hx + 1, hy + 2, 2, 1, P.crimsonHi);
+    }
+  } else if (f === 3) {
+    blit(ctx, atlas.tinted(cur.key, cur, P.slate), x, y);
+  } else {
+    ctx.globalAlpha = (7 - f) / 6;
+    blit(ctx, (tl.phase === PAST ? amber : crimson)(cur), x - (8 - f), y);
+    ctx.globalAlpha = 1;
+    blit(ctx, cur, x, y);
+  }
+  void id;
+}
+
+function drawEnemy(g, ctx, e) {
+  if (e.draw) {
+    e.draw(ctx, e, g);
+    return;
+  }
+  if (e.spawn > 0) {
+    // собирается из квадратов
+    const k = 1 - e.spawn / 0.6;
+    for (let i = 0; i < 12; i++) {
+      const r = hash2(e.id, i, 1);
+      const a = r * Math.PI * 2;
+      const d = (1 - k) * 18;
+      px(ctx, e.x + Math.cos(a) * d - 1, e.y - 8 + Math.sin(a) * d * 0.7 - hash2(i, e.id, 2) * 10, 2, 2, i % 2 ? P.crimson : P.ink);
+    }
+    return;
+  }
+  if (e.kind === 'echo') {
+    ctx.globalAlpha = 0.65;
+    drawHeroC(ctx, e.x, e.y, { dir: 'down', t: e.t, aim: e.face, charges: 0 }, Math.floor(e.t * 20) % 3 ? P.crimson : P.crimsonHi);
+    ctx.globalAlpha = 1;
+    return;
+  }
+  const o = {
+    phase: e.tl.phase, t: e.t, walk: e.walk, windup: e.state === 'windup', lunge: e.state === 'lunge',
+    charge: e.charge, look: e.look, shield: e.kind === 'shadow' && !(e.exposed > 0),
+  };
+  if (e.kind === 'framer' && isPhased(g, e)) {
+    // пропущенный кадр: почти невидим
+    if (Math.floor(e.t * 30) % 5 === 0) {
+      ctx.globalAlpha = 0.25;
+      drawEnemyC(ctx, 'framer', e.x + (Math.random() > 0.5 ? 1 : -1), e.y, o, P.crimson);
+      ctx.globalAlpha = 1;
+    }
+    return;
+  }
+  shadow(ctx, e.x, e.y, SHADOW_W[e.kind] ?? 12);
+  const flash = e.flash > 0;
+  const shifted = isShifted(e.tl);
+  const fading = isFading(e.tl) && Math.floor(g.time * 10) % 2 === 0;
+  if (e.tl.flash > 0) {
+    // переход фазы: старая версия со сдвигом и двойным контуром, потом новая
+    const f = Math.floor((1 - e.tl.flash) * 8);
+    const oldO = { ...o, phase: otherPhase(e.tl.phase) };
+    if (f < 3) {
+      drawEnemyC(ctx, e.kind, e.x - 1, e.y, oldO, P.amber);
+      drawEnemyC(ctx, e.kind, e.x + 2, e.y, oldO, P.crimson);
+      drawEnemyC(ctx, e.kind, e.x + (f > 0 ? 1 : 0), e.y, oldO);
+      return;
+    }
+    if (f === 3) {
+      drawEnemyC(ctx, e.kind, e.x, e.y, o, P.slate);
+      return;
+    }
+  }
+  if (shifted && !fading) {
+    const c = PHASE_COLOR[e.tl.phase];
+    drawEnemyC(ctx, e.kind, e.x - 1, e.y, o, c);
+    drawEnemyC(ctx, e.kind, e.x + 1, e.y, o, c);
+    drawEnemyC(ctx, e.kind, e.x, e.y - 1, o, c);
+  }
+  drawEnemyC(ctx, e.kind, e.x, e.y, o, flash ? '#ffffff' : null);
+  if (e.kind === 'shadow') drawEnemyC(ctx, e.kind, e.x, e.y, { ...o, layer: 'front' }, flash ? '#ffffff' : null);
+  if (e.burn > 0 && Math.floor(g.time * 12) % 2) px(ctx, e.x - 2 + Math.random() * 4, e.y - 18 - Math.random() * 6, 1, 2, P.amberHi);
+}
+
+
+// Подбираемое — кадр из атласа (3 положения покачивания).
 function drawPickup(ctx, pk, t) {
   const bob = Math.round(Math.sin(t * 5 + pk.seed) * 1.5);
-  const x = Math.round(pk.x);
-  const y = Math.round(pk.y);
+  const key = `pk|${pk.kind}|${bob}`;
+  const e = atlas.sprite(key, 16, 18, 8, 13, (b, ax, ay) => paintPickup(b, pk.kind, ax, ay, bob, t));
+  blit(ctx, e, pk.x, pk.y);
+}
+
+function paintPickup(ctx, kind, x, y, bob, t) {
+  const pk = { kind };
   px(ctx, x - 2, y, 5, 1, 'rgba(3,4,10,0.5)');
   if (pk.kind === 'ash') {
     px(ctx, x - 1, y - 4 + bob, 3, 3, P.ash3);
@@ -96,60 +269,12 @@ function drawPickup(ctx, pk, t) {
     px(ctx, x - 2, y - 5 + bob, 1, 1, P.amberHi);
   } else if (pk.kind === 'fragment' || pk.kind === 'scrap') {
     const c = pk.kind === 'scrap' ? P.milk : P.amberHi;
-    ring(ctx, x, y - 7 + bob, 5 + Math.sin(t * 6), 'rgba(255,210,122,0.5)');
+    ring(ctx, x, y - 7 + bob, 5, 'rgba(255,210,122,0.5)');
     px(ctx, x - 2, y - 9 + bob, 5, 5, P.ink);
     px(ctx, x - 1, y - 8 + bob, 3, 3, c);
   }
 }
 
-function drawEnemy(g, ctx, e) {
-  if (e.draw) {
-    e.draw(ctx, e, g);
-    return;
-  }
-  const fn = ENEMY_DRAW[e.kind];
-  const o = {
-    phase: e.tl.phase, t: e.t, walk: e.walk, windup: e.state === 'windup', lunge: e.state === 'lunge',
-    charge: e.charge, look: e.look, shield: e.kind === 'shadow' && !(e.exposed > 0),
-  };
-  if (e.spawn > 0) {
-    // собирается из квадратов
-    const k = 1 - e.spawn / 0.6;
-    for (let i = 0; i < 16; i++) {
-      const r = hash2(e.id, i, 1);
-      const a = r * Math.PI * 2;
-      const d = (1 - k) * 18;
-      px(ctx, e.x + Math.cos(a) * d - 1, e.y - 8 + Math.sin(a) * d * 0.7 - hash2(i, e.id, 2) * 10, 2, 2, i % 2 ? P.crimson : P.ink);
-    }
-    return;
-  }
-  if (e.kind === 'echo') {
-    ctx.globalAlpha = 0.6 + Math.sin(e.t * 20) * 0.2;
-    drawHero(ctx, e.x, e.y, { dir: 'down', t: e.t, aim: e.face, k: () => (Math.random() > 0.15 ? P.crimson : P.crimsonHi), charges: 0 });
-    ctx.globalAlpha = 1;
-    return;
-  }
-  if (e.kind === 'framer' && isPhased(g, e)) {
-    // пропущенный кадр: почти невидим
-    if (Math.floor(e.t * 30) % 5 === 0) {
-      ctx.globalAlpha = 0.25;
-      fn(ctx, e.x + (Math.random() - 0.5) * 3, e.y, { ...o, k: () => P.crimson });
-      ctx.globalAlpha = 1;
-    }
-    return;
-  }
-  const flash = e.flash > 0;
-  const shifted = isShifted(e.tl);
-  const fading = isFading(e.tl) && Math.floor(g.time * 10) % 2 === 0;
-  if (shifted && !fading) {
-    withOutline(ctx, PHASE_COLOR[e.tl.phase], (k) => fn(ctx, e.x, e.y, { ...o, k: flash ? whiteK : k || undefined }));
-  } else {
-    fn(ctx, e.x, e.y, { ...o, k: flash ? whiteK : undefined });
-  }
-  if (e.kind === 'shadow') fn(ctx, e.x, e.y, { ...o, layer: 'front', k: flash ? whiteK : undefined });
-  if (e.burn > 0 && Math.floor(g.time * 12) % 2) px(ctx, e.x - 2 + Math.random() * 4, e.y - 18 - Math.random() * 6, 1, 2, P.amberHi);
-  if (e.tl.flash > 0.5) ring(ctx, e.x, e.y - 8, 10 * (1 - e.tl.flash) + 6, PHASE_COLOR[e.tl.phase]);
-}
 
 function drawTelegraphs(g, ctx, e) {
   if (e.spawn > 0) return;
@@ -214,6 +339,15 @@ function drawFxItem(ctx, f) {
     ring(ctx, f.x, f.y, r, f.c, f.squash);
     ctx.globalAlpha = 1;
   } else if (f.kind === 'slash') {
+    // серп из атласа: 32 направления
+    const aq = ((Math.round(f.angle / (Math.PI / 16)) % 32) + 32) % 32;
+    const R = Math.round(f.radius);
+    const key = `slash|${aq}|${f.span.toFixed(2)}|${R}|${f.c}`;
+    const e = atlas.sprite(key, R * 2 + 6, R * 2 + 6, R + 3, R + 3, (b, ax, ay) => paintSlash(b, ax, ay, (aq * Math.PI) / 16, f.span, R, f.c));
+    ctx.globalAlpha = k;
+    blit(ctx, e, f.x, f.y);
+    ctx.globalAlpha = 1;
+  } else if (f.kind === 'slash-old') {
     // серп удара
     const steps = 14;
     ctx.globalAlpha = k;
@@ -242,6 +376,18 @@ function drawFxItem(ctx, f) {
       ly = ny;
     }
     ctx.globalAlpha = 1;
+  }
+}
+
+function paintSlash(ctx, x, y, angle, span, radius, c) {
+  const steps = 14;
+  for (let i = 0; i <= steps; i++) {
+    const a = angle - span / 2 + (span * i) / steps;
+    const w = Math.sin((i / steps) * Math.PI);
+    for (let d = 0; d < 3 + w * 3; d++) {
+      const rr = radius - d;
+      px(ctx, x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.75, 1, 1, d < 2 ? P.milk : c);
+    }
   }
 }
 
@@ -280,8 +426,23 @@ function drawInteractMarker(g, ctx, obj) {
   px(ctx, cx - 1, top - 4 + bob, 1, 3, P.ink);
 }
 
+
+// Сводка для отладочного оверлея (обновляется каждый кадр).
+export const frameStats = { objects: 0, lights: 0, culled: 0, sec: {} };
+// Счётчик вызовов (подставляет оверлей): разбивка кадра по разделам для поиска пиков.
+let callProbe = () => 0;
+export const setCallProbe = (f) => (callProbe = f);
+let secT = 0;
+const sec = (name) => {
+  const n = callProbe();
+  frameStats.sec[name] = n - secT;
+  secT = n;
+};
+
 export function renderWorld(g, ctx) {
   const room = g.room;
+  const q = g.quality;
+  setShadowStyle(q.shadows);
   ctx.fillStyle = P.void;
   ctx.fillRect(0, 0, W, H);
   if (!room) return;
@@ -289,71 +450,138 @@ export function renderWorld(g, ctx) {
   const shake = g.cam.shakeT > 0 && g.save.settings.screenShake ? g.cam.shakeA : 0;
   const cx = Math.round(g.cam.x + (Math.random() - 0.5) * shake * 2);
   const cy = Math.round(g.cam.y + (Math.random() - 0.5) * shake * 2);
+  view = { x0: cx, y0: cy, x1: cx + W, y1: cy + H };
+  secT = callProbe();
+  let drawn = 0;
+  let culled = 0;
+
+  // параллакс неба (экранные координаты) — под прозрачной полосой холста комнаты
+  room.def.drawParallax?.(g, ctx, cx, cy, q);
+  // поле Стирания под дырами пустоты — один fillRect узором
+  if (!room.def.paint) drawVoidField(g, ctx, cx, cy);
+
   ctx.save();
   ctx.translate(-cx, -cy);
-  ctx.drawImage(g.roomCanvas, 0, 0);
+  // только видимая часть запечённой комнаты
+  const sx = Math.max(0, cx);
+  const sy = Math.max(0, cy);
+  const sw = Math.min(g.roomCanvas.width - sx, W + (cx < 0 ? cx : 0));
+  const sh = Math.min(g.roomCanvas.height - sy, H + (cy < 0 ? cy : 0));
+  if (sw > 0 && sh > 0) ctx.drawImage(g.roomCanvas, sx, sy, sw, sh, sx, sy, sw, sh);
   const x0 = Math.max(0, Math.floor(cx / TILE));
   const y0 = Math.max(0, Math.floor(cy / TILE));
-  drawVoidLayer(g, ctx, x0, y0, x0 + W / TILE + 1, y0 + H / TILE + 1);
+  drawVoidLayer(g, ctx, x0, y0, x0 + Math.ceil(W / TILE) + 1, y0 + Math.ceil(H / TILE) + 1);
 
   // зоны стирания
   for (const z of g.voidZones) {
+    if (!visible(z.x, z.y, z.r, z.r)) continue;
     if (!z.active) {
       const k = 1 - z.warn;
       ring(ctx, z.x, z.y, z.r * (0.4 + k * 0.6), Math.floor(g.time * 12) % 2 ? P.crimsonHi : P.crimson, 0.7, 2);
     } else {
       ctx.fillStyle = P.void;
-      for (let yy = -z.r; yy <= z.r; yy++) {
+      for (let yy = -z.r; yy <= z.r; yy += 1) {
         const w = Math.sqrt(z.r * z.r - yy * yy);
         ctx.fillRect(Math.round(z.x - w), Math.round(z.y + yy * 0.7), Math.round(w * 2), 1);
       }
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 6; i++) {
         const a = hash2(i, z.x | 0, 1) * Math.PI * 2 + g.time;
         px(ctx, z.x + Math.cos(a) * z.r * 0.8, z.y + Math.sin(a) * z.r * 0.55, 2, 2, P.crimson);
       }
     }
   }
 
-  room.def.drawFloor?.(g, ctx);
+  sec('пол');
+  room.def.drawFloor?.(g, ctx, q);
 
   // плоские объекты
-  const flat = g.props.filter((p) => p.def.flat && !p.hidden).sort((a, b) => a.y - b.y);
-  for (const p of flat) p.def.draw(ctx, p, g);
-  for (const pk of g.pickups) drawPickup(ctx, pk, g.time);
+  for (const p of g.props) {
+    if (!p.def.flat || p.hidden) continue;
+    if (!visible(p.x + p.w / 2, p.y + p.h, p.h + 16, p.w / 2 + 16)) {
+      culled++;
+      continue;
+    }
+    drawProp(g, ctx, p);
+    drawn++;
+  }
+  for (const pk of g.pickups) if (visible(pk.x, pk.y, 16, 8)) drawPickup(ctx, pk, g.time);
 
-  // сортировка по глубине
+  // сортировка по глубине, только видимое
   const list = [];
-  for (const p of g.props) if (!p.def.flat && !p.hidden) list.push({ y: propSortY(p), kind: 'prop', o: p });
-  for (const e of g.enemies) list.push({ y: e.y, kind: 'enemy', o: e });
+  for (const p of g.props) {
+    if (p.def.flat || p.hidden) continue;
+    const c = p.def.cache;
+    if (!visible(p.x, p.y, c ? c.ay : 64, c ? c.w / 2 + 8 : 48)) {
+      culled++;
+      continue;
+    }
+    list.push({ y: propSortY(p), kind: 'prop', o: p });
+  }
+  for (const e of g.enemies) {
+    if (!visible(e.x, e.y, e.kind === 'mel' ? 90 : 48)) {
+      culled++;
+      continue;
+    }
+    list.push({ y: e.y, kind: 'enemy', o: e });
+  }
   if (g.player && !g.player.dead) list.push({ y: g.player.y, kind: 'hero', o: g.player });
   for (const extra of g.drawables) list.push(extra);
   list.sort((a, b) => a.y - b.y);
+  sec('декор пола');
   for (const it of list) {
+    drawn++;
     if (it.kind === 'prop') {
       const p = it.o;
-      p.def.draw(ctx, p, g);
+      // высокий декор перед героем становится полупрозрачным — бой не закрывается
+      const c = p.def.cache;
+      const hero = g.player;
+      const cover = c && c.ay > 28 && hero && hero.y < p.y && Math.abs(hero.x - p.x) < c.w / 2 + 4 && hero.y > p.y - c.ay - 4;
+      if (cover) ctx.globalAlpha = 0.45;
+      drawProp(g, ctx, p);
+      if (cover) ctx.globalAlpha = 1;
       if (isShifted(p.tl) && p.tl.switchable && !p.def.flat) {
-        const [mx, my] = propCenter(p);
+        const [mx] = propCenter(p);
         const fading = isFading(p.tl) && Math.floor(g.time * 10) % 2 === 0;
         if (!fading) ring(ctx, mx, p.y - 1, 9, PHASE_COLOR[p.tl.phase], 0.4, 2);
-        void my;
       }
     } else if (it.kind === 'enemy') drawEnemy(g, ctx, it.o);
     else if (it.kind === 'hero') drawHeroSprite(g, ctx, it.o);
     else if (it.draw) it.draw(ctx, g);
   }
 
-  for (const pr of g.projectiles) drawProjectile(g, ctx, pr);
+  sec('спрайты');
+  for (const pr of g.projectiles) {
+    const r = pr.kind === 'ring' ? pr.rad : 4;
+    if (pr.x + r < view.x0 || pr.x - r > view.x1 || pr.y + r < view.y0 || pr.y - r > view.y1) continue;
+    drawProjectile(g, ctx, pr);
+  }
+  // частицы из пула
+  const pl = g.particles;
+  for (let i = 0; i < pl.n; i++) {
+    const x = pl.x[i];
+    const y = pl.y[i];
+    if (x < view.x0 || x > view.x1 || y < view.y0 || y > view.y1) continue;
+    const k = pl.life[i] / pl.max[i];
+    ctx.globalAlpha = k > 0.66 ? 1 : k > 0.33 ? 0.66 : 0.33;
+    ctx.fillStyle = pl.color[i];
+    ctx.fillRect(x | 0, y | 0, pl.size[i], pl.size[i]);
+  }
+  ctx.globalAlpha = 1;
+  sec('снаряды+частицы');
   for (const f of g.fx) drawFxItem(ctx, f);
-  room.def.drawOver?.(g, ctx);
+  room.def.drawOver?.(g, ctx, q);
   ctx.restore();
+  sec('эффекты');
 
+  ambientAsh(g, ctx);
   drawLighting(g, ctx, cx, cy);
+  sec('свет');
 
-  // поверх света: метки, полоски здоровья, цифры
+  // поверх света: метки, полоски здоровья, цифры — одинаковы во всех профилях
   ctx.save();
   ctx.translate(-cx, -cy);
   for (const e of g.enemies) {
+    if (!visible(e.x, e.y, 60)) continue;
     drawTelegraphs(g, ctx, e);
     if (e.hp < e.maxHp && !e.def.elite && e.spawn <= 0 && !(e.kind === 'framer' && isPhased(g, e))) {
       const w = 14;
@@ -367,7 +595,7 @@ export function renderWorld(g, ctx) {
     if (g.interactTarget) drawInteractMarker(g, ctx, g.interactTarget);
   }
   for (const t of g.texts) {
-    const k = Math.min(1, t.life / t.max * 2);
+    const k = Math.min(1, (t.life / t.max) * 2);
     ctx.globalAlpha = k;
     if (/^[\d+\-×/]+$/.test(t.text)) {
       const s = t.big ? 2 : 1;
@@ -389,108 +617,126 @@ export function renderWorld(g, ctx) {
 
   // экранные эффекты
   if (p && p.hurtFlash > 0) {
-    ctx.fillStyle = `rgba(200,40,74,${p.hurtFlash * 1.2})`;
+    ctx.fillStyle = `rgba(200,40,74,${Math.min(0.9, p.hurtFlash * 4)})`;
     ctx.fillRect(0, 0, W, 3);
     ctx.fillRect(0, H - 3, W, 3);
     ctx.fillRect(0, 0, 3, H);
     ctx.fillRect(W - 3, 0, 3, H);
   }
   if (p && p.hp / p.maxHp < 0.3 && !p.dead) {
-    ctx.fillStyle = `rgba(74,12,30,${0.18 + Math.sin(g.time * 4) * 0.08})`;
-    ctx.fillRect(0, 0, W, 2);
-    ctx.fillRect(0, H - 2, W, 2);
+    ctx.fillStyle = Math.floor(g.time * 3) % 2 ? P.crimson0 : P.crimson1;
+    ctx.fillRect(0, 0, W, 1);
+    ctx.fillRect(0, H - 1, W, 1);
   }
-  glitch(g, ctx);
-  if (g.scene === 'play' || g.scene === 'hub') drawHud(g, ctx);
+  sec('метки+цифры');
+  if (q.glitch) glitch(g, ctx);
+  if (g.scene === 'play') drawHud(g, ctx);
+  sec('HUD');
+  frameStats.objects = drawn;
+  frameStats.culled = culled;
 }
 
 function drawHeroSprite(g, ctx, p) {
+  const o = {
+    dir: p.dir, flip: p.flip, t: g.time, walk: p.walk, sway: p.sway, moving: p.moving, aim: p.aim,
+    swing: p.swing ? p.swing.t : null, swingStep: p.swing?.step, glow: inPerfectWindow(p.combo), charges: p.charges.n,
+  };
   if (p.falling > 0) {
     const k = p.falling / 0.5;
-    ctx.globalAlpha = k;
-    drawHero(ctx, p.x, p.y + (1 - k) * 8, { dir: p.dir, flip: p.flip, t: g.time, charges: p.charges.n });
+    ctx.globalAlpha = k > 0.5 ? 1 : 0.5;
+    drawHeroC(ctx, p.x, p.y + Math.round((1 - k) * 8), { ...o, moving: false, swing: null });
     ctx.globalAlpha = 1;
     return;
   }
   const blink = p.invuln > 0 && p.dodge <= 0 && Math.floor(g.time * 20) % 2 === 0;
   if (blink) return;
-  const o = {
-    dir: p.dir, flip: p.flip, t: g.time, walk: p.walk, sway: p.sway, moving: p.moving, aim: p.aim,
-    swing: p.swing ? p.swing.t : null, swingStep: p.swing?.step, glow: inPerfectWindow(p.combo), charges: p.charges.n,
-  };
+  shadow(ctx, p.x, p.y, 12);
   if (p.dodge > 0) {
-    // шлейф рывка
-    ctx.globalAlpha = 0.35;
-    drawHero(ctx, p.x - p.dodgeDir[0] * 8, p.y - p.dodgeDir[1] * 6, { ...o, k: () => P.blueLo });
+    // шлейф рывка — силуэт того же кадра
+    ctx.globalAlpha = 0.5;
+    drawHeroC(ctx, p.x - p.dodgeDir[0] * 8, p.y - p.dodgeDir[1] * 6, o, P.blueLo);
     ctx.globalAlpha = 1;
   }
   if (p.doubleOutline > 0) {
     // двойной контур при смене состояния
-    drawHero(ctx, p.x - 2, p.y, { ...o, k: () => P.amber });
-    drawHero(ctx, p.x + 2, p.y, { ...o, k: () => P.crimson });
+    drawHeroC(ctx, p.x - 2, p.y, o, P.amber);
+    drawHeroC(ctx, p.x + 2, p.y, o, P.crimson);
   }
-  if (p.echo > 0) {
-    ctx.globalAlpha = 0.5;
-    drawHero(ctx, p.x + Math.sin(g.time * 30), p.y, { ...o, k: () => P.tealHi });
-    ctx.globalAlpha = 1;
-  }
-  drawHero(ctx, p.x, p.y, { ...o, k: p.hurtFlash > 0.1 ? whiteK : undefined });
+  if (p.echo > 0 && Math.floor(g.time * 15) % 2) drawHeroC(ctx, p.x + 1, p.y, o, P.tealHi);
+  drawHeroC(ctx, p.x, p.y, o, p.hurtFlash > 0.1 ? '#ffffff' : null);
   if (p.channel) {
     const pr = channelProgress(p.channel);
     ring(ctx, p.x, p.y - 2, 6 + pr * 6, pr > 0.95 ? P.milk : P.teal, 0.5, 2);
   }
 }
 
+// Пепел в воздухе — экранные пиксели, число по профилю.
+function ambientAsh(g, ctx) {
+  const n = g.room.def.ambient === false ? 0 : g.quality.ambient;
+  if (!n) return;
+  ctx.fillStyle = g.room.def.ashColor || P.ash3;
+  const t = g.time;
+  for (let i = 0; i < n; i++) {
+    const r = hash2(i, 1, 4);
+    const x = ((r * W + t * (5 + r * 9) - g.cam.x * 0.2) % W + W) % W;
+    const y = ((hash2(i, 2, 4) * H + t * (7 + r * 6) - g.cam.y * 0.2) % H + H) % H;
+    ctx.fillRect(x | 0, y | 0, 1, 1);
+  }
+}
+
+// Свет: тьма в половинном разрешении, ступенчатые маски из кэша, число по профилю.
 function drawLighting(g, ctx, cx, cy) {
   const dark = g.room.def.dark ?? 0.45;
+  frameStats.lights = 0;
   if (dark <= 0) return;
+  const q = g.quality;
   const lc = lightCtx;
   lc.globalCompositeOperation = 'source-over';
   lc.clearRect(0, 0, W / 2, H / 2);
   lc.fillStyle = `rgba(4,5,14,${dark})`;
   lc.fillRect(0, 0, W / 2, H / 2);
   lc.globalCompositeOperation = 'destination-out';
-  const hole = (x, y, r, a = 1) => {
-    const sx = (x - cx) / 2;
-    const sy = (y - cy) / 2;
-    const sr = r / 2;
-    if (sx < -sr || sy < -sr || sx > W / 2 + sr || sy > H / 2 + sr) return;
-    const grd = lc.createRadialGradient(sx, sy, 0, sx, sy, sr);
-    grd.addColorStop(0, `rgba(0,0,0,${a})`);
-    grd.addColorStop(0.55, `rgba(0,0,0,${a * 0.7})`);
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    lc.fillStyle = grd;
-    lc.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
-  };
   const p = g.player;
-  if (p) hole(p.x, p.y - 8, 90, 0.85);
-  for (const l of g.lights) hole(l.x, l.y, l.r * 2, 1);
-  for (const e of g.enemies) if (e.kind === 'ringer' && e.charge) hole(e.x, e.y - 8, 40, 0.6);
-  for (const pr of g.projectiles) hole(pr.x, pr.y, pr.kind === 'ring' ? 30 : 24, 0.5);
+  const list = [];
+  if (p) list.push({ x: p.x, y: p.y - 8, r: 46, s: 0.85, hero: true });
+  // остальные — ближайшие к герою, в пределах кадра
+  const extra = [];
+  for (const l of g.lights) {
+    const sx = l.x - cx;
+    const sy = l.y - cy;
+    if (sx < -l.r || sy < -l.r || sx > W + l.r || sy > H + l.r) continue;
+    extra.push({ ...l, s: 1, d: p ? Math.abs(l.x - p.x) + Math.abs(l.y - p.y) : 0 });
+  }
+  extra.sort((a, b) => a.d - b.d);
+  list.push(...extra.slice(0, q.lights - 1));
+  for (const l of list) {
+    const m = lightMask(l.r / 2, q.lightRings, '0,0,0', l.s);
+    const r = (m.width - 1) / 2;
+    lc.drawImage(m, Math.round((l.x - cx) / 2 - r), Math.round((l.y - cy) / 2 - r));
+  }
+  frameStats.lights = list.length;
   lc.globalCompositeOperation = 'source-over';
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(lightCanvas, 0, 0, W, H);
-  // тёплое свечение янтарных источников
-  ctx.globalCompositeOperation = 'lighter';
-  for (const l of g.lights) {
-    if (l.c !== 'amber') continue;
-    const sx = l.x - cx;
-    const sy = l.y - cy;
-    const grd = ctx.createRadialGradient(sx, sy, 0, sx, sy, l.r);
-    grd.addColorStop(0, 'rgba(120,70,20,0.28)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grd;
-    ctx.fillRect(sx - l.r, sy - l.r, l.r * 2, l.r * 2);
+  // тёплые ореолы прошлого — ступенчатые пятна, без градиентов
+  if (q.lightRings >= 3) {
+    ctx.globalCompositeOperation = 'lighter';
+    for (const l of list) {
+      if (l.c !== 'amber') continue;
+      const m = lightMask(l.r * 0.8, q.lightRings - 1, '110,64,18', 0.3);
+      const r = (m.width - 1) / 2;
+      ctx.drawImage(m, Math.round(l.x - cx - r), Math.round(l.y - cy - r));
+    }
+    ctx.globalCompositeOperation = 'source-over';
   }
-  ctx.globalCompositeOperation = 'source-over';
 }
 
-// Редкие сбои кадра — мир «проходит через неисправный экран».
+// Редкие сбои кадра — мир «проходит через неисправный экран» (не на Low).
 function glitch(g, ctx) {
   const amount = g.glitch ?? 0.02;
   if (Math.random() > amount) return;
   const y = Math.floor(Math.random() * H);
   const h = 1 + Math.floor(Math.random() * 4);
-  const dx = Math.round((Math.random() - 0.5) * 8);
+  const dx = Math.random() > 0.5 ? 2 : -2;
   ctx.drawImage(ctx.canvas, 0, y, W, h, dx, y, W, h);
 }

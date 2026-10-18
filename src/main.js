@@ -13,6 +13,12 @@ import { drawTitle } from './scenes/title.js';
 import { createTouch } from './mobile/touch.js';
 import { ROOMS, CHAPTER1 } from './scenes/rooms.js';
 import { drawSpriteSheet } from './scenes/spritesheet.js';
+import { resolveProfile, createAutoTuner, tuneStep, PROFILES } from './core/quality.js';
+import { createPerf, instrument, recordFrame, summary, setOverlay, showOverlay } from './core/perf.js';
+import { frameStats, lightLayerBytes, setCallProbe } from './render.js';
+import { atlasStats, atlas } from './art/spritecache.js';
+import { lightCacheBytes } from './art/lightmask.js';
+import { W, H } from './core/renderer.js';
 
 const stage = document.getElementById('stage');
 const canvas = document.getElementById('screen');
@@ -24,10 +30,16 @@ const save = loadSave(window.localStorage);
 const game = createGame({ input, audio, ui, storage: window.localStorage, save });
 const touch = createTouch(document.getElementById('touch'), input, renderer);
 
+const ENV = { cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory, touch: matchMedia('(pointer: coarse)').matches };
+const perf = createPerf();
+const tuner = createAutoTuner({ limitMs: 14 });
+
 function applySettings() {
   const s = save.settings;
   audio.setVolumes(s.music, s.sfx);
-  renderer.setInteger(s.integerScale);
+  if (!!s.perfOverlay !== perf.on) toggleOverlay(!!s.perfOverlay);
+  game.autoQuality = s.quality === 'auto';
+  game.setQuality(resolveProfile(s.quality, ENV));
   touch.applySettings(s);
 }
 applySettings();
@@ -162,7 +174,22 @@ function settingsMenu(back) {
   row('Тряска экрана', toggle('screenShake'));
   row('Упрощённый бой (автоудар)', toggle('autoAttack'));
   row('Автонаведение', toggle('autoAim'));
-  row('Целочисленный масштаб', toggle('integerScale'));
+  const qsel = document.createElement('select');
+  for (const [v, t] of [['auto', 'Авто'], ['low', 'Низкое'], ['medium', 'Среднее'], ['high', 'Высокое']]) {
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = t;
+    qsel.appendChild(o);
+  }
+  qsel.value = s.quality;
+  qsel.addEventListener('change', () => {
+    s.quality = qsel.value;
+    applySettings();
+    game.persist();
+  });
+  row('Качество графики', qsel);
+  row('Режим 30 FPS (экономия батареи)', toggle('fps30'));
+  row('Показатели производительности', toggle('perfOverlay'));
   row('Размер кнопок', slider('buttonScale', 0.7, 1.5, 0.05));
   row('Прозрачность стика', slider('stickOpacity', 0.15, 1, 0.05));
   const items = [];
@@ -300,9 +327,20 @@ const pauseBtn = ui.pauseButton(() => pauseMenu());
 
 // ── цикл ─────────────────────────────────────────────────────────────
 let last = performance.now();
+let acc = 0;
+let lastFrameAt = performance.now();
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  requestAnimationFrame(frame);
+  acc += Math.min(0.1, (now - last) / 1000);
   last = now;
+  // режим 30 FPS: пропускаем каждый второй вызов, логика получает накопленное время
+  if (save.settings.fps30 && acc < 1 / 31) return;
+  const dt = Math.min(0.05, acc);
+  acc = 0;
+  const gap = now - lastFrameAt;
+  lastFrameAt = now;
+  const t0 = performance.now();
+  let t1 = t0;
   input.update();
   const consumed = ui.handleInput(input);
   if (!consumed && input.pressed('pause') && game.scene === 'play') pauseMenu();
@@ -316,17 +354,61 @@ function frame(now) {
     drawTitle(renderer.ctx, game.time);
   } else {
     game.update(dt);
+    t1 = performance.now();
     renderWorld(game, renderer.ctx);
+  }
+  const t2 = performance.now();
+  recordFrame(perf, t1 - t0, t2 - t1, gap);
+  if (game.autoQuality && game.scene === 'play') {
+    const down = tuneStep(tuner, game.quality.id, summary(perf).cpuMs, dt);
+    if (down) {
+      game.setQuality(PROFILES[down]);
+      ui.toast(`Качество снижено: ${PROFILES[down].name}`, 2);
+    }
+  }
+  if (perf.on) {
+    const g = game;
+    const enemies = g.enemies || [];
+    const at = atlasStats();
+    showOverlay(perf, now, {
+      fpsCap: save.settings.fps30 ? 30 : 60,
+      callLimit: { low: 250, medium: 400, high: 650 }[g.quality.id],
+      objects: `${frameStats.objects} видно / ${(g.props?.length || 0) + enemies.length + (g.projectiles?.length || 0) + (g.pickups?.length || 0)} всего`,
+      particles: g.particles.n,
+      particleCap: g.particles.cap,
+      lights: frameStats.lights,
+      lightLimit: g.quality.lights,
+      enemies: enemies.length,
+      far: enemies.filter((e) => e.far).length,
+      canvasBytes: at.bytes + (g.roomCanvas ? g.roomCanvas.width * g.roomCanvas.height * 4 : 0) + lightLayerBytes() + lightCacheBytes() + W * H * 4,
+      atlasFrames: at.frames,
+      profile: g.quality.name + (g.autoQuality ? ' (авто)' : ''),
+      frame: `${W}×${H} ×${renderer.scale}`,
+    });
   }
   const playing = game.scene === 'play' && !ui.mode && !game.cinematic && !game.paused;
   touch.update(game, playing);
   pauseBtn.classList.toggle('hidden', !(game.scene === 'play' && !ui.mode && touch.enabled));
   input.endFrame();
-  requestAnimationFrame(frame);
 }
+
+function toggleOverlay(on = !perf.on) {
+  if (on) {
+    instrument(perf, renderer.ctx);
+    setCallProbe(() => perf.calls);
+  }
+  setOverlay(perf, on);
+}
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'F3') {
+    e.preventDefault();
+    toggleOverlay();
+  }
+});
 
 titleMenu();
 requestAnimationFrame(frame);
+if (save.settings.perfOverlay || new URLSearchParams(location.search).has('debug')) toggleOverlay(true);
 
 if (__DEBUG__) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -347,7 +429,7 @@ if (__DEBUG__) {
       await sleep(120);
     }
   };
-  window.__abf = { game, save, ui, input, rooms: ROOMS, startGame, shot, skip, sleep };
+  window.__abf = { game, save, ui, input, rooms: ROOMS, startGame, shot, skip, sleep, perf, summary: () => summary(perf), frameStats, PROFILES, renderer, atlas };
   const q = new URLSearchParams(location.search);
   if (q.get('room')) startGame(q.get('room'));
   if (q.has('sprites')) {

@@ -14,6 +14,8 @@ import { dist, clamp } from './core/math.js';
 import { W, H } from './core/renderer.js';
 import { P } from './art/palette.js';
 import { ROOMS } from './scenes/rooms.js';
+import { createParticlePool, clearParticles, resizePool } from './world/particles.js';
+import { PROFILES } from './core/quality.js';
 
 export function createGame({ input, audio, ui, storage, save }) {
   const g = {
@@ -23,7 +25,13 @@ export function createGame({ input, audio, ui, storage, save }) {
     exits: [], lights: [], cam: { x: 0, y: 0, shakeA: 0, shakeT: 0 },
     cinematic: false, inputLocked: false, paused: false, hitstopT: 0, slowT: 0,
     waiters: [], scriptToken: 0, bossBar: null, interactTarget: null, freeShift: false, glitch: 0.015,
-    transitioning: false,
+    transitioning: false, frame: 0,
+    quality: PROFILES.medium, particles: createParticlePool(PROFILES.medium.particles),
+  };
+
+  g.setQuality = (profile) => {
+    g.quality = profile;
+    g.particles = resizePool(g.particles, profile.particles);
   };
 
   // ── службы для модулей ──────────────────────────────────────────────
@@ -178,6 +186,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     g.projectiles = [];
     g.pickups = [];
     g.fx = [];
+    clearParticles(g.particles);
     g.texts = [];
     g.voidZones = [];
     g.drawables = [];
@@ -437,6 +446,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     if (g.scene !== 'play' || !g.room) return;
     if (g.paused) return;
     g.time += dt;
+    g.frame++;
     ui.typewriter(dt);
     for (const w of g.waiters) {
       if (w.tok !== g.scriptToken) {

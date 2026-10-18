@@ -52,7 +52,7 @@ export function castAbility(g, p, i) {
   } else if (a.id === 'seam') {
     const x = p.x + Math.cos(p.aim) * 26;
     const y = p.y + Math.sin(p.aim) * 18;
-    const seam = g.addProp('ghostNpc', x, y, { drawFn: () => {}, noRift: true, life: 8, uses: 3 });
+    const seam = g.addProp('ghostNpc', x, y, { drawFn: () => {}, noRift: true, life: 8, uses: 3, nocache: true });
     seam.def = { ...seam.def, flat: true, draw: drawSeam };
     seam.x = x - 14;
     seam.y = y - 6;
@@ -62,7 +62,7 @@ export function castAbility(g, p, i) {
     g.audio.sfx.shift('past');
     ringFx(g, x, y, 2, 16, P.teal, 0.35);
   } else if (a.id === 'shade') {
-    const s = g.addProp('ghostNpc', p.x - 10, p.y, { drawFn: drawShade, life: 4, swing: 0, aim: p.aim, noRift: true });
+    const s = g.addProp('ghostNpc', p.x - 10, p.y, { drawFn: drawShade, life: 4, swing: 0, aim: p.aim, noRift: true, nocache: true });
     s.update = updateShade;
     g.audio.sfx.shift('present');
     burst(g, s.x, s.y - 10, [P.blueHi, P.ink], 12, 40);
