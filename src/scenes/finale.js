@@ -60,6 +60,8 @@ export const belfry = {
       await g.wait(1.5);
       g.flags.melDone = true;
       g.persist();
+      // «Песня звонаря» (карта 4.8): Мел вспомнил, зачем звонил, — прощание мягче
+      if (g.flags.melSong) await g.say([{ who: 'Брат Мел', text: 'Праздничный звон… Позвони его за меня, Смотритель. Один раз. Для них.', portrait: 'mel' }]);
       await g.say([{ who: '', text: 'Колокол срывается с чёрной нити и уходит вниз, сквозь площадь. Снизу слышны голоса.' }]);
       g.transition('under');
     };
