@@ -1,29 +1,33 @@
-// Частицы, кольца, всплывающие числа. Всё лежит в g.fx / g.texts.
+// Частицы (пул g.particles), кольца, удары, всплывающие числа (g.fx / g.texts).
 import { P } from '../art/palette.js';
+import { spawnParticle, updateParticles } from './particles.js';
 
 export function addParticle(g, p) {
-  if (g.fx.length > 600) g.fx.shift();
-  g.fx.push({ kind: 'sq', life: 0.6, max: 0.6, size: 1, grav: 0, drag: 0.9, ...p });
+  const life = p.life ?? 0.6;
+  spawnParticle(g.particles, p.x, p.y, p.vx ?? 0, p.vy ?? 0, life, p.c, p.size ?? 1, p.grav ?? 0, p.drag ?? 0.9);
 }
 
-// Рассыпание на квадраты — смерть врагов и стирание.
+// Рассыпание на квадраты — смерть врагов и стирание. Количество масштабируется профилем качества.
 export function burst(g, x, y, colors, n = 14, speed = 60, o = {}) {
-  for (let i = 0; i < n; i++) {
+  const count = Math.max(1, Math.round(n * (g.quality?.particleMul ?? 1)));
+  const pool = g.particles;
+  for (let i = 0; i < count; i++) {
     const a = Math.random() * Math.PI * 2;
     const s = speed * (0.3 + Math.random() * 0.9);
     const life = (o.life ?? 0.7) * (0.6 + Math.random() * 0.6);
-    addParticle(g, {
-      x: x + (Math.random() - 0.5) * (o.spread ?? 8),
-      y: y + (Math.random() - 0.5) * (o.spread ?? 8),
-      vx: Math.cos(a) * s,
-      vy: Math.sin(a) * s - (o.up ?? 0),
-      c: colors[i % colors.length],
-      size: o.size ?? (Math.random() > 0.6 ? 2 : 1),
+    const ok = spawnParticle(
+      pool,
+      x + (Math.random() - 0.5) * (o.spread ?? 8),
+      y + (Math.random() - 0.5) * (o.spread ?? 8),
+      Math.cos(a) * s,
+      Math.sin(a) * s - (o.up ?? 0),
       life,
-      max: life,
-      grav: o.grav ?? 0,
-      drag: o.drag ?? 0.88,
-    });
+      colors[i % colors.length],
+      o.size ?? (Math.random() > 0.6 ? 2 : 1),
+      o.grav ?? 0,
+      o.drag ?? 0.88,
+    );
+    if (!ok) break;
   }
 }
 
@@ -44,16 +48,8 @@ export function addText(g, x, y, text, c = P.milk, o = {}) {
 }
 
 export function updateFx(g, dt) {
-  for (const f of g.fx) {
-    f.life -= dt;
-    if (f.kind === 'sq') {
-      f.vx *= Math.pow(f.drag, dt * 60);
-      f.vy *= Math.pow(f.drag, dt * 60);
-      f.vy += f.grav * dt;
-      f.x += f.vx * dt;
-      f.y += f.vy * dt;
-    }
-  }
+  updateParticles(g.particles, dt);
+  for (const f of g.fx) f.life -= dt;
   g.fx = g.fx.filter((f) => f.life > 0);
   for (const t of g.texts) {
     t.life -= dt;

@@ -483,3 +483,33 @@ function drawBox(ctx, p) {
   line(ctx, x - 6, y - 10, x + 5, y - 1, P.ink);
   px(ctx, x - 3, y - 12, 6, 2, P.milk); // обрывки
 }
+
+// ── кэш в атласе ─────────────────────────────────────────────────────────
+// Клетка (w×h) с точкой основания (ax, ay); fps/frames — цикл анимации декора;
+// inst — чем различаются экземпляры одного вида.
+const C = (w, h, ax, ay, fps = 0, frames = 1, inst = null) => ({ w, h, ax, ay, fps, frames, inst });
+const figureKey = (p) => `${p.drawFn?.name}|${p.id % 7}|${JSON.stringify(p.drawOpts || {})}`;
+const CACHE = {
+  sign: C(100, 48, 50, 37, 9, 8),
+  memoryStone: C(110, 56, 55, 30, 6, 6),
+  lantern: C(16, 42, 8, 40, 12, 5),
+  campfire: C(20, 22, 10, 18, 9, 6),
+  statue: C(26, 46, 13, 44, 2, 4),
+  chest: C(20, 18, 10, 16, 0, 1, (p) => `${p.open}`),
+  pillar: C(22, 64, 11, 56, 0, 1, (p) => `${p.tall ?? 40}|${p.broken ? 1 : 0}`),
+  tree: C(36, 50, 18, 46, 2, 4, (p) => p.id),
+  deadTree: C(30, 38, 15, 35),
+  banner: C(18, 46, 3, 44, 6, 6),
+  grave: C(14, 20, 7, 18),
+  rubble: C(20, 10, 10, 8),
+  candles: C(14, 12, 7, 10, 8, 2),
+  stove: C(32, 44, 16, 42, 7, 6),
+  table: C(36, 18, 18, 16),
+  window: C(22, 16, 11, 15, 1, 9, (p) => (p.bell ? 1 : 0)),
+  portraits: C(52, 14, 24, 13, 0, 1, (p) => p.count),
+  shelf: C(30, 10, 15, 8, 0, 1, (p) => p.cups),
+  box: C(16, 16, 8, 14),
+  npc: C(28, 40, 14, 36, 6, 6, figureKey),
+  ghostNpc: C(28, 40, 14, 36, 6, 6, figureKey),
+};
+for (const k of Object.keys(CACHE)) PROP_KINDS[k].cache = CACHE[k];

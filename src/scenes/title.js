@@ -297,7 +297,7 @@ function banner(ctx, x, y, t) {
 
 let heroBuf = null;
 export function drawTitle(ctx, t) {
-  if (!bg || bg.width !== W) buildBackground();
+  if (!bg || bg.width !== W || bg.height !== H) buildBackground();
   ctx.drawImage(bg, 0, 0);
   ctx.save();
   ctx.translate(OX(), 0);

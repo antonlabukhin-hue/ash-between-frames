@@ -7,6 +7,7 @@ import { dist, norm, clamp, angleDiff } from '../core/math.js';
 import { spawnNote, spawnRing } from '../combat/projectiles.js';
 import { lineOfSight } from '../world/room.js';
 import { P } from '../art/palette.js';
+import { W, H } from '../core/renderer.js';
 
 export const ENEMY_DEFS = {
   hollow: {
@@ -452,7 +453,13 @@ export function updateEnemies(g, dt) {
       else continue;
     }
     if (g.player.dead) continue;
-    (e.ai || AI[e.kind])?.(g, e, dt);
+    // дальние враги (за экраном от края кадра) думают раз в 4 кадра с накопленным временем
+    const far = Math.abs(e.x - (g.cam.x + W / 2)) > W || Math.abs(e.y - (g.cam.y + H / 2)) > H;
+    e.aiAcc = (e.aiAcc || 0) + dt;
+    e.far = far;
+    if (far && (g.frame + e.id) % 4 !== 0) continue;
+    (e.ai || AI[e.kind])?.(g, e, e.aiAcc);
+    e.aiAcc = 0;
   }
   // расталкивание
   const list = g.enemies.filter((e) => !e.dead && e.spawn <= 0 && !e.noPush);

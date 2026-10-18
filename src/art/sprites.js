@@ -10,9 +10,17 @@ export function px(ctx, x, y, w, h, c) {
   ctx.fillRect(Math.round(x), Math.round(y), w, h);
 }
 
+// Тень под ногами: ступенчатый эллипс или плоская полоса (профиль Low).
+let shadowStyle = 'stepped';
+export const setShadowStyle = (s) => (shadowStyle = s);
+
 export function shadow(ctx, x, y, w = 12, a = 0.45) {
   ctx.fillStyle = `rgba(3,4,10,${a})`;
   const hw = Math.round(w / 2);
+  if (shadowStyle === 'flat') {
+    ctx.fillRect(Math.round(x - hw), Math.round(y - 1), hw * 2, 2);
+    return;
+  }
   ctx.fillRect(Math.round(x - hw + 2), Math.round(y - 1), hw * 2 - 4, 3);
   ctx.fillRect(Math.round(x - hw), Math.round(y), hw * 2, 1);
 }
@@ -35,13 +43,56 @@ export function disc(ctx, cx, cy, r, c) {
   }
 }
 
+// Пиксельное кольцо (эллипс). step=1 — сплошное: строки отрезками, крутые участки —
+// вертикальными столбиками, четыре симметричные четверти. step>1 — пунктир.
 export function ring(ctx, cx, cy, r, c, squash = 1, step = 1) {
   ctx.fillStyle = c;
-  const n = Math.max(12, Math.floor(r * 6));
-  for (let i = 0; i < n; i += step) {
-    const a = (i / n) * Math.PI * 2;
-    ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * squash), 1, 1);
+  cx = Math.round(cx);
+  cy = Math.round(cy);
+  const rx = Math.max(1, Math.round(r));
+  const ry = Math.max(1, Math.round(r * squash));
+  if (step > 1) {
+    const n = Math.max(8, Math.floor((Math.PI * 2 * rx) / (2 + step)));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      ctx.fillRect(Math.round(cx + Math.cos(a) * rx), Math.round(cy + Math.sin(a) * ry), 1, 1);
+    }
+    return;
   }
+  const xAt = (y) => (y >= ry ? 0 : Math.round(rx * Math.sqrt(1 - (y * y) / (ry * ry))));
+  let colX = -1;
+  let colY0 = 0;
+  const flushCol = (yEnd) => {
+    if (colX < 0) return;
+    const h = yEnd - colY0;
+    ctx.fillRect(cx + colX, cy + colY0, 1, h);
+    ctx.fillRect(cx - colX, cy + colY0, 1, h);
+    ctx.fillRect(cx + colX, cy - colY0 - h + 1, 1, h);
+    ctx.fillRect(cx - colX, cy - colY0 - h + 1, 1, h);
+    colX = -1;
+  };
+  for (let y = 0; y <= ry; y++) {
+    const xo = xAt(y);
+    const xi = Math.min(xo, xAt(y + 1) + 1);
+    if (xo === xi) {
+      // одиночный пиксель в строке — копим вертикальный столбик
+      if (colX !== xo) {
+        flushCol(y);
+        colX = xo;
+        colY0 = y;
+      }
+      continue;
+    }
+    flushCol(y);
+    const w = xo - xi + 1;
+    ctx.fillRect(cx + xi, cy + y, w, 1);
+    ctx.fillRect(cx - xo, cy + y, w, 1);
+    if (y > 0) {
+      ctx.fillRect(cx + xi, cy - y, w, 1);
+      ctx.fillRect(cx - xo, cy - y, w, 1);
+    }
+  }
+  flushCol(ry + 1);
 }
 
 // Рваный низ плаща: зубцы колышутся во времени.
@@ -60,7 +111,7 @@ export function drawHero(ctx, x, y, o) {
   const t = o.t || 0;
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 12);
+  if (!o.noShadow) shadow(ctx, x, y, 12);
   const dir = o.dir || 'down';
   const f = o.flip ? -1 : 1;
   const walk = o.walk || 0;
@@ -192,7 +243,7 @@ export function drawHollow(ctx, x, y, o) {
   const past = o.phase === 'past';
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 12);
+  if (!o.noShadow) shadow(ctx, x, y, 12);
   const step = Math.sin((o.walk || 0) * Math.PI * 2);
   const skin = past ? P.skin : P.ash3;
   const cloth = past ? P.amber0 : P.ash1;
@@ -237,7 +288,7 @@ export function drawFramer(ctx, x, y, o) {
   const past = o.phase === 'past';
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 8, 0.35);
+  if (!o.noShadow) shadow(ctx, x, y, 8, 0.35);
   const body = past ? P.brass : P.crimson1;
   const hi = past ? P.brassHi : P.crimson;
   const t = o.t || 0;
@@ -266,7 +317,7 @@ export function drawRinger(ctx, x, y, o) {
   const past = o.phase === 'past';
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 14);
+  if (!o.noShadow) shadow(ctx, x, y, 14);
   const robe = past ? P.milk : P.ash2;
   const robeLo = past ? P.ash4 : P.ash1;
   const t = o.t || 0;
@@ -298,7 +349,7 @@ export function drawShadow(ctx, x, y, o) {
   const t = o.t || 0;
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 18, 0.55);
+  if (!o.noShadow) shadow(ctx, x, y, 18, 0.55);
   const body = past ? P.slate : P.ink;
   // шлейф-тело
   for (let i = 0; i < 30; i++) {
@@ -332,7 +383,7 @@ export function drawEater(ctx, x, y, o) {
   const t = o.t || 0;
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 22, 0.5);
+  if (!o.noShadow) shadow(ctx, x, y, 22, 0.5);
   const body = past ? P.amber1 : P.slate;
   const hi = past ? P.amberHi : P.ash2;
   const chew = o.windup ? 4 : Math.round((Math.sin(t * 5) + 1) * 1.5);
@@ -372,7 +423,7 @@ export function drawMel(ctx, x, y, o) {
   const v = o.version; // 'imprint' | 'scar' | undefined (целый)
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 34, 0.5);
+  if (!o.noShadow) shadow(ctx, x, y, 34, 0.5);
   const hover = Math.round(Math.sin(t * 1.6) * 1.5);
   const yy = y - 4 + hover;
   // ряса: левая половина молочно-золотая, правая — малиновая (если целый)
@@ -425,10 +476,10 @@ export function drawGreatBell(ctx, x, y, o) {
   const k = o.k || ident;
   const past = o.phase === 'past';
   const t = o.t || 0;
-  const sw = Math.round(Math.sin(t * 1.3) * (o.ringing ? 3 : 1));
+  const sw = o.sw ?? Math.round(Math.sin(t * 1.3) * (o.ringing ? 3 : 1));
   x = Math.round(x) + sw;
   y = Math.round(y);
-  line(ctx, x - sw, y - 200, x, y - 34, P.void, 2);
+  if (!o.noThread) line(ctx, x - sw, y - 200, x, y - 34, P.void, 2);
   const body = past ? P.brass : P.ash2;
   const hi = past ? P.brassHi : P.ash3;
   for (let i = 0; i < 30; i++) {
@@ -451,7 +502,7 @@ export function drawTik(ctx, x, y, o = {}) {
   const k = o.k || ident;
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 10);
+  if (!o.noShadow) shadow(ctx, x, y, 10);
   const b = Math.round(Math.sin((o.t || 0) * 3));
   px(ctx, x - 4, y - 9, 8, 8, k(P.wood));
   px(ctx, x - 3, y - 2, 2, 2, k(P.ink));
@@ -468,7 +519,7 @@ export function drawMara(ctx, x, y, o = {}) {
   const k = o.k || ident;
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 12);
+  if (!o.noShadow) shadow(ctx, x, y, 12);
   for (let i = 0; i < 14; i++) {
     const half = 3 + Math.floor(i / 4);
     px(ctx, x - half, y - 15 + i, half * 2, 1, k(P.wood));
@@ -487,7 +538,7 @@ export function drawDog(ctx, x, y, o = {}) {
   const k = o.k || ident;
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 14);
+  if (!o.noShadow) shadow(ctx, x, y, 14);
   const wag = Math.round(Math.sin((o.t || 0) * 8));
   const c = o.past ? P.amber1 : P.ash3;
   px(ctx, x - 6, y - 7, 11, 4, k(c));
@@ -509,7 +560,7 @@ export function drawGhost(ctx, x, y, o = {}) {
   const t = o.t || 0;
   x = Math.round(x);
   y = Math.round(y);
-  shadow(ctx, x, y, 10, 0.25);
+  if (!o.noShadow) shadow(ctx, x, y, 10, 0.25);
   ctx.globalAlpha = a;
   // тело: от плеч к подолу
   for (let i = 0; i < 14; i++) {

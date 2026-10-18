@@ -420,3 +420,26 @@ body {
   z-index: 10;
 }
 body.portrait #rotate { display: flex; }
+
+/* отладочный оверлей производительности (F3, ?debug) */
+.perf {
+  position: fixed;
+  top: 4px;
+  left: 4px;
+  margin: 0;
+  padding: 4px 6px;
+  z-index: 20;
+  background: rgba(5, 6, 12, 0.85);
+  border: 1px solid #3a3b47;
+  color: #a8fff0;
+  font: 11px/1.25 Consolas, monospace;
+  pointer-events: none;
+  white-space: pre;
+}
+
+select {
+  font: inherit;
+  background: #121628;
+  color: var(--milk);
+  border: 1px solid #3a3b47;
+}
