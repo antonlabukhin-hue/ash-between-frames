@@ -25,12 +25,12 @@ function viewport() {
 export function createRenderer(canvas, stage) {
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.imageSmoothingEnabled = false;
-  const r = { canvas, ctx, rs: RS, scale: 1, cssScale: 1, exact: true, ox: 0, oy: 0, onResize: null };
+  const r = { canvas, ctx, rs: RS, scale: 1, cssScale: 1, exact: true, ox: 0, oy: 0, onResize: null, zoom: 1 };
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     const vp = viewport();
-    const f = frameSize(vp.width * dpr, vp.height * dpr);
+    const f = frameSize(vp.width * dpr, vp.height * dpr, RS, r.zoom);
     const changed = f.w !== W || f.h !== H;
     W = f.w;
     H = f.h;
@@ -64,6 +64,12 @@ export function createRenderer(canvas, stage) {
   resize();
 
   r.resize = resize;
+  // Камера ближе или дальше (def.zoom комнаты); меняет размер мира в кадре
+  r.setZoom = (z) => {
+    if (z === r.zoom) return;
+    r.zoom = z;
+    resize();
+  };
   // Сбросить преобразование к базовому (логические пиксели мира).
   r.begin = () => ctx.setTransform(RS, 0, 0, RS, 0, 0);
   // Экран → логические координаты кадра (мышь, касания).

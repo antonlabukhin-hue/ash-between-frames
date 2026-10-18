@@ -17,12 +17,14 @@ import { atlas } from '../art/spritecache.js';
 import { blit } from '../art/atlas.js';
 import { line, px } from '../art/sprites.js';
 import { registerFigureHd } from '../world/props.js';
+import { ART64 } from '../art/style64.js';
+import { drawVillager64, drawStillOne64 } from '../art/chars64.js';
 import { drawVillager32, drawStillOne32 } from '../art/npcs32.js';
 import { paintRoadBase, paintRoadHd, drawRoadParallax, drawRoadOver } from '../art/road32.js';
 import { hasArt } from '../art/roomart.js';
 
-registerFigureHd(drawVillager, drawVillager32);
-registerFigureHd(drawStillOne, drawStillOne32);
+registerFigureHd(drawVillager, ART64 ? drawVillager64 : drawVillager32);
+registerFigureHd(drawStillOne, ART64 ? drawStillOne64 : drawStillOne32);
 
 const REN = (text) => ({ who: 'Рен', text, portrait: 'ren', style: 'white' });
 const TIK = (text) => ({ who: 'Тик', text, portrait: 'tik' });
@@ -205,7 +207,7 @@ export const road = {
     };
     for (let i = 0; i < 5; i++) g.spawnPickup('ash', 216 + (i % 2) * 40, RT(36 - i * 1.5), { vx: 0, vy: 0 });
 
-    g.tik = npc(g, drawTik, T(9), RT(41), { hidden: true, prompt: 'Поговорить с Тиком' });
+    g.tik = npc(g, drawTik, T(9), RT(41), { hidden: true, prompt: 'Поговорить с Тиком', name: 'Тик' });
     g.tik.onInteract = async () => {
       await g.say([TIK('Отпечаток — каким вещь была. Шрам — какой стала. Ты не чинишь мир, ты одалживаешь у прошлого. На время.')]);
     };
@@ -381,6 +383,7 @@ function campMap() {
 
 export const camp = {
   id: 'camp',
+  zoom: 1.35, // мирная сцена — камера ближе
   title: 'Чужой привал',
   weather: { rain: 0.25, fog: 'cold', fogA: 0.25 },
   music: 'road',
@@ -393,8 +396,8 @@ export const camp = {
   setup(g) {
     for (const [x, y] of [[3, 2], [8, 1], [15, 2], [19, 10], [5, 10], [12, 11]]) g.addProp('tree', T(x), TOP(y + 1));
     const fire = g.addProp('campfire', T(11), TOP(4) + 10, { prompt: null });
-    const arno = g.addProp('ghostNpc', T(9), TOP(4) + 8, { drawFn: drawGhost, drawOpts: { hat: true }, prompt: 'Поговорить с силуэтом', markY: 28 });
-    const sena = g.addProp('ghostNpc', T(13), TOP(4) + 8, { drawFn: drawGhost, drawOpts: { dress: true, color: P.amberHi }, hidden: true, markY: 28 });
+    const arno = g.addProp('ghostNpc', T(9), TOP(4) + 8, { drawFn: drawGhost, drawOpts: { hat: true }, prompt: 'Поговорить с силуэтом', markY: 28, name: 'Арно' });
+    const sena = g.addProp('ghostNpc', T(13), TOP(4) + 8, { drawFn: drawGhost, drawOpts: { dress: true, color: P.amberHi }, hidden: true, markY: 28, name: 'Сена' });
     g.campNpc = { arno, sena, fire };
     g.campNode = g.memoryNode(fire, 'campfire', { w: 52, h: 22, x: fire.x - 26, y: fire.y - 9, interact: false, closedText: 'Руны гаснут: у этого костра выбор уже сделан.' });
     g.campNode.canInteract = () => !!g.flags.camp; // до выбора не отвлекать от силуэта
@@ -643,7 +646,7 @@ export const square = {
     g.stillOne = g.addProp('ghostNpc', 404, 252, { drawFn: drawStillOne });
     // переносной свет (П2): фонарь привратника у входа; в его ореоле — привратник и стёртая надпись
     g.addProp('handLantern', 212, 330);
-    const keeper = g.addProp('ghostNpc', 272, 104, { drawFn: drawGhost, drawOpts: { hat: true }, inAura: 'handLantern', hidden: true, prompt: 'Окликнуть привратника', markY: 28 });
+    const keeper = g.addProp('ghostNpc', 272, 104, { drawFn: drawGhost, drawOpts: { hat: true }, inAura: 'handLantern', hidden: true, prompt: 'Окликнуть привратника', markY: 28, name: 'Привратник Ведан' });
     keeper.onInteract = async () => {
       const KEEP = (t) => ({ who: 'Привратник Ведан', text: t });
       if (g.flags.keeperOpened) {
@@ -1028,6 +1031,7 @@ function ascentMap() {
 
 export const ascent = {
   id: 'ascent',
+  zoom: 1.3, // мирная сцена — камера ближе
   title: 'Подъём к колокольне',
   weather: { rain: 0.5, fog: 'cold', fogA: 0.3 },
   walls: 'city',
@@ -1043,7 +1047,7 @@ export const ascent = {
     for (const [x, y] of [[10, 10], [25, 11], [34, 10]]) g.addProp('rubble', T(x), TOP(y + 1));
     const echo = g.addProp('memoryStone', T(13), TOP(7) + 4, { timeline: { hold: 9, cost: 0, switchTime: 0.5 } });
     g.cityEcho = echo;
-    const mara = npc(g, drawMara, T(24), TOP(7) + 4, { prompt: 'Поговорить с Марой' });
+    const mara = npc(g, drawMara, T(24), TOP(7) + 4, { prompt: 'Поговорить с Марой', name: 'Мара' });
     // печь Мары остывает в Шраме; Узел памяти под ней держит прошлое навсегда
     const oven = g.addProp('maraOven', T(24), TOP(5) + 6);
     g.memoryNode(oven, 'oven', { w: 46, h: 18, x: oven.x - 23, y: oven.y - 6, onFix: async (gg, o, silent) => {
