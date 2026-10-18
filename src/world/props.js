@@ -41,7 +41,7 @@ export const PROP_KINDS = {
     solid: { past: true, present: false },
     protect: { past: 52, present: 0 }, // удерживает стирающиеся плиты рядом
     light: { past: 44, present: 0 },
-    aura: { past: [54, 38], present: 0 },
+    aura: { past: [92, 52], present: 0 }, // в ореоле плиты целы и виден следующий камень
     auraRim: false, // свой круг рун уже нарисован
     draw: drawMemoryStone,
   },
