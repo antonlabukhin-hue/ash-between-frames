@@ -8,6 +8,7 @@ import { moveBox } from '../world/room.js';
 import { heroBlocked, isPit, isStableGround, isWall, solidPropAt } from '../world/world.js';
 import { findNearest } from '../world/safe.js';
 import { shiftNote } from '../combat/bestiary.js';
+import { bonusCharges, holdMul } from '../items/gifts.js';
 import { enemyMods, isPhased, stats } from '../enemies/enemies.js';
 import { projectileAnchor } from '../combat/projectiles.js';
 import { burst, ringFx, slashFx, addText, boltFx } from '../world/fx.js';
@@ -30,7 +31,7 @@ export function createPlayer(x, y, save) {
     x, y, r: 4, hp: maxHp, maxHp, invuln: 0, dead: false,
     aim: Math.PI / 2, dir: 'down', flip: false, walk: 0, sway: 0, moving: false,
     combo: createCombo(), swing: null, hitSet: new Set(),
-    charges: createCharges(BALANCE.charges + (save.upgrades.charges || 0), 10),
+    charges: createCharges(BALANCE.charges + (save.upgrades.charges || 0) + bonusCharges(save), 10),
     heat: createHeat(),
     dodge: 0, dodgeCd: 0, dodgeDir: [0, 1], dodgeFresh: false,
     channel: null, echo: 0, rift: 0, critNext: false,
@@ -134,6 +135,10 @@ export function applyShift(g, target, { free = false, byShade = false } = {}) {
     if (p.echo > 0 && cost === 0) p.echo = 0;
   }
   const phase = shiftTimeline(obj.tl);
+  // «Осколок линзы» (дар Сены): вернутое держится дольше
+  if (phase !== obj.tl.base && Number.isFinite(obj.tl.left)) obj.tl.left *= holdMul(g.save);
+  // «Сухая сталь» (дар кузнеца): после сдвига врага следующий удар по нему сильнее
+  if (target.type === 'enemy' && g.save.upgrades?.steel) obj.steelUntil = g.time + 4;
   g.audio.sfx.shift(phase);
   const c = phase === PAST ? P.amberHi : P.crimsonHi;
   ringFx(g, target.x, target.y, 2, 22, c, 0.35);
