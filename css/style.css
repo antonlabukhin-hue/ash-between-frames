@@ -767,3 +767,6 @@ body { font-family: var(--font-body); font-weight: 500; }
 .keystrip b { color: var(--amber-hi); font-weight: 700; margin-right: 0.3em; }
 .keystrip.hidden { display: none; }
 @media (pointer: coarse) { .keystrip { display: none; } }
+
+/* подпись, которой не нашлось места (src/ui/layout.js) */
+.lhide { visibility: hidden !important; }

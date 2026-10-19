@@ -808,6 +808,8 @@ export function createGame({ input, audio, ui, storage, save }) {
     updateFx(g, dt);
     updateScenes(dt);
     g.lights = collectLights(g);
+    // идёт бой: враг рядом и уже в деле — интерфейс оставляет только боевое (аудит: приоритет UI)
+    g.inCombat = !!p && !p.dead && g.enemies.some((e) => !e.dead && e.spawn <= 0 && e.aggro && Math.hypot(e.x - p.x, e.y - p.y) < 170);
     // первая встреча с врагом: бой замирает, карточка — каков он в Шраме и в Отпечатке и как его бить
     // (под автотестами карточки выключены, если тест сам не включил их: window.__abfBestiary)
     const bestiaryOn = typeof navigator === 'undefined' || !navigator.webdriver || window.__abfBestiary;
