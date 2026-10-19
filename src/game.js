@@ -8,6 +8,7 @@ import { createProp, propFoot, propCenter } from './world/props.js';
 import { collectLights, isPit, isWall, solidPropAt } from './world/world.js';
 import { updateIslands, inIslands, auraSources, carryPos, dropPos } from './world/memory.js';
 import { link, resolveThreads, chainOf } from './timeline/threads.js';
+import { key } from './scenes/keys.js';
 import { stepShade, hitShade } from './player/echo.js';
 import { pointInRect } from './world/room.js';
 import { updateFx, burst, addText, ringFx, slashFx } from './world/fx.js';
@@ -780,7 +781,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     const st = p?.shiftTarget?.obj;
     if (st && !save.flags.threadHinted && !g.cinematic && chainOf(g.props, st).length) {
       save.flags.threadHinted = true;
-      g.hint('Янтарная нить — причина и следствие. Сдвигай причину: следствие пойдёт за ней.', 6);
+      g.hint(`У этого объекта есть нить причин. Удерживай ${key(g, 'gaze')} — взгляд Смотрителя покажет, что он тянет за собой. Сдвигай причину: следствие пойдёт за ней.`, 6);
     }
     // интерактив
     const found = !g.cinematic && p && !p.dead ? findInteract() : { target: null, near: null };

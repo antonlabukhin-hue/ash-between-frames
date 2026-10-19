@@ -728,6 +728,8 @@ function gazeTags(g, p, cx, cy) {
 // (причина работает) — яркая, с бегущими бусинами. Без прицела — только натянутые, бледно.
 const threadAnchor = (o) => (o.def.flat ? propCenter(o) : [o.x, o.y - (o.def.threadY ?? 12)]);
 function drawThreads(g, ctx, p) {
+  // нити видны только во «Взгляде Смотрителя» — в обычной игре не мешают
+  if (!(g.gazeK > 0)) return;
   const all = threadList(g.props);
   if (!all.length) return;
   const target = (p.channel?.target || p.shiftTarget)?.obj;
@@ -744,7 +746,7 @@ function drawThreads(g, ctx, p) {
     const len = Math.hypot(x1 - x0, y1 - y0);
     const sag = Math.min(18, len * 0.12);
     const n = Math.max(6, Math.floor(len / 3));
-    const a = hot ? (t.on ? 0.95 : 0.8) : 0.3;
+    const a = (hot ? (t.on ? 0.95 : 0.8) : 0.3) * g.gazeK;
     const col = t.on ? P.amberHi : hot ? '#e0a040' : '#b8721f';
     ctx.globalAlpha = a;
     for (let i = 0; i <= n; i++) {
