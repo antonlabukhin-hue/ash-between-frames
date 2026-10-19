@@ -1,6 +1,7 @@
 // Враги. Каждый — TimelineEnemy: параметры для Отпечатка (past) и Шрама (present).
 import { createTimeline, tickTimeline, PAST, PRESENT } from '../timeline/timeline.js';
 import { inIslands, auraDamageMul } from '../world/memory.js';
+import { STEEL_MUL } from '../items/gifts.js';
 import { moveBox } from '../world/room.js';
 import { enemyBlocked, revealedAt } from '../world/world.js';
 import { burst, addText, ringFx } from '../world/fx.js';
@@ -129,6 +130,12 @@ export function damageEnemy(g, e, amount, o = {}) {
   if (!o.reflected && !o.pure && isPhased(g, e)) {
     addText(g, e.x, e.y - 18, '·', P.ash3, { life: 0.3 });
     return -1;
+  }
+  // «Сухая сталь»: первый удар после сдвига этого врага — в полтора раза сильнее
+  if (!o.pure && e.steelUntil && g.time < e.steelUntil) {
+    amount = Math.round(amount * STEEL_MUL);
+    e.steelUntil = 0;
+    addText(g, e.x, e.y - (e.hitY ?? 9) - 26, 'сухая сталь', P.milk, { life: 0.8 });
   }
   // остров памяти: Шрам слабеет, Отпечаток крепнет (П2)
   if (!o.pure && e.tl && g.memIslands?.length && inIslands(g.memIslands, e.x, e.y)) amount = Math.max(1, Math.round(amount * auraDamageMul(e.tl.phase)));

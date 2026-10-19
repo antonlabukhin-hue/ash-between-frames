@@ -1,0 +1,11 @@
+{
+  "cpuThrottle": 4,
+  "actions": 40,
+  "rooms": ["square", "shadowArena", "tornRoad"],
+  "limits": { "median": 34, "p95": 70, "over100": 6 },
+  "ci": {
+    "note": "раннер GitHub без видеокарты рисует холст программно — свои пороги, без замедления ЦП",
+    "cpuThrottle": 1,
+    "limits": { "median": 45, "p95": 90, "over100": 12 }
+  }
+}

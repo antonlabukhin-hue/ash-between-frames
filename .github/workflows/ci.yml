@@ -1,0 +1,66 @@
+name: CI
+
+# Проверки рабочих веток до слияния в main: unit, сборка, e2e в Chromium и плавность в бою.
+on:
+  push:
+    branches: ['claude/**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # webServer из playwright.config.js сам поднимает vite; в CI — Chromium вместо Edge
+      - run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: test-results
+          retention-days: 7
+
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # раннер GitHub — не телефон: замер ловит регрессии и пишет цифры в отчёт, но не блокирует
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # отладочная сборка: в ней есть window.__abf, через который замер ставит бой
+      - run: npx vite build --mode development
+      - run: nohup npx vite preview --port 4173 --strictPort > preview.log 2>&1 &
+      - run: for i in $(seq 1 30); do curl -sf http://localhost:4173/ > /dev/null && break; sleep 1; done
+      - run: node scripts/perf-gate.mjs
+        env:
+          ABF_URL: http://localhost:4173/

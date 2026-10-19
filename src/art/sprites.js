@@ -551,6 +551,11 @@ export function drawGreatBell(ctx, x, y, o) {
   ring(ctx, x, y - 16, 4, k(past ? P.amberHi : P.ash1));
   if (!past) {
     for (let i = 0; i < 8; i++) px(ctx, x + 2 + i, y - 22 + ((i * 5) % 14), 1, 2, P.crimson);
+    // выбитый кусок края и сквозная трещина — силуэт другой, не только цвет
+    px(ctx, x + 8, y - 5, 12, 5, P.void);
+    px(ctx, x + 11, y - 8, 6, 3, P.void);
+    line(ctx, x + 10, y - 8, x - 2, y - 30, P.void);
+    line(ctx, x + 11, y - 8, x - 1, y - 30, P.crimson);
   }
   if (o.cracks) for (let i = 0; i < o.cracks; i++) line(ctx, x - 10 + i * 7, y - 28 + i * 3, x - 6 + i * 7, y - 6, P.void);
 }

@@ -9,6 +9,7 @@ import { burst } from '../world/fx.js';
 import { hasFragment } from '../items/fragments.js';
 import { spendMemory } from '../story/memories.js';
 import { tikTopics } from './tiktalk.js';
+import { GIFTS, giftsFrom, takeGift } from '../items/gifts.js';
 import { mulberry32 } from '../core/math.js';
 import { killEnemy } from '../enemies/enemies.js';
 
@@ -221,17 +222,41 @@ export const kitchen = {
     dog.onInteract = () => talkDog(g, dog);
     if (f.camp === 'arno' || f.camp === 'both' || f.camp === 'fixed') {
       const a = g.addProp('ghostNpc', T(4), TOP(11), { drawFn: drawGhost, drawOpts: { hat: true, alpha: 0.85 }, prompt: 'Поговорить с Арно', markY: 26, name: 'Арно' });
-      a.onInteract = () => g.say([{ who: 'Арно', text: f.camp === 'fixed' ? 'Та женщина у окна… Мы точно незнакомы? Она смеётся, как кто-то, кого я ждал.' : f.camp === 'both' ? 'Сена говорит, что я храплю. Значит, я есть.' : 'Здесь пахнет хлебом. Я и забыл, что так бывает.', portrait: 'arno' }]);
+      a.onInteract = () =>
+        rescuedTalk(g, 'arno', 'Арно', 'arno', [{ who: 'Арно', text: f.camp === 'fixed' ? 'Та женщина у окна… Мы точно незнакомы? Она смеётся, как кто-то, кого я ждал.' : f.camp === 'both' ? 'Сена говорит, что я храплю. Значит, я есть.' : 'Здесь пахнет хлебом. Я и забыл, что так бывает.', portrait: 'arno' }], {
+          wick: [
+            { who: 'Арно', text: 'Держи. Фитиль от моего дорожного фонаря — я нёс его, пока ждал у ворот.', portrait: 'arno' },
+            { who: 'Арно', text: 'Браслет у тебя голодный до огня. Пусть будет ещё один огонёк.', portrait: 'arno' },
+          ],
+        });
     }
     if (f.camp === 'sena' || f.camp === 'both' || f.camp === 'fixed') {
       const s = g.addProp('ghostNpc', T(8), TOP(11), { drawFn: drawGhost, drawOpts: { dress: true, color: P.amberHi, alpha: 0.85 }, prompt: 'Поговорить с Сеной', markY: 26, name: 'Сена' });
-      s.onInteract = () => g.say([{ who: 'Сена', text: 'Я помню дорогу за двоих. Если пойдёшь снова — спрашивай.', portrait: 'sena' }]);
+      s.onInteract = () =>
+        rescuedTalk(g, 'sena', 'Сена', 'sena', [{ who: 'Сена', text: 'Я помню дорогу за двоих. Если пойдёшь снова — спрашивай.', portrait: 'sena' }], {
+          lens: [
+            { who: 'Сена', text: 'Осколок от моего фонаря. Сквозь него прошлое видно дольше — я так смотрела на костёр, пока Арно не вернулся.', portrait: 'sena' },
+            { who: 'Сена', text: 'Вставь в браслет. Пусть то, что ты вернул, не спешит уходить.', portrait: 'sena' },
+          ],
+        });
     }
     if (f.bellChoice === 'people' || f.bellChoice === 'split' || f.bellChoice === 'lastRing') {
       const n = f.bellChoice === 'split' ? 1 : 2;
       for (let i = 0; i < n; i++) {
         const v = g.addProp('ghostNpc', T(13 + i * 3), TOP(11), { drawFn: drawGhost, drawOpts: { color: P.milk, alpha: 0.85, hat: i === 0 }, prompt: 'Поговорить с жителем', markY: 26, name: 'Житель' });
-        v.onInteract = () => g.say([{ who: 'Житель Колокольных Ворот', text: i === 0 ? 'Тесно, зато все на своих местах.' : 'Я помню, как звучал праздник. Хочешь, напою?', portrait: 'villager' }]);
+        if (i === 0) {
+          v.name = 'Кузнец';
+          v.prompt = 'Поговорить с кузнецом';
+        }
+        v.onInteract = () =>
+          i === 0
+            ? rescuedTalk(g, 'smith', 'Житель-кузнец', 'villager', [{ who: 'Кузнец', text: 'Тесно, зато все на своих местах. Я ковал колокольные языки — помню жар горна.', portrait: 'villager' }], {
+                steel: [
+                  { who: 'Кузнец', text: 'Дай клинок. Сухая сталь — закалка без воды, на памяти огня.', portrait: 'villager' },
+                  { who: 'Кузнец', text: 'Вернёшь врагу прошлое — бей сразу: такой клинок помнит, куда целиться.', portrait: 'villager' },
+                ],
+              })
+            : g.say([{ who: 'Житель Колокольных Ворот', text: 'Я помню, как звучал праздник. Хочешь, напою?', portrait: 'villager' }]);
       }
     }
   },
@@ -360,6 +385,27 @@ async function talkDog(g, dog) {
     return;
   }
   await g.say([DOG(g.hasMemory('dogTag') || g.hasMemory('dogBowl') ? 'Пёс обнюхивает обрывок имени и смотрит на дверь. Половины мало.' : 'Пёс существует только в настоящем. Но хвост у него виляет так, будто он тебя узнал.')]);
+}
+
+// Спасённый на Кухне: приветствие, а если у него есть дар — короткая сцена и карточка дара.
+async function rescuedTalk(g, id, from, portrait, hello, scenes) {
+  const gifts = giftsFrom(g.save, from);
+  if (!gifts.length) {
+    await g.say(hello);
+    return;
+  }
+  for (const gid of gifts) {
+    await g.say(scenes[gid] || hello);
+    if (!takeGift(g.save, gid)) continue;
+    const d = GIFTS[gid];
+    if (gid === 'wick' && g.player) {
+      g.player.charges.max += 1;
+      g.player.charges.n = g.player.charges.max;
+    }
+    g.audio.sfx.shard();
+    g.ui.card(`Дар · ${d.from}`, d.name, d.desc, 4.5);
+    g.persist();
+  }
 }
 
 async function readRecords(g) {

@@ -220,11 +220,24 @@ function drawBridge(ctx, p, g) {
       }
       line(ctx, x, y + 1, x + p.w, y + 1, P.amber1);
       line(ctx, x, y + p.h - 2, x + p.w, y + p.h - 2, P.amber1);
+      // столбики и верёвочные перила: целый мост — объёмный силуэт
+      for (let i = 0; i <= p.w; i += 12) {
+        px(ctx, x + i - 1, y - 4, 2, 5, P.wood);
+        px(ctx, x + i - 1, y + p.h - 2, 2, 4, P.wood);
+      }
+      line(ctx, x, y - 3, x + p.w, y - 3, P.amberHi);
     } else {
       for (let i = 0; i < p.h; i += 4) {
         px(ctx, x + 2, y + i, p.w - 4, 3, i % 8 ? P.woodHi : P.wood);
         px(ctx, x + 2, y + i + 2, p.w - 4, 1, P.amber0);
       }
+      // столбики и перила по бокам
+      for (let i = 0; i <= p.h; i += 12) {
+        px(ctx, x - 1, y + i - 3, 2, 4, P.wood);
+        px(ctx, x + p.w - 1, y + i - 3, 2, 4, P.wood);
+      }
+      line(ctx, x, y, x, y + p.h, P.amberHi);
+      line(ctx, x + p.w, y, x + p.w, y + p.h, P.amberHi);
     }
   } else {
     // обломки по краям, посередине пустота
@@ -239,6 +252,20 @@ function drawBridge(ctx, p, g) {
       ctx.fillStyle = 'rgba(224,160,64,0.25)';
       for (let i = 12; i < p.h - 8; i += 6) ctx.fillRect(x + p.w / 2, y + i, 1, 3);
     }
+    // Шрам: обломанные доски свисают в провал, от перил — обрывки верёвок
+    const sway = Math.round(Math.sin(g.time * 2) * 1);
+    if (horizontal) {
+      for (const [bx, dir] of [[x + 10, 1], [x + p.w - 13, -1]]) {
+        line(ctx, bx, y + 4, bx + dir * 3 + sway, y + p.h - 2, P.wood);
+        line(ctx, bx + 1, y + 4, bx + 1 + dir * 4 + sway, y + p.h - 4, P.woodHi);
+        line(ctx, bx - dir * 2, y - 2, bx - dir * 2 + sway, y + 6, P.amber0);
+      }
+    } else {
+      for (const [by, dir] of [[y + 10, 1], [y + p.h - 4, -1]]) {
+        line(ctx, x + 4, by, x + p.w - 3 + sway, by + dir * 4, P.wood);
+        line(ctx, x + 1, by - dir * 2, x + 3 + sway, by + dir * 3, P.amber0);
+      }
+    }
   }
 }
 
@@ -249,13 +276,35 @@ function drawStair(ctx, p, g) {
   const past = p.exists === PAST;
   const c1 = past ? P.amber1 : P.ash2;
   const c2 = past ? P.amberHi : P.ash3;
-  if (on) {
+  if (on && past) {
+    // прошлое: ровные ступени, дорожка посередине и балясины по краям
     for (let i = 0; i < p.h; i += 4) {
       px(ctx, x, y + i, p.w, 4, c1);
       px(ctx, x, y + i, p.w, 1, c2);
       px(ctx, x, y + i + 3, p.w, 1, P.ink);
     }
-    if (!past) for (let i = 0; i < 6; i++) px(ctx, x + hash2(i, p.id, 3) * p.w, y + hash2(p.id, i, 4) * p.h, 1, 1, P.crimson);
+    px(ctx, x + p.w / 2 - 6, y, 12, p.h, 'rgba(134,22,58,0.55)');
+    for (let i = 0; i < p.h; i += 4) px(ctx, x + p.w / 2 - 6, y + i, 12, 1, 'rgba(255,210,122,0.35)');
+    for (let i = 2; i < p.h; i += 6) {
+      px(ctx, x + 1, y + i, 2, 3, c2);
+      px(ctx, x + p.w - 3, y + i, 2, 3, c2);
+    }
+  } else if (on) {
+    // Шрам: ступени сбиты, края зубчатые, трещины — та же опора, но разорванная форма
+    for (let i = 0; i < p.h; i += 4) {
+      const off = hash2(i, p.id, 7) > 0.5 ? 1 : -1;
+      const l = Math.floor(hash2(p.id, i, 8) * 9);
+      const r = Math.floor(hash2(i, p.id, 9) * 9);
+      px(ctx, x + l + off, y + i, p.w - l - r, 4, c1);
+      px(ctx, x + l + off, y + i, p.w - l - r, 1, c2);
+      px(ctx, x + l + off, y + i + 3, p.w - l - r, 1, P.ink);
+    }
+    for (let i = 0; i < 8; i++) {
+      const cx0 = x + 8 + hash2(i, p.id, 3) * (p.w - 16);
+      const cy0 = y + hash2(p.id, i, 4) * p.h;
+      line(ctx, cx0, cy0, cx0 + 5, cy0 + 3, P.crimson);
+      line(ctx, cx0 + 5, cy0 + 3, cx0 + 7, cy0 + 6, P.crimson1 ?? P.crimson);
+    }
   } else {
     // призрачный контур: здесь лестница есть в другой версии
     ctx.fillStyle = past ? 'rgba(224,160,64,0.35)' : 'rgba(174,176,188,0.3)';
