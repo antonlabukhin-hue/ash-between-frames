@@ -10,6 +10,7 @@ import { updateIslands, inIslands, auraSources, carryPos, dropPos } from './worl
 import { link, resolveThreads, chainOf } from './timeline/threads.js';
 import { key } from './scenes/keys.js';
 import { BESTIARY, unseenKinds } from './combat/bestiary.js';
+import { talkMenu, PRESENT, BYE } from './story/talk.js';
 import { stepShade, hitShade } from './player/echo.js';
 import { pointInRect } from './world/room.js';
 import { updateFx, burst, addText, ringFx, slashFx } from './world/fx.js';
@@ -125,6 +126,34 @@ export function createGame({ input, audio, ui, storage, save }) {
     if (reactions[m.id]) await reactions[m.id](g);
     else await g.say([{ who, text: fallback }]);
     return m.id;
+  };
+
+  // Разговор с меню тем. greet — первая встреча (строки или функция), again — короткое «снова ты»;
+  // topics: [{ id, text, lines | run(g), when?(g) }]; present: { prompt?, reactions, fallback }.
+  // Темы можно перечитывать, воспоминание показать сколько угодно раз; разговор — до «Уйти».
+  g.talk = async (id, { who, portrait, greet, again, topics = [], present = {} }) => {
+    const st = ((save.flags.talk ||= {})[id] ||= { met: false, seen: {} });
+    const lines = st.met ? again : greet;
+    if (typeof lines === 'function') await lines(g);
+    else if (lines?.length) await g.say(lines);
+    st.met = true;
+    g.persist();
+    for (;;) {
+      const avail = topics.filter((t) => !t.when || t.when(g));
+      const opts = talkMenu(avail, st.seen, memoryList(save).length);
+      const i = await g.choose(who, opts);
+      const pick = opts[i]?.id;
+      if (!pick || pick === BYE) return;
+      if (pick === PRESENT) {
+        await g.present(present.prompt || `Показать воспоминание — ${who}?`, present.reactions || {}, present.fallback, who);
+        continue;
+      }
+      const t = avail.find((x) => x.id === pick);
+      if (t.run) await t.run(g);
+      else await g.say(t.lines.map((l) => (typeof l === 'string' ? { who, text: l, portrait } : l)));
+      st.seen[t.id] = true;
+      g.persist();
+    }
   };
 
   g.giveFragment = (id) => {

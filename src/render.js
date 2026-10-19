@@ -22,6 +22,7 @@ import { islandRows, islandScale, inIslands } from './world/memory.js';
 import { threadList, chainOf } from './timeline/threads.js';
 import { shadeFade, recordLeft, ECHO_TIME, ECHO_LINGER } from './player/echo.js';
 import { shiftNote } from './combat/bestiary.js';
+import { MEMORIES } from './story/memories.js';
 
 const OUTLINE = '#05060c';
 let lightCanvas = null;
@@ -699,6 +700,12 @@ function nameTags(g, p, cx, cy) {
     if (!isTalk(o) || o.hidden || !o.name || o === g.interactTarget) continue;
     if (Math.hypot(o.x - p.x, o.y - p.y) > 110) continue;
     out.push({ x: (o.x - cx) / W, y: (propTop(o) - 10 - cy) / H, text: o.name, kind: 'talk', d: Math.hypot(o.x - p.x, o.y - p.y) });
+  }
+  // подобрать: записки и обрывки воспоминаний — подпись с названием
+  for (const pk of g.pickups || []) {
+    if (pk.kind !== 'scrap' || Math.hypot(pk.x - p.x, pk.y - p.y) > 150) continue;
+    const m = MEMORIES[pk.memory ?? 'nameScrap'];
+    out.push({ x: (pk.x - cx) / W, y: (pk.y - 12 - cy) / H, text: m ? `Подобрать: ${m.name}` : 'Подобрать', kind: 'use', d: Math.hypot(pk.x - p.x, pk.y - p.y) });
   }
   return out.sort((a, b) => a.d - b.d).slice(0, 6);
 }

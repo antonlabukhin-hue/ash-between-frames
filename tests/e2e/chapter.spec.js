@@ -16,7 +16,11 @@ test('глава 1 проходится от пролога до убежища'
     // фоновый «игрок»: листает диалоги, выбирает первый доступный вариант, лечится
     const bot = setInterval(() => {
       if (A.ui.mode === 'dialogue') A.input.tap('confirm');
-      if (A.ui.mode === 'choice') document.querySelector('.choices .btn:not([disabled])')?.click();
+      if (A.ui.mode === 'choice') {
+        // в разговоре с меню тем — «Уйти», в остальных выборах — первый доступный пункт
+        const btns = [...document.querySelectorAll('.choices .btn:not([disabled])')];
+        (btns.find((b) => b.textContent.includes('Уйти')) || btns[0])?.click();
+      }
       if (g.player && !g.player.dead) g.player.hp = g.player.maxHp;
     }, 120);
     const until = async (pred, ms = 20000, what = '') => {
