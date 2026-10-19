@@ -1,0 +1,6 @@
+{
+  "cpuThrottle": 4,
+  "actions": 40,
+  "rooms": ["square", "shadowArena", "tornRoad"],
+  "limits": { "median": 34, "p95": 70, "over100": 6 }
+}
