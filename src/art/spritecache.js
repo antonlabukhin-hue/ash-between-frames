@@ -28,6 +28,9 @@ export function loadSpriteOverrides(base) {
 
 // Выводит кадр; variant: null — обычный, иначе цвет силуэта (вспышка, двойной контур, шлейф).
 // ov — смысловой ключ ручного кадра: если он есть в манифесте, кодовый кадр не рисуется.
+// последний готовый кадр каждого персонажа (герой, вид врага в фазе) — запасной, пока новый в очереди
+const lastOf = new Map();
+const familyOf = (key) => key.split('|').slice(0, 2).join('|');
 function put(ctx, key, w, h, ax, ay, draw, x, y, variant, outline = true, ov = null, flip = false, hdDraw = null) {
   const f = ov ? overrides.get(ov) : null;
   let base;
@@ -42,8 +45,13 @@ function put(ctx, key, w, h, ax, ay, draw, x, y, variant, outline = true, ov = n
       } else c.drawImage(f.img, f.x, f.y, f.w, f.h, bx - f.ax, by - f.ay, f.w, f.h);
       c.restore();
     }, { outline: f.outline ? OUTLINE : null });
-  } else if (hdDraw && hd.on) base = atlas.sprite(`hd|${key}`, w, h, ax, ay, hdDraw, { outline: outline ? OUTLINE : null, ...HD_OPTS });
-  else base = atlas.sprite(key, w, h, ax, ay, draw, { outline: outline ? OUTLINE : null });
+  } else {
+    const fam = familyOf(key);
+    const fallback = lastOf.get(fam);
+    if (hdDraw && hd.on) base = atlas.sprite(`hd|${key}`, w, h, ax, ay, hdDraw, { outline: outline ? OUTLINE : null, ...HD_OPTS, fallback });
+    else base = atlas.sprite(key, w, h, ax, ay, draw, { outline: outline ? OUTLINE : null, fallback });
+    if (base !== fallback) lastOf.set(fam, base);
+  }
   blit(ctx, variant ? atlas.tinted(base.key, base, variant) : base, x, y);
 }
 
@@ -54,7 +62,7 @@ export function heroKey(o) {
   const aim = ((Math.round((o.aim ?? Math.PI / 2) / (Math.PI / 4)) % 8) + 8) % 8;
   const swing = o.swing != null ? Math.min(4, Math.floor(o.swing / 0.04)) : -1;
   const hem = Math.floor((o.t || 0) * 6) % 3;
-  return { walk, sway, aim, swing, hem, key: `hero|${o.dir}|${o.flip ? 1 : 0}|${walk}|${sway}|${aim}|${swing}|${o.swingStep || 0}|${o.glow ? 1 : 0}|${o.charges ?? 3}|${o.moving ? 1 : 0}|${hem}` };
+  return { walk, sway, aim, swing, hem, key: `hero|${o.dir}|${o.flip ? 1 : 0}|${walk}|${sway}|${aim}|${swing}|${o.swingStep || 0}|${o.glow ? 1 : 0}|${o.moving ? 1 : 0}|${hem}` };
 }
 
 export function drawHeroC(ctx, x, y, o, variant = null) {
@@ -62,7 +70,7 @@ export function drawHeroC(ctx, x, y, o, variant = null) {
   const args = {
     dir: o.dir, flip: o.flip, walk: q.walk / 6, sway: q.sway * 2.5, aim: (q.aim * Math.PI) / 4,
     swing: q.swing >= 0 ? q.swing * 0.04 : null, swingStep: o.swingStep, glow: o.glow, charges: o.charges ?? 3,
-    moving: o.moving, t: q.hem * 0.35, noShadow: true,
+    moving: o.moving, t: q.hem * 0.35, noShadow: true, charges: 3,
   };
   put(ctx, q.key, 44, 44, 22, 38, (c, ax, ay) => drawHero(c, ax, ay, args), x, y, variant, true,
     heroOverrideKey(o, q), o.dir === 'side' && o.flip, (c, ax, ay) => drawHero32(c, ax, ay, args));

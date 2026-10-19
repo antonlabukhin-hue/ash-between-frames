@@ -222,13 +222,11 @@ function propEntry(g, p, phase) {
 
 // Контур и контровой свет живых фигур (Hades, Children of Morta): тёмная кромка вокруг и
 // светлый блик сверху-слева — фигура отделяется от фона того же тона. draw(dx, dy, tint).
-const EDGE = '#05060c';
 const rimOf = (g) => g.room?.def.rim ?? '#a9c0e8';
 function figureEdge(ctx, g, draw) {
   // прозрачность — от текущей (отражения в лужах, призраки рисуются полупрозрачно)
+  // тёмный контур уже запечён в кадр атласа — добавляем только контровой свет
   const a0 = ctx.globalAlpha;
-  ctx.globalAlpha = a0 * 0.9;
-  for (const [dx, dy] of [[-0.5, 0], [0.5, 0], [0, 0.5], [0, -0.5]]) draw(dx, dy, EDGE);
   ctx.globalAlpha = a0 * 0.6;
   draw(-0.5, -0.5, rimOf(g));
   ctx.globalAlpha = a0;
@@ -1107,6 +1105,7 @@ const sec = (name) => {
 };
 
 export function renderWorld(g, ctx) {
+  atlas.beginFrame?.();
   const room = g.room;
   const q = g.quality;
   setShadowStyle(q.shadows);
