@@ -440,6 +440,8 @@ function frame(now) {
   } else {
     // мирные сцены — камера ближе (def.zoom комнаты), бой — обычный кадр
     renderer.setZoom(game.room?.def.zoom ?? 1);
+    // подсказка прячется на время диалога, выбора, меню и сцены — и возвращается после
+    ui.hideHintFor?.(!!ui.mode || game.cinematic || game.paused);
     game.update(dt);
     t1 = performance.now();
     renderWorld(game, renderer.ctx);

@@ -29,7 +29,7 @@ export const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<
 export function createUI(root, { audio }) {
   const ui = { mode: null };
   const banner = el('div', 'banner passive', root);
-  const hint = el('div', 'hint passive off', root);
+  const hint = el('div', 'hint off', root);
   const toast = el('div', 'toast passive off', root);
   // строка подсказки — для экранного диктора; видимая информация — таблички над объектами
   const prompt = el('div', 'prompt passive hidden', root);
@@ -59,7 +59,7 @@ export function createUI(root, { audio }) {
   };
   // Перед модальным окном убираем временные слои: под выбором и диалогом не должно быть старого текста.
   ui.clearTransient = (all = true) => {
-    ui.clearHint();
+    ui.hideHintFor(true); // вернётся после диалога
     ui.hideBanner();
     ui.setPrompt(null);
     ui.setPlates([]);
@@ -105,32 +105,55 @@ export function createUI(root, { audio }) {
     return { out, done: !hidden };
   };
   const hintLen = (html) => html.replace(/<[^>]+>/g, '').length;
-  ui.hint = (html, dur = 4) => {
-    const len = hintLen(html);
-    const read = Math.min(dur, Math.max(2.2, 1.2 + len * 0.045));
-    if (hintText !== html) {
-      hintText = html;
-      clearInterval(hintTimer);
-      let n = 0;
-      hint.innerHTML = typedHtml(html, 0).out;
-      hintTimer = setInterval(() => {
-        n += 2;
-        const r = typedHtml(html, n);
-        hint.innerHTML = r.out;
-        if (r.done) clearInterval(hintTimer);
-      }, 30);
-    }
-    hint.classList.remove('off');
-    later('hint', (read + len * 0.015) * 1000, () => {
-      hint.classList.add('off');
-      hintText = '';
-    });
-  };
-  ui.clearHint = () => {
+  // Подсказка не исчезает сама: висит, пока по ней не нажмут (щелчок или касание).
+  // Новые встают в очередь и не затирают непрочитанную; на время диалога подсказка прячется.
+  const queue = [];
+  const close = '<span class="hx">✕</span>';
+  const more = () => (queue.length ? `<span class="hq">ещё ${queue.length}</span>` : '');
+  function showHint(html) {
+    hintText = html;
     clearInterval(hintTimer);
-    hint.classList.add('off');
-    hintText = '';
+    let n = 0;
+    hint.innerHTML = typedHtml(html, 0).out + close + more();
+    hintTimer = setInterval(() => {
+      n += 2;
+      const r = typedHtml(html, n);
+      hint.innerHTML = r.out + close + more();
+      if (r.done) clearInterval(hintTimer);
+    }, 30);
+    hint.classList.remove('off');
+  }
+  ui.hint = (html) => {
+    if (html === hintText || queue.includes(html)) return;
+    if (hintText) {
+      queue.push(html);
+      hint.querySelector('.hq')?.remove();
+      hint.insertAdjacentHTML('beforeend', more());
+      return;
+    }
+    showHint(html);
   };
+  const nextHint = () => {
+    clearInterval(hintTimer);
+    hintText = '';
+    if (queue.length) showHint(queue.shift());
+    else hint.classList.add('off');
+  };
+  hint.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+  });
+  hint.addEventListener('click', (e) => {
+    e.stopPropagation();
+    nextHint();
+  });
+  // сценарий больше не ждёт подсказку: очередь старых — прочь, но текущую закрывает только игрок
+  ui.clearHint = () => {
+    queue.length = 0;
+    hint.querySelector('.hq')?.remove();
+  };
+  ui.hideHintFor = (on) => hint.classList.toggle('away', on);
+  ui.hasHint = () => !!hintText;
 
   ui.toast = (text, dur = 2.2) => {
     toast.textContent = text;

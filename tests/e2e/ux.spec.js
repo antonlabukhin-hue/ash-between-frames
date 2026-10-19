@@ -68,7 +68,7 @@ for (const [w, h] of [[844, 390], [667, 375]]) {
     });
     await expect(page.locator('.choices')).toBeVisible();
     await expect(page.locator('.modal-dim')).toBeVisible();
-    await expect(page.locator('.hint')).toHaveClass(/off/);
+    await expect(page.locator('.hint')).toHaveClass(/off|away/); // спрятана на время выбора
     await expect(page.locator('.banner')).not.toHaveClass(/show/);
     await expect(page.locator('.caption')).not.toHaveClass(/show/);
     await expect(page.locator('#ui > .prompt')).toBeHidden();
@@ -175,4 +175,24 @@ test.describe('телефон', () => {
     });
     await expect(page.locator('.tbtn.attack')).toBeHidden();
   });
+});
+
+test('hint_click_to_close: подсказка висит, пока по ней не нажмут; следующая ждёт в очереди', async ({ page }) => {
+  await page.goto('/?room=kitchen');
+  await page.waitForFunction(() => window.__abf?.game?.player);
+  await page.waitForFunction(() => !window.__abf.game.cinematic && !window.__abf.ui.mode, null, { timeout: 8000 });
+  await page.evaluate(() => {
+    const ui = window.__abf.ui;
+    ui.hint('Первая подсказка');
+    ui.hint('Вторая подсказка');
+  });
+  const hint = page.locator('.hint');
+  await page.waitForTimeout(6000);
+  await expect(hint).not.toHaveClass(/off/);
+  await expect(hint).toContainText('Первая');
+  await expect(hint).toContainText('ещё 1');
+  await hint.click();
+  await expect(hint).toContainText('Вторая');
+  await hint.click();
+  await expect(hint).toHaveClass(/off/);
 });
