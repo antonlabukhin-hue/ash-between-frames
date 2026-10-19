@@ -33,6 +33,9 @@ test('torn_stone_chain: прицел на следующий камень не �
     }, [wx, wy]);
     await page.mouse.move(r[0], r[1]);
   };
+  // тест про выбор цели и проходимость, а не про скорость: на медленном раннере свет камня
+  // (10 с) мог погаснуть, пока герой идёт, — дадим камням запас
+  await ev(() => window.__abf.game.tornStones.forEach((st) => (st.tl.hold = 60)));
   await steer(120, 162, 3000);
   await page.waitForTimeout(5500); // стирание дошло до берега
   for (const [i, next] of [[0, 200], [1, 280], [2, 340]]) {
@@ -44,6 +47,7 @@ test('torn_stone_chain: прицел на следующий камень не �
       await page.waitForTimeout(150);
       aimed = await ev((i) => window.__abf.game.player.shiftTarget?.obj === window.__abf.game.tornStones[i], i);
     }
+    if (!aimed) console.log('прицел не навёлся:', JSON.stringify(await ev(() => { const g = window.__abf.game; return { p: [g.player.x | 0, g.player.y | 0], t: g.player.shiftTarget?.obj?.id, stones: g.tornStones.map((s) => [s.id, s.tl.phase, s.hidden]) }; })));
     expect(aimed).toBe(true);
     await page.keyboard.press('q');
     await page.waitForTimeout(900);
