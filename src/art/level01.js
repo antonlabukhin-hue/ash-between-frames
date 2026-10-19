@@ -697,6 +697,28 @@ export function drawLantern16(ctx, p, g) {
   // ступенчатое основание и столб с кольцами
   px(ctx, x - 4, y - 3, 8, 3, L.ink);
   px(ctx, x - 3, y - 5, 6, 2, L.navy);
+  if (!past) {
+    // Шрам: столб переломлен на середине, голова фонаря упала рядом — другой силуэт, не только цвет
+    px(ctx, x - 1, y - 18, 2, 14, L.navy);
+    px(ctx, x - 1, y - 18, 1, 14, L.wall1);
+    px(ctx, x - 2, y - 14, 4, 2, L.wall1);
+    px(ctx, x - 1, y - 20, 1, 2, L.navy); // зубец слома
+    px(ctx, x, y - 19, 1, 1, L.wall1);
+    // упавшая голова: лежит на боку справа, стёкла выбиты
+    const hx = x + 4;
+    const hy = y - 6;
+    px(ctx, hx, hy, 10, 6, L.ink);
+    px(ctx, hx + 1, hy + 1, 3, 4, L.navy2);
+    px(ctx, hx + 6, hy + 1, 3, 4, L.navy2);
+    px(ctx, hx + 10, hy + 1, 2, 4, L.navy);
+    if (f !== 2) {
+      line(ctx, hx + 1, hy + 2, hx + 8, hy + 4, L.liveHi);
+      px(ctx, hx + 4, hy - 1, 1, 1, L.sc4);
+    }
+    px(ctx, hx - 2, hy + 5, 2, 1, L.wall1); // осколок стекла
+    px(ctx, hx + 12, hy + 5, 1, 1, L.wall1);
+    return;
+  }
   px(ctx, x - 1, y - 34, 2, 30, L.navy);
   px(ctx, x - 1, y - 34, 1, 30, L.wall1);
   for (const ry of [y - 14, y - 26]) px(ctx, x - 2, ry, 4, 2, L.wall1);

@@ -344,6 +344,22 @@ function drawEnemy(g, ctx, e) {
   }
   if (!flash) figureEdge(ctx, g, (dx, dy, t) => drawEnemyC(ctx, e.kind, e.x + dx, e.y + dy, o, t));
   drawEnemyC(ctx, e.kind, e.x, e.y, o, flash ? '#ffffff' : null);
+  if (!flash && e.tl?.phase === PRESENT && e.kind !== 'shadow' && g.quality.decorAnim !== false) {
+    // Шрам рвёт форму: время от времени одна полоса фигуры съезжает вбок
+    const step = Math.floor(g.time * 8 + e.id * 3);
+    if (step % 4 === 0) {
+      const top = e.y - (e.hitY ?? 9) - 16;
+      const by = top + (step % 3) * 6 + 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(e.x - 16, by, 32, 3);
+      ctx.clip();
+      ctx.fillStyle = 'rgba(3,4,10,0.85)';
+      ctx.fillRect(e.x - 16, by, 32, 3);
+      drawEnemyC(ctx, e.kind, e.x + (step % 2 ? 2 : -2), e.y, o);
+      ctx.restore();
+    }
+  }
   if (e.kind === 'shadow') drawEnemyC(ctx, e.kind, e.x, e.y, { ...o, layer: 'front' }, flash ? '#ffffff' : null);
   if (e.burn > 0 && Math.floor(g.time * 12) % 2) px(ctx, e.x - 2 + Math.random() * 4, e.y - 18 - Math.random() * 6, 1, 2, P.amberHi);
 }
