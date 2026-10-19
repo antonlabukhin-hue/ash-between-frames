@@ -37,9 +37,14 @@ test('torn_stone_chain: прицел на следующий камень не �
   await page.waitForTimeout(5500); // стирание дошло до берега
   for (const [i, next] of [[0, 200], [1, 280], [2, 340]]) {
     const s = await ev((i) => ({ x: window.__abf.game.tornStones[i].x, y: window.__abf.game.tornStones[i].y }), i);
-    await aimAt(s.x, s.y - 8);
-    await page.waitForTimeout(250);
-    expect(await ev((i) => window.__abf.game.player.shiftTarget?.obj === window.__abf.game.tornStones[i], i)).toBe(true);
+    // камера ещё может ехать — доводим прицел, пока камень не станет целью (как игрок)
+    let aimed = false;
+    for (let k = 0; k < 12 && !aimed; k++) {
+      await aimAt(s.x, s.y - 8);
+      await page.waitForTimeout(150);
+      aimed = await ev((i) => window.__abf.game.player.shiftTarget?.obj === window.__abf.game.tornStones[i], i);
+    }
+    expect(aimed).toBe(true);
     await page.keyboard.press('q');
     await page.waitForTimeout(900);
     await steer(next, 162, 3500);
