@@ -195,6 +195,17 @@ export function createUI(root, { audio }) {
     }
   };
 
+  // Строка клавиш: какие особые действия доступны — чтобы Эхо и Взгляд не путались.
+  const keystrip = el('div', 'keystrip passive hidden', root);
+  let keysKey = '';
+  ui.setKeys = (list) => {
+    const k = JSON.stringify(list);
+    if (k === keysKey) return;
+    keysKey = k;
+    keystrip.classList.toggle('hidden', !list.length);
+    keystrip.innerHTML = list.map(([key, text]) => `<span><b>${esc(key)}</b>${esc(text)}</span>`).join('');
+  };
+
   // Подписи «Взгляда Смотрителя»: над каждым интерактивным объектом — что с ним можно сделать.
   const tagEls = Array.from({ length: 12 }, () => el('div', 'gtag passive hidden', root));
   const tagKeys = tagEls.map(() => '');

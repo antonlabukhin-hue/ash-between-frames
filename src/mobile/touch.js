@@ -21,7 +21,8 @@ export function createTouch(root, input, renderer) {
   root.append(zone, stick);
 
   // name — подпись для экранного диктора, label — значок на кнопке
-  const mk = (cls, label, action, name) => {
+  // tag — короткая подпись под значком: что делает кнопка
+  const mk = (cls, label, action, name, tag = '') => {
     const b = document.createElement('button');
     b.className = `tbtn ${cls}`;
     b.type = 'button';
@@ -33,6 +34,12 @@ export function createTouch(root, input, renderer) {
     icon.setAttribute('aria-hidden', 'true');
     icon.textContent = label;
     b.appendChild(icon);
+    if (tag) {
+      const t = document.createElement('span');
+      t.className = 'ttag';
+      t.textContent = tag;
+      b.appendChild(t);
+    }
     root.appendChild(b);
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -51,16 +58,16 @@ export function createTouch(root, input, renderer) {
     return b;
   };
   const btn = {
-    attack: mk('attack', '⚔', 'attack', 'Удар'),
-    dodge: mk('dodge', '↷', 'dodge', 'Уклонение'),
-    shift: mk('shift', '⧗', 'shift', 'Сдвиг: в прошлое'),
-    rift: mk('rift', '✦', 'rift', 'Разлом'),
-    interact: mk('interact', '✋', 'interact', 'Взаимодействие'),
+    attack: mk('attack', '⚔', 'attack', 'Удар', 'удар'),
+    dodge: mk('dodge', '↷', 'dodge', 'Уклонение', 'уклон'),
+    shift: mk('shift', '⧗', 'shift', 'Сдвиг: в прошлое', 'время'),
+    rift: mk('rift', '✦', 'rift', 'Разлом', 'разлом'),
+    interact: mk('interact', '✋', 'interact', 'Взаимодействие', 'действие'),
     ab1: mk('ab ab1', '1', 'ab1', 'Способность 1'),
     ab2: mk('ab ab2', '2', 'ab2', 'Способность 2'),
     ab3: mk('ab ab3', '3', 'ab3', 'Способность 3'),
-    echo: mk('echo', '◐', 'echo', 'Эхо: запись'),
-    gaze: mk('gaze', '◉', 'gaze', 'Взгляд Смотрителя (удерживать)'),
+    echo: mk('echo', '◐', 'echo', 'Эхо: записать 5 секунд, тень повторит', 'эхо'),
+    gaze: mk('gaze', '◉', 'gaze', 'Взгляд Смотрителя: удерживать, чтобы увидеть всё', 'взгляд'),
   };
 
   let stickId = null;
