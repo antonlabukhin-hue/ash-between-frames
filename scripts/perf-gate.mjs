@@ -6,7 +6,9 @@
 import { chromium } from '@playwright/test';
 import fs from 'fs';
 
-const cfg = JSON.parse(fs.readFileSync(new URL('./perf-gate.json', import.meta.url), 'utf8'));
+const base = JSON.parse(fs.readFileSync(new URL('./perf-gate.json', import.meta.url), 'utf8'));
+// в CI — свой профиль: раннер без видеокарты, сравниваем с ним самим, а не с телефоном
+const cfg = process.env.CI && base.ci ? { ...base, ...base.ci, limits: { ...base.limits, ...base.ci.limits } } : base;
 const url = process.env.ABF_URL || 'http://localhost:5320/';
 const browser = await chromium.launch({ channel: process.env.CI ? undefined : 'msedge' });
 const rows = [];
