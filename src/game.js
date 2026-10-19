@@ -9,6 +9,7 @@ import { collectLights, isPit, isWall, solidPropAt } from './world/world.js';
 import { updateIslands, inIslands, auraSources, carryPos, dropPos } from './world/memory.js';
 import { link, resolveThreads, chainOf } from './timeline/threads.js';
 import { key } from './scenes/keys.js';
+import { BESTIARY, unseenKinds } from './combat/bestiary.js';
 import { stepShade, hitShade } from './player/echo.js';
 import { pointInRect } from './world/room.js';
 import { updateFx, burst, addText, ringFx, slashFx } from './world/fx.js';
@@ -403,6 +404,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     clearParticles(g.particles);
     g.texts = [];
     g.scenes = [];
+    g.introducing = false;
     g.islandState = new Map();
     g.memIslands = [];
     g.echoShade = null;
@@ -757,7 +759,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     // Взгляд Смотрителя (удерживать): мир замедляется и гаснет, видно всё, с чем можно что-то сделать
     g.gaze = !g.cinematic && !ui.mode && !!g.player && !g.player.dead && input.isDown('gaze');
     g.gazeK = clamp((g.gazeK || 0) + (g.gaze ? dt * 6 : -dt * 8), 0, 1);
-    dt *= 1 - 0.7 * g.gazeK;
+    dt *= 1 - 0.75 * g.gazeK;
     const p = g.player;
     if (!g.cinematic) {
       updatePlayer(g, p, dt);
@@ -777,6 +779,28 @@ export function createGame({ input, audio, ui, storage, save }) {
     updateFx(g, dt);
     updateScenes(dt);
     g.lights = collectLights(g);
+    // первая встреча с врагом: бой замирает, карточка — каков он в Шраме и в Отпечатке и как его бить
+    // (под автотестами карточки выключены, если тест сам не включил их: window.__abfBestiary)
+    const bestiaryOn = typeof navigator === 'undefined' || !navigator.webdriver || window.__abfBestiary;
+    if (bestiaryOn && !g.cinematic && !ui.mode && !g.introducing && p && !p.dead && g.enemies.length) {
+      const fresh = unseenKinds(g.enemies.filter((e) => !e.dead && e.spawn <= 0).map((e) => e.kind), save.flags.seenFoes);
+      if (fresh.length) {
+        g.introducing = true;
+        const tok = g.scriptToken;
+        (async () => {
+          for (const k of fresh) {
+            const b = BESTIARY[k];
+            (save.flags.seenFoes ||= {})[k] = true;
+            await g.say([
+              { who: b.name, text: `${b.scar} ${b.print}` },
+              { who: 'Как бить', text: `${b.tip} Удерживай ${key(g, 'gaze')} — время замедлится, и над врагом будет видно, что даст сдвиг.` },
+            ]);
+          }
+          if (live(tok)) g.introducing = false;
+          g.persist();
+        })();
+      }
+    }
     // первая встреча с нитью причин — подсказка
     const st = p?.shiftTarget?.obj;
     if (st && !save.flags.threadHinted && !g.cinematic && chainOf(g.props, st).length) {

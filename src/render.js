@@ -21,6 +21,7 @@ import { heatCost } from './timeline/heat.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 import { threadList, chainOf } from './timeline/threads.js';
 import { shadeFade, recordLeft, ECHO_TIME, ECHO_LINGER } from './player/echo.js';
+import { shiftNote } from './combat/bestiary.js';
 
 const OUTLINE = '#05060c';
 let lightCanvas = null;
@@ -748,6 +749,13 @@ function gazeTags(g, p, cx, cy) {
     if (mx < cx - 8 || mx > cx + W + 8 || y < cy - 8 || y > cy + H + 8) continue;
     const text = use ? (isTalk(o) && o.name ? `${o.name} · ${(o.prompt || 'Поговорить').toLowerCase()}` : o.prompt || 'Осмотреть') : `${o.name || o.def.name || 'Объект'} — ${nextPhaseOf(o.tl) === PAST ? 'в прошлое' : 'в настоящее'}`;
     out.push({ x: (mx - cx) / W, y: (y - cy) / H, text, kind: use ? (isTalk(o) ? 'talk' : 'use') : 'time', d: Math.hypot(mx - p.x, y - p.y) });
+  }
+  for (const e of g.enemies) {
+    if (e.dead || e.spawn > 0 || !e.tl?.switchable) continue;
+    const y = ENEMY_TOP(e) - 6;
+    if (e.x < cx - 8 || e.x > cx + W + 8 || y < cy - 8 || y > cy + H + 8) continue;
+    const next = nextPhaseOf(e.tl);
+    out.push({ x: (e.x - cx) / W, y: (y - cy) / H, text: `${e.def.name} · Q: ${shiftNote(e.kind, next)}`, kind: 'time', d: Math.hypot(e.x - p.x, e.y - p.y) - 1000 });
   }
   return out.sort((a, b) => a.d - b.d).slice(0, 12);
 }
