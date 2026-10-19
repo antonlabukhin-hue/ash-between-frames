@@ -17,6 +17,7 @@ import { atlas } from '../art/spritecache.js';
 import { blit } from '../art/atlas.js';
 import { line, px } from '../art/sprites.js';
 import { registerFigureHd } from '../world/props.js';
+import { tikTopics } from './tiktalk.js';
 import { ART64 } from '../art/style64.js';
 import { drawVillager64, drawStillOne64 } from '../art/chars64.js';
 import { drawVillager32, drawStillOne32 } from '../art/npcs32.js';
@@ -208,9 +209,15 @@ export const road = {
     for (let i = 0; i < 5; i++) g.spawnPickup('ash', 216 + (i % 2) * 40, RT(36 - i * 1.5), { vx: 0, vy: 0 });
 
     g.tik = npc(g, drawTik, T(9), RT(41), { hidden: true, prompt: 'Поговорить с Тиком', name: 'Тик' });
-    g.tik.onInteract = async () => {
-      await g.say([TIK('Отпечаток — каким вещь была. Шрам — какой стала. Ты не чинишь мир, ты одалживаешь у прошлого. На время.')]);
-    };
+    g.tik.onInteract = () =>
+      g.talk('tik', {
+        who: 'Тик',
+        portrait: 'tik',
+        greet: [TIK('Спрашивай. Я считаю секунды, но на тебя их хватит.')],
+        again: [TIK('Ещё вопрос? Секунды идут, но спрашивай.')],
+        topics: tikTopics(g),
+        present: { fallback: 'Это не моя память. Моя — это тиканье.' },
+      });
   },
   async script(g) {
     const ui = g.ui;
@@ -788,7 +795,10 @@ export const square = {
     unlockAbility(g, 1);
     g.persist();
     await g.wait(0.5);
-    await boyTalk(g);
+    // Мальчик говорит одно — дальше игрок подходит сам (разговор с темами у статуи)
+    await g.say([{ who: 'Латунный Мальчик', text: 'Башня звонит не потому, что хочет позвать людей. Она звонит, чтобы убедиться, что люди ещё есть.', portrait: 'boy' }]);
+    ((g.flags.talk ||= {}).boy ||= { met: false, seen: {} }).met = true;
+    g.hint(`Латунный Мальчик ещё хочет поговорить — ${key(g, 'interact')} у статуи. Ему можно показать воспоминание.`);
     await keeperGate(g);
   },
 };
@@ -825,23 +835,45 @@ async function keeperGate(g) {
   g.openExits();
 }
 
+// Латунный Мальчик: разговор с темами; воспоминание можно показать в любой раз.
 async function boyTalk(g) {
   const BOY = (t) => ({ who: 'Латунный Мальчик', text: t, portrait: 'boy' });
-  await g.say([BOY('Башня звонит не потому, что хочет позвать людей. Она звонит, чтобы убедиться, что люди ещё есть.')]);
-  const i = await g.choose('Спросить мальчика…', [{ text: 'Кто ты?' }, { text: 'Мне пора наверх' }]);
-  if (i === 0) await g.say([BOY('Я был мальчиком, пока меня не понадобилось заменить.'), REN('Кем заменить?'), BOY('Тем, кто не стирается.')]);
-  else await g.say([BOY('Лестница из двух версий. Наступай на ту, что помнит тебя.')]);
-  if (g.flags.boyQuest) return;
-  await g.present('Показать Мальчику воспоминание?', {
-    lanternFeast: async (gg) => {
-      await gg.say([
-        BOY('Кепка… моя. А лицо — нет. Это тот, кого я заменил.'),
-        BOY('Женщина в платке — его мать. Она ещё ищет. Найди её, Смотритель.'),
-      ]);
-      gg.flags.boyQuest = true;
-      gg.persist();
+  await g.talk('boy', {
+    who: 'Латунный Мальчик',
+    portrait: 'boy',
+    greet: [BOY('Башня звонит не потому, что хочет позвать людей. Она звонит, чтобы убедиться, что люди ещё есть.')],
+    again: [BOY('Ты вернулся. Колокол всё ещё молчит — хорошо.')],
+    topics: [
+      { id: 'who', text: 'Кто ты?', lines: [BOY('Я был мальчиком, пока меня не понадобилось заменить.'), REN('Кем заменить?'), BOY('Тем, кто не стирается.')] },
+      { id: 'bell', text: 'Почему нельзя звонить в колокол?', lines: [BOY('Каждый раз, когда он звонит, кого-то становится меньше.'), BOY('Мел звонит, чтобы проверить, что мы есть. А мы от этого кончаемся.')] },
+      { id: 'way', text: 'Куда мне идти?', lines: [BOY('За ворота — лестница из двух версий. Наступай на ту, что помнит тебя.')] },
+      {
+        id: 'show',
+        text: 'Как тебе помочь вспомнить?',
+        lines: [BOY('Покажи мне, каким был праздник. Говорят, у фонтана его ещё видно — когда горят два фонаря.'), BOY('Найдёшь — выбери «Показать воспоминание».')],
+        when: () => !g.flags.boyQuest,
+      },
+      { id: 'mother', text: 'Где искать его мать?', lines: [BOY('Платок у неё малиновый. Она пекла хлеб — там, где улица поднимается к колокольне.')], when: () => !!g.flags.boyQuest },
+    ],
+    present: {
+      prompt: 'Показать Мальчику воспоминание',
+      reactions: {
+        lanternFeast: async (gg) => {
+          if (gg.flags.boyQuest) {
+            await gg.say([BOY('Это он. Его мать ещё ищет — найди её, Смотритель.')]);
+            return;
+          }
+          await gg.say([
+            BOY('Кепка… моя. А лицо — нет. Это тот, кого я заменил.'),
+            BOY('Женщина в платке — его мать. Она ещё ищет. Найди её, Смотритель.'),
+          ]);
+          gg.flags.boyQuest = true;
+          gg.persist();
+        },
+      },
+      fallback: 'Я этого не помню. Значит, со мной этого не было.',
     },
-  }, 'Я этого не помню. Значит, со мной этого не было.', 'Латунный Мальчик');
+  });
 }
 
 // ── 4. Лестница из двух версий ───────────────────────────────────────
@@ -1053,40 +1085,49 @@ export const ascent = {
     g.memoryNode(oven, 'oven', { w: 46, h: 18, x: oven.x - 23, y: oven.y - 6, onFix: async (gg, o, silent) => {
       if (!silent) await gg.say([{ who: 'Мара', text: 'Печь… тёплая. Как в тот вечер. Теперь хлеб не остынет — ни здесь, ни на Кухне.', portrait: 'mara' }]);
     } });
-    mara.onInteract = async () => {
-      if (g.flags.bread) {
-        await g.say([{ who: 'Мара', text: 'Наверху Брат Мел. Звонит в пустоту. Не дай ему дозвониться.', portrait: 'mara' }]);
-        if (!g.flags.maraQuest) await maraPresent(g);
-        return;
-      }
-      const MARA = (t) => ({ who: 'Мара', text: t, portrait: 'mara' });
-      await g.say([
-        MARA('Смотритель. Не смотри так — я тоже не знаю, как сюда попала.'),
-        MARA('Я помню все рецепты. Не помню, для кого готовила. Пусть будет для тебя.'),
-        MARA('Ешь сейчас. В прошлом он уже остыл.'),
-      ]);
-      g.flags.bread = true;
-      if (!g.save.items.includes('bread')) g.save.items.push('bread');
-      g.heal(g.player.maxHp);
-      g.persist();
-      await g.say([MARA('Наверху Брат Мел. Звонит в пустоту. Не дай ему дозвониться.')]);
-      await maraPresent(g);
-    };
-    // жители прошлого готовятся к празднику
-    async function maraPresent(gg) {
-      const MARA = (t) => ({ who: 'Мара', text: t, portrait: 'mara' });
-      await gg.present('Показать Маре воспоминание?', {
-        lanternFeast: async () => {
+    const MARA = (t) => ({ who: 'Мара', text: t, portrait: 'mara' });
+    mara.onInteract = () =>
+      g.talk('maraAscent', {
+        who: 'Мара',
+        portrait: 'mara',
+        // первая встреча: хлеб (лечит), дальше — короткое приветствие
+        greet: async (gg) => {
           await gg.say([
-            MARA('Платок… это мой платок.'),
-            MARA('В тот вечер я потеряла сына. Помню, как звала его. Не помню — как.'),
-            MARA('Найди его, Смотритель. Или хотя бы его имя.'),
+            MARA('Смотритель. Не смотри так — я тоже не знаю, как сюда попала.'),
+            MARA('Я помню все рецепты. Не помню, для кого готовила. Пусть будет для тебя.'),
+            MARA('Ешь сейчас. В прошлом он уже остыл.'),
           ]);
-          gg.flags.maraQuest = true;
-          gg.persist();
+          gg.flags.bread = true;
+          if (!gg.save.items.includes('bread')) gg.save.items.push('bread');
+          gg.heal(gg.player.maxHp);
         },
-      }, 'Красиво. Но это не моё.', 'Мара');
-    }
+        again: [MARA('Снова ты. Садись, отдохни — хлеб ещё есть.')],
+        topics: [
+          { id: 'mel', text: 'Кто наверху?', lines: [MARA('Брат Мел. Звонит в пустоту. Не дай ему дозвониться.'), MARA('Он звонил для нас. Потом — вместо нас. Теперь — потому что иначе его не будет.')] },
+          { id: 'oven', text: 'Почему печь холодная?', lines: [MARA('В Шраме она остыла. Под ней круг с рунами: говорят, там прошлое держится навсегда.'), MARA('Только цена — память. Подумай, что отдаёшь.')] },
+          { id: 'son', text: 'Про вашего сына', lines: [MARA('Ему было восемь. Латунная кепка, вечно на фонтане.'), MARA('Найдёшь хоть что-то — неси на Кухню. Я буду там.')], when: () => !!g.flags.maraQuest },
+        ],
+        present: {
+          prompt: 'Показать Маре воспоминание',
+          reactions: {
+            lanternFeast: async (gg) => {
+              if (gg.flags.maraQuest) {
+                await gg.say([MARA('Мой платок. И мой мальчик где-то в этой толпе. Найди его, Смотритель.')]);
+                return;
+              }
+              await gg.say([
+                MARA('Платок… это мой платок.'),
+                MARA('В тот вечер я потеряла сына. Помню, как звала его. Не помню — как.'),
+                MARA('Найди его, Смотритель. Или хотя бы его имя.'),
+              ]);
+              gg.flags.maraQuest = true;
+              gg.persist();
+            },
+          },
+          fallback: 'Красиво. Но это не моё.',
+        },
+      });
+    // жители прошлого готовятся к празднику
     const ghosts = [[8, 6], [11, 10], [16, 8], [20, 6], [30, 9], [35, 6], [39, 10]];
     g.drawables.push({
       y: 0,

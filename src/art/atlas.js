@@ -22,7 +22,12 @@ export function createAtlas({ pageSize = PAGE, maxPages = 2, makeCanvas, rs = 1 
     return c;
   });
   const size = pageSize * rs;
-  const a = { rs, pages: [], map: new Map(), stats: { baked: 0, hits: 0, resets: 0 } };
+  const a = { rs, pages: [], map: new Map(), stats: { baked: 0, hits: 0, resets: 0, deferred: 0 }, spent: 0, limit: 3 };
+  // Бюджет печати: новые кадры анимации печатаются не больше чем на limit мс за кадр игры.
+  // Сверх бюджета — opts.fallback (последний готовый кадр того же персонажа), а для силуэтов
+  // (tinted) — null: вызывающий просто пропускает их. Кадр допечатается в следующих кадрах.
+  a.beginFrame = () => (a.spent = 0);
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   function newPage() {
     const canvas = mk(size, size);
@@ -62,6 +67,11 @@ export function createAtlas({ pageSize = PAGE, maxPages = 2, makeCanvas, rs = 1 
       a.stats.hits++;
       return hit;
     }
+    if (opts.fallback && a.spent > a.limit) {
+      a.stats.deferred++;
+      return opts.fallback;
+    }
+    const t0 = now();
     const pad = opts.outline ? 1 : 0;
     const cw = w + pad * 2;
     const ch = h + pad * 2;
@@ -92,6 +102,7 @@ export function createAtlas({ pageSize = PAGE, maxPages = 2, makeCanvas, rs = 1 
     const e = { key, page: page.canvas, sx: r.x, sy: r.y, pw, ph, w: cw, h: ch, ax: ax + pad, ay: ay + pad };
     a.map.set(key, e);
     a.stats.baked++;
+    a.spent += now() - t0;
     return e;
   };
 
@@ -100,6 +111,8 @@ export function createAtlas({ pageSize = PAGE, maxPages = 2, makeCanvas, rs = 1 
     const k = `${key}#${color}`;
     const hit = a.map.get(k);
     if (hit) return hit;
+    if (a.spent > a.limit) return null; // силуэт допечатается позже
+    const t0 = now();
     const { page, r } = alloc(base.pw, base.ph);
     // source-in стирает всё вне прямоугольника — тонируем только на рабочем холсте
     const sc = scratch(base.pw, base.ph);
@@ -110,6 +123,7 @@ export function createAtlas({ pageSize = PAGE, maxPages = 2, makeCanvas, rs = 1 
     page.ctx.drawImage(sc.canvas, 0, 0, base.pw, base.ph, r.x, r.y, base.pw, base.ph);
     const e = { ...base, key: k, page: page.canvas, sx: r.x, sy: r.y };
     a.map.set(k, e);
+    a.spent += now() - t0;
     return e;
   };
 
@@ -122,6 +136,7 @@ export function createAtlas({ pageSize = PAGE, maxPages = 2, makeCanvas, rs = 1 
 let snap = RS;
 export const setSnap = (rs) => (snap = rs);
 export function blit(ctx, e, x, y) {
+  if (!e) return; // кадр ещё не напечатан (бюджет атласа)
   const dx = Math.round(x * snap) / snap - e.ax;
   const dy = Math.round(y * snap) / snap - e.ay;
   ctx.drawImage(e.page, e.sx, e.sy, e.pw ?? e.w, e.ph ?? e.h, dx, dy, e.w, e.h);

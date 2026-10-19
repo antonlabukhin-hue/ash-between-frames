@@ -80,6 +80,8 @@ export function collectLights(g) {
   // постоянные источники комнаты (зарево провала и т.п.)
   for (const l of g.room?.def.lights || []) out.push(l);
   for (const pr of g.projectiles) if (pr.light) out.push({ x: pr.x, y: pr.y, r: pr.light, c: 'cold' });
+  // записки и обрывки на земле светятся тёплым — их видно издалека
+  for (const pk of g.pickups || []) if (pk.kind === 'scrap') out.push({ x: pk.x, y: pk.y - 4, r: 34, c: 'amber' });
   return out;
 }
 

@@ -8,6 +8,9 @@ import { createProp, propFoot, propCenter } from './world/props.js';
 import { collectLights, isPit, isWall, solidPropAt } from './world/world.js';
 import { updateIslands, inIslands, auraSources, carryPos, dropPos } from './world/memory.js';
 import { link, resolveThreads, chainOf } from './timeline/threads.js';
+import { key } from './scenes/keys.js';
+import { BESTIARY, unseenKinds } from './combat/bestiary.js';
+import { talkMenu, PRESENT, BYE } from './story/talk.js';
 import { stepShade, hitShade } from './player/echo.js';
 import { pointInRect } from './world/room.js';
 import { updateFx, burst, addText, ringFx, slashFx } from './world/fx.js';
@@ -123,6 +126,34 @@ export function createGame({ input, audio, ui, storage, save }) {
     if (reactions[m.id]) await reactions[m.id](g);
     else await g.say([{ who, text: fallback }]);
     return m.id;
+  };
+
+  // Разговор с меню тем. greet — первая встреча (строки или функция), again — короткое «снова ты»;
+  // topics: [{ id, text, lines | run(g), when?(g) }]; present: { prompt?, reactions, fallback }.
+  // Темы можно перечитывать, воспоминание показать сколько угодно раз; разговор — до «Уйти».
+  g.talk = async (id, { who, portrait, greet, again, topics = [], present = {} }) => {
+    const st = ((save.flags.talk ||= {})[id] ||= { met: false, seen: {} });
+    const lines = st.met ? again : greet;
+    if (typeof lines === 'function') await lines(g);
+    else if (lines?.length) await g.say(lines);
+    st.met = true;
+    g.persist();
+    for (;;) {
+      const avail = topics.filter((t) => !t.when || t.when(g));
+      const opts = talkMenu(avail, st.seen, memoryList(save).length);
+      const i = await g.choose(who, opts);
+      const pick = opts[i]?.id;
+      if (!pick || pick === BYE) return;
+      if (pick === PRESENT) {
+        await g.present(present.prompt || `Показать воспоминание — ${who}?`, present.reactions || {}, present.fallback, who);
+        continue;
+      }
+      const t = avail.find((x) => x.id === pick);
+      if (t.run) await t.run(g);
+      else await g.say(t.lines.map((l) => (typeof l === 'string' ? { who, text: l, portrait } : l)));
+      st.seen[t.id] = true;
+      g.persist();
+    }
   };
 
   g.giveFragment = (id) => {
@@ -402,6 +433,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     clearParticles(g.particles);
     g.texts = [];
     g.scenes = [];
+    g.introducing = false;
     g.islandState = new Map();
     g.memIslands = [];
     g.echoShade = null;
@@ -756,7 +788,7 @@ export function createGame({ input, audio, ui, storage, save }) {
     // Взгляд Смотрителя (удерживать): мир замедляется и гаснет, видно всё, с чем можно что-то сделать
     g.gaze = !g.cinematic && !ui.mode && !!g.player && !g.player.dead && input.isDown('gaze');
     g.gazeK = clamp((g.gazeK || 0) + (g.gaze ? dt * 6 : -dt * 8), 0, 1);
-    dt *= 1 - 0.7 * g.gazeK;
+    dt *= 1 - 0.75 * g.gazeK;
     const p = g.player;
     if (!g.cinematic) {
       updatePlayer(g, p, dt);
@@ -776,11 +808,33 @@ export function createGame({ input, audio, ui, storage, save }) {
     updateFx(g, dt);
     updateScenes(dt);
     g.lights = collectLights(g);
+    // первая встреча с врагом: бой замирает, карточка — каков он в Шраме и в Отпечатке и как его бить
+    // (под автотестами карточки выключены, если тест сам не включил их: window.__abfBestiary)
+    const bestiaryOn = typeof navigator === 'undefined' || !navigator.webdriver || window.__abfBestiary;
+    if (bestiaryOn && !g.cinematic && !ui.mode && !g.introducing && p && !p.dead && g.enemies.length) {
+      const fresh = unseenKinds(g.enemies.filter((e) => !e.dead && e.spawn <= 0).map((e) => e.kind), save.flags.seenFoes);
+      if (fresh.length) {
+        g.introducing = true;
+        const tok = g.scriptToken;
+        (async () => {
+          for (const k of fresh) {
+            const b = BESTIARY[k];
+            (save.flags.seenFoes ||= {})[k] = true;
+            await g.say([
+              { who: b.name, text: `${b.scar} ${b.print}` },
+              { who: 'Как бить', text: `${b.tip} Удерживай ${key(g, 'gaze')} — время замедлится, и над врагом будет видно, что даст сдвиг.` },
+            ]);
+          }
+          if (live(tok)) g.introducing = false;
+          g.persist();
+        })();
+      }
+    }
     // первая встреча с нитью причин — подсказка
     const st = p?.shiftTarget?.obj;
     if (st && !save.flags.threadHinted && !g.cinematic && chainOf(g.props, st).length) {
       save.flags.threadHinted = true;
-      g.hint('Янтарная нить — причина и следствие. Сдвигай причину: следствие пойдёт за ней.', 6);
+      g.hint(`У этого объекта есть нить причин. Удерживай ${key(g, 'gaze')} — взгляд Смотрителя покажет, что он тянет за собой. Сдвигай причину: следствие пойдёт за ней.`, 6);
     }
     // интерактив
     const found = !g.cinematic && p && !p.dead ? findInteract() : { target: null, near: null };

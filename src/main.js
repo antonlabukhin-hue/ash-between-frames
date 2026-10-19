@@ -440,6 +440,21 @@ function frame(now) {
   } else {
     // мирные сцены — камера ближе (def.zoom комнаты), бой — обычный кадр
     renderer.setZoom(game.room?.def.zoom ?? 1);
+    // подсказка прячется на время диалога, выбора, меню и сцены — и возвращается после
+    ui.hideHintFor?.(!!ui.mode || game.cinematic || game.paused);
+    // строка клавиш (на телефоне подписи под кнопками)
+    {
+      const dev = input.device;
+      const keys = [];
+      if (dev !== 'touch' && !ui.mode && !game.cinematic) {
+        const pad = dev === 'pad';
+        keys.push([pad ? 'Y' : 'Q', 'время цели']);
+        keys.push([pad ? 'L3' : 'V', 'взгляд (держать)']);
+        if (game.flags.echoUnlocked) keys.push([pad ? 'R3' : 'R', 'эхо (запись)']);
+        keys.push(['Tab', 'дневник']);
+      }
+      ui.setKeys?.(keys);
+    }
     game.update(dt);
     t1 = performance.now();
     renderWorld(game, renderer.ctx);

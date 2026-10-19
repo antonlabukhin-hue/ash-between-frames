@@ -79,7 +79,7 @@ export function createEnemy(kind, x, y, o = {}) {
   const e = {
     id: nextId++, kind, def, x, y, r: def.r, hp: o.hp ?? def.hp, maxHp: o.hp ?? def.hp,
     tl: createTimeline({ ...def.timeline, base: o.base ?? PRESENT }),
-    state: 'idle', st: 0, cd: 0.6 + Math.random() * 0.6, face: Math.PI / 2, walk: 0,
+    state: 'idle', st: 0, cd: 1.4 + Math.random() * 0.8, // первая атака — не сразу: есть время оценить face: Math.PI / 2, walk: 0,
     flash: 0, burn: 0, burnTick: 0, kx: 0, ky: 0, stun: 0, spawn: o.spawn ?? 0.6, t: Math.random() * 10,
     aggro: o.aggro ?? true, dead: false, hitY: def.hitY ?? 9, ...o.extra,
   };

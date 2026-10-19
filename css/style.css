@@ -741,3 +741,29 @@ body { font-family: var(--font-body); font-weight: 500; }
 .journal.board .st.have { color: var(--milk); }
 .journal.board .st small { color: var(--amber); }
 .journal.board .q p { margin: 0.2em 0 0; color: var(--milk); font-size: 0.9em; font-style: italic; }
+
+/* подсказка закрывается только нажатием на неё */
+.hint { pointer-events: auto; cursor: pointer; padding-right: calc(var(--px) * 9); }
+.hint.off { pointer-events: none; }
+.hint.away { opacity: 0; pointer-events: none; }
+.hint .hx { position: absolute; right: calc(var(--px) * 2.5); top: calc(var(--px) * 1.5); color: var(--amber); font-size: 0.9em; }
+.hint .hq { display: block; margin-top: 0.2em; font-size: 0.8em; color: var(--ash); }
+
+/* подписи под сенсорными кнопками и строка клавиш на компьютере */
+.tbtn { flex-direction: column; }
+.tbtn .ttag { display: block; margin-top: 1px; font-size: max(8px, calc(9px * var(--bs, 1))); line-height: 1; letter-spacing: 0.02em; color: var(--ash-hi, #b4aa94); text-transform: lowercase; }
+.keystrip {
+  position: absolute;
+  left: calc(var(--px) * 6);
+  top: calc(var(--px) * 31);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--px) * 0.8);
+  font-size: max(11px, calc(var(--px) * 4.2));
+  opacity: 0.85;
+  color: var(--ash, #8a8296);
+  pointer-events: none;
+}
+.keystrip b { color: var(--amber-hi); font-weight: 700; margin-right: 0.3em; }
+.keystrip.hidden { display: none; }
+@media (pointer: coarse) { .keystrip { display: none; } }

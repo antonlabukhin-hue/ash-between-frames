@@ -20,7 +20,9 @@ import { drawArtOver } from './art/roomart.js';
 import { heatCost } from './timeline/heat.js';
 import { islandRows, islandScale, inIslands } from './world/memory.js';
 import { threadList, chainOf } from './timeline/threads.js';
-import { shadeFade, recordLeft, ECHO_TIME } from './player/echo.js';
+import { shadeFade, recordLeft, ECHO_TIME, ECHO_LINGER } from './player/echo.js';
+import { shiftNote } from './combat/bestiary.js';
+import { MEMORIES } from './story/memories.js';
 
 const OUTLINE = '#05060c';
 let lightCanvas = null;
@@ -222,13 +224,11 @@ function propEntry(g, p, phase) {
 
 // Контур и контровой свет живых фигур (Hades, Children of Morta): тёмная кромка вокруг и
 // светлый блик сверху-слева — фигура отделяется от фона того же тона. draw(dx, dy, tint).
-const EDGE = '#05060c';
 const rimOf = (g) => g.room?.def.rim ?? '#a9c0e8';
 function figureEdge(ctx, g, draw) {
   // прозрачность — от текущей (отражения в лужах, призраки рисуются полупрозрачно)
+  // тёмный контур уже запечён в кадр атласа — добавляем только контровой свет
   const a0 = ctx.globalAlpha;
-  ctx.globalAlpha = a0 * 0.9;
-  for (const [dx, dy] of [[-0.5, 0], [0.5, 0], [0, 0.5], [0, -0.5]]) draw(dx, dy, EDGE);
   ctx.globalAlpha = a0 * 0.6;
   draw(-0.5, -0.5, rimOf(g));
   ctx.globalAlpha = a0;
@@ -629,8 +629,37 @@ function drawEchoRec(g, ctx, p) {
     if (i % 4 === 0) px(ctx, Math.round(f.x), Math.round(f.y), 1, 1, P.teal);
   });
   ctx.globalAlpha = 1;
-  const left = recordLeft(rec) / ECHO_TIME;
-  ring(ctx, p.x, p.y, 4 + 10 * left, P.tealHi, 0.5, 1);
+  timeBar(ctx, p.x, p.y - 34, recordLeft(rec) / ECHO_TIME, P.tealHi, 'запись');
+}
+
+// Шкала оставшегося времени: над сдвинутыми объектами и врагами (цвет фазы), над записью
+// Эха и над тенью, пока она держит вес. Тёмная подложка — читается на любом фоне.
+function timeBar(ctx, x, y, k, color, label = '') {
+  const w = 16;
+  const x0 = Math.round(x - w / 2);
+  const y0 = Math.round(y);
+  px(ctx, x0 - 1, y0 - 1, w + 2, 4, '#05060c');
+  px(ctx, x0, y0, w, 2, 'rgba(60,60,80,0.8)');
+  px(ctx, x0, y0, Math.max(0, Math.round(w * clamp01(k))), 2, color);
+  if (label) void label; // подпись — в табличке; здесь только полоса
+}
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+function drawTimers(g, ctx, p) {
+  for (const o of g.props) {
+    if (o.hidden || !o.tl?.switchable || !isShifted(o.tl) || !Number.isFinite(o.tl.left) || !visible(o.x, o.y, 64)) continue;
+    const [mx] = propCenter(o);
+    const k = o.tl.left / (o.tl.hold || 1);
+    timeBar(ctx, mx, propTop(o) - 6, k, k < 0.25 && Math.floor(g.time * 8) % 2 ? '#ffffff' : PHASE_COLOR[o.tl.phase]);
+  }
+  for (const e of g.enemies) {
+    if (e.dead || !e.tl || !isShifted(e.tl) || !Number.isFinite(e.tl.left)) continue;
+    timeBar(ctx, e.x, ENEMY_TOP(e) - 4, e.tl.left / (e.tl.hold || 1), PHASE_COLOR[e.tl.phase]);
+  }
+  const sh = g.echoShade;
+  if (sh && !sh.done) {
+    const k = sh.linger ? shadeFade(sh) : 1 - sh.t / Math.max(0.01, sh.rec.t + ECHO_LINGER);
+    timeBar(ctx, sh.x, sh.y - 34, k, P.teal);
+  }
 }
 
 // ── значки действий (docs/GAME_RESEARCH.md 3.1) ─────────────────────────
@@ -671,6 +700,12 @@ function nameTags(g, p, cx, cy) {
     if (!isTalk(o) || o.hidden || !o.name || o === g.interactTarget) continue;
     if (Math.hypot(o.x - p.x, o.y - p.y) > 110) continue;
     out.push({ x: (o.x - cx) / W, y: (propTop(o) - 10 - cy) / H, text: o.name, kind: 'talk', d: Math.hypot(o.x - p.x, o.y - p.y) });
+  }
+  // подобрать: записки и обрывки воспоминаний — подпись с названием
+  for (const pk of g.pickups || []) {
+    if (pk.kind !== 'scrap' || Math.hypot(pk.x - p.x, pk.y - p.y) > 150) continue;
+    const m = MEMORIES[pk.memory ?? 'nameScrap'];
+    out.push({ x: (pk.x - cx) / W, y: (pk.y - 12 - cy) / H, text: m ? `Подобрать: ${m.name}` : 'Подобрать', kind: 'use', d: Math.hypot(pk.x - p.x, pk.y - p.y) });
   }
   return out.sort((a, b) => a.d - b.d).slice(0, 6);
 }
@@ -722,6 +757,13 @@ function gazeTags(g, p, cx, cy) {
     const text = use ? (isTalk(o) && o.name ? `${o.name} · ${(o.prompt || 'Поговорить').toLowerCase()}` : o.prompt || 'Осмотреть') : `${o.name || o.def.name || 'Объект'} — ${nextPhaseOf(o.tl) === PAST ? 'в прошлое' : 'в настоящее'}`;
     out.push({ x: (mx - cx) / W, y: (y - cy) / H, text, kind: use ? (isTalk(o) ? 'talk' : 'use') : 'time', d: Math.hypot(mx - p.x, y - p.y) });
   }
+  for (const e of g.enemies) {
+    if (e.dead || e.spawn > 0 || !e.tl?.switchable) continue;
+    const y = ENEMY_TOP(e) - 6;
+    if (e.x < cx - 8 || e.x > cx + W + 8 || y < cy - 8 || y > cy + H + 8) continue;
+    const next = nextPhaseOf(e.tl);
+    out.push({ x: (e.x - cx) / W, y: (y - cy) / H, text: `${e.def.name} · Q: ${shiftNote(e.kind, next)}`, kind: 'time', d: Math.hypot(e.x - p.x, e.y - p.y) - 1000 });
+  }
   return out.sort((a, b) => a.d - b.d).slice(0, 12);
 }
 
@@ -730,6 +772,8 @@ function gazeTags(g, p, cx, cy) {
 // (причина работает) — яркая, с бегущими бусинами. Без прицела — только натянутые, бледно.
 const threadAnchor = (o) => (o.def.flat ? propCenter(o) : [o.x, o.y - (o.def.threadY ?? 12)]);
 function drawThreads(g, ctx, p) {
+  // нити видны только во «Взгляде Смотрителя» — в обычной игре не мешают
+  if (!(g.gazeK > 0)) return;
   const all = threadList(g.props);
   if (!all.length) return;
   const target = (p.channel?.target || p.shiftTarget)?.obj;
@@ -746,7 +790,7 @@ function drawThreads(g, ctx, p) {
     const len = Math.hypot(x1 - x0, y1 - y0);
     const sag = Math.min(18, len * 0.12);
     const n = Math.max(6, Math.floor(len / 3));
-    const a = hot ? (t.on ? 0.95 : 0.8) : 0.3;
+    const a = (hot ? (t.on ? 0.95 : 0.8) : 0.3) * g.gazeK;
     const col = t.on ? P.amberHi : hot ? '#e0a040' : '#b8721f';
     ctx.globalAlpha = a;
     for (let i = 0; i <= n; i++) {
@@ -1107,6 +1151,7 @@ const sec = (name) => {
 };
 
 export function renderWorld(g, ctx) {
+  atlas.beginFrame?.();
   const room = g.room;
   const q = g.quality;
   setShadowStyle(q.shadows);
@@ -1275,6 +1320,7 @@ export function renderWorld(g, ctx) {
   if (p && !p.dead && !g.cinematic && g.gazeK > 0) drawGaze(g, ctx, p, cx, cy);
   if (p && !p.dead && !g.cinematic) drawThreads(g, ctx, p);
   if (p?.echoRec) drawEchoRec(g, ctx, p);
+  if (p && !p.dead && !g.cinematic) drawTimers(g, ctx, p);
   drawNodeRunes(g, ctx);
   if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
   g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
@@ -1362,6 +1408,19 @@ function reflectFigures(g) {
           drawHeroC(c, p.x, p.y, o);
         },
       });
+  }
+  // запись Эха: на месте начала — полупрозрачная копия героя, там тень и появится
+  if (p?.echoRec) {
+    const r0 = p.echoRec;
+    const f0 = r0.frames[0] || { ...r0.start, dir: p.dir, flip: p.flip, aim: p.aim };
+    out.push({
+      y: r0.start.y,
+      draw: (c) => {
+        c.globalAlpha = 0.35 + 0.1 * Math.sin(g.time * 6);
+        drawHeroC(c, r0.start.x, r0.start.y, { dir: f0.dir, flip: f0.flip, t: g.time, aim: f0.aim, charges: 0 }, P.teal);
+        c.globalAlpha = 1;
+      },
+    });
   }
   // Эхо: полупрозрачная бирюзовая тень героя
   const sh = g.echoShade;

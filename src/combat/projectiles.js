@@ -72,10 +72,18 @@ export function updateProjectiles(g, dt) {
       }
     } else if (pr.kind === 'ring') {
       if (back) {
+        // отражённый звон сжимается и скользит за хозяином: отошёл — всё равно получит
+        const o = pr.owner;
+        if (o && !o.dead) {
+          const tx = o.x;
+          const ty = o.y - (o.hitY ?? 8);
+          const k = Math.min(1, dt * 6);
+          pr.x += (tx - pr.x) * k;
+          pr.y += (ty - pr.y) * k;
+        }
         pr.rad -= pr.speed * 1.5 * dt;
         if (pr.rad <= 6) {
-          const o = pr.owner;
-          if (o && !o.dead && dist(o.x, o.y, pr.x, pr.y) < 40) hitOwner(g, pr);
+          if (o && !o.dead) hitOwner(g, pr);
           ringFx(g, pr.x, pr.y, 2, 30, P.amberHi, 0.4);
           pr.life = 0;
         }

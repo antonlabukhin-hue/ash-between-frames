@@ -7,6 +7,7 @@ import { shiftTimeline, shiftCost, channelTime, createChannel, tickChannel, isSh
 import { moveBox } from '../world/room.js';
 import { heroBlocked, isPit, isStableGround, isWall, solidPropAt } from '../world/world.js';
 import { findNearest } from '../world/safe.js';
+import { shiftNote } from '../combat/bestiary.js';
 import { enemyMods, isPhased, stats } from '../enemies/enemies.js';
 import { projectileAnchor } from '../combat/projectiles.js';
 import { burst, ringFx, slashFx, addText, boltFx } from '../world/fx.js';
@@ -143,6 +144,10 @@ export function applyShift(g, target, { free = false, byShade = false } = {}) {
   if (target.type === 'enemy' && g.hasFragment('backHeat')) {
     obj.burn = 3;
     obj.burnTick = 0.2;
+  }
+  if (target.type === 'enemy') {
+    const note = shiftNote(obj.kind, phase);
+    if (note) addText(g, obj.x, obj.y - (obj.hitY ?? 9) - 22, note, phase === PAST ? P.amberHi : P.crimsonHi, { life: 1.6 });
   }
   obj.onShift?.(g, obj, phase);
   g.room.def.onShift?.(g, obj, phase, target.type);
