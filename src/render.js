@@ -349,22 +349,18 @@ function drawEnemy(g, ctx, e) {
 }
 
 
-// Кольцо врага на земле (как в эталоне): малиновое в Шраме, янтарное в Отпечатке.
-// Враг сразу отличается от столба, статуи и прочего декора.
+// Кольцо врага на земле: отличает врага от столба и статуи. Спокойное — тонкое, неподвижное,
+// приглушённое: яркое и мигающее остаётся только у телеграфов атак (аудит: не путать со светом).
 function groundRing(g, ctx, e) {
   const r = (SHADOW_W[e.kind] ?? 12) / 2 + 3;
   const past = e.tl.phase === PAST;
-  const pulse = 0.65 + 0.25 * Math.sin(g.time * 4 + e.id);
   ctx.save();
-  ctx.lineWidth = 0.6;
-  ctx.strokeStyle = past ? `rgba(255,200,110,${pulse})` : `rgba(255,70,105,${pulse})`;
+  ctx.fillStyle = 'rgba(3,4,10,0.35)';
   ctx.beginPath();
   ctx.ellipse(e.x, e.y - 0.5, r, r * 0.42, 0, 0, Math.PI * 2);
-  ctx.stroke();
+  ctx.fill();
   ctx.lineWidth = 0.5;
-  ctx.strokeStyle = past ? 'rgba(224,160,64,0.3)' : 'rgba(200,40,74,0.3)';
-  ctx.beginPath();
-  ctx.ellipse(e.x, e.y - 0.5, r + 1.5, (r + 1.5) * 0.42, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = past ? 'rgba(224,160,64,0.45)' : 'rgba(200,40,74,0.45)';
   ctx.stroke();
   ctx.restore();
 }
@@ -479,22 +475,85 @@ function paintPickup(ctx, kind, x, y, bob, t) {
 }
 
 
+// Цель сдвига — угловые скобки цвета будущей фазы: прямоугольная форма, которой нет у
+// телеграфов атак (дуги, полосы, кольца) и у кругов под ногами.
+function targetBrackets(g, ctx, t) {
+  const o = t.obj;
+  const c = PHASE_COLOR[nextPhaseOf(o.tl)];
+  let x0;
+  let y0;
+  let x1;
+  let y1;
+  if (t.type === 'enemy') {
+    x0 = o.x - 8;
+    x1 = o.x + 8;
+    y0 = ENEMY_TOP(o) + 4;
+    y1 = o.y + 2;
+  } else if (o.def?.flat) {
+    x0 = o.x;
+    y0 = o.y;
+    x1 = o.x + o.w;
+    y1 = o.y + o.h;
+  } else {
+    const hw = Math.max(6, (o.def?.foot?.w ?? 10) / 2 + 3);
+    x0 = o.x - hw;
+    x1 = o.x + hw;
+    y0 = propTop(o) + 4;
+    y1 = o.y + 2;
+  }
+  const k = 3 + (Math.floor(g.time * 4) % 2);
+  ctx.fillStyle = c;
+  for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+    ctx.fillRect(Math.round(x) - (sx < 0 ? 1 : 0), Math.round(y) - (sy < 0 ? 1 : 0), sx * k, 1);
+    ctx.fillRect(Math.round(x) - (sx < 0 ? 1 : 0), Math.round(y) - (sy < 0 ? 1 : 0), 1, sy * k);
+  }
+}
+
+// Телеграфы атак — яркие, короткие, у каждого врага своя форма (аудит: отделить от света):
+// Пустокожий — малиновая дуга перед телом; Кадровик — бирюзовые сегменты вдоль рывка;
+// Звонарь — растущее кольцо с ярким разрывом в сторону героя; Пожиратель — мигающий круг укуса.
+function arc(ctx, x, y, r, a0, a1, color, squash = 0.7) {
+  const n = Math.max(6, Math.round((a1 - a0) * r));
+  ctx.fillStyle = color;
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    ctx.fillRect(Math.round(x + Math.cos(a) * r), Math.round(y + Math.sin(a) * r * squash), 1, 1);
+  }
+}
 function drawTelegraphs(g, ctx, e) {
   if (e.spawn > 0) return;
+  const blink = Math.floor(g.time * 14) % 2 ? P.crimsonHi : '#ffffff';
   if (e.kind === 'hollow' && e.state === 'windup') {
+    // восклицание над головой и дуга удара перед телом — туда он прыгнет
     px(ctx, e.x - 1, e.y - 30, 2, 5, P.crimsonHi);
     px(ctx, e.x - 1, e.y - 24, 2, 2, P.crimsonHi);
-    const ex = e.x + Math.cos(e.lock) * 22;
-    const ey = e.y + Math.sin(e.lock) * 16;
-    ctx.globalAlpha = 0.5;
-    line(ctx, e.x, e.y - 2, ex, ey, P.crimson);
+    for (const r of [16, 19]) arc(ctx, e.x, e.y - 2, r, e.lock - 0.6, e.lock + 0.6, r === 16 ? blink : P.crimson);
+  }
+  if (e.kind === 'framer' && e.state === 'windup' && !isPhased(g, e)) {
+    // бирюзовые сегменты вдоль будущего рывка
+    px(ctx, e.x - 1, e.y - 18, 2, 3, '#6ff2e0');
+    const nx = Math.cos(e.lock ?? e.face ?? 0);
+    const ny = Math.sin(e.lock ?? e.face ?? 0) * 0.75;
+    ctx.globalAlpha = 0.85;
+    for (let i = 8; i < 56; i += 8) {
+      const sx = e.x + nx * i;
+      const sy = e.y - 2 + ny * i;
+      px(ctx, Math.round(sx - ny * 5) - 1, Math.round(sy + nx * 5) - 1, 3, 2, '#6ff2e0');
+      px(ctx, Math.round(sx + ny * 5) - 1, Math.round(sy - nx * 5) - 1, 3, 2, '#6ff2e0');
+    }
     ctx.globalAlpha = 1;
   }
-  if (e.kind === 'framer' && e.state === 'windup' && !isPhased(g, e)) px(ctx, e.x - 1, e.y - 18, 2, 3, P.crimsonHi);
   if (e.kind === 'eater' && e.state === 'windup') ring(ctx, e.x, e.y - 2, 22, Math.floor(g.time * 12) % 2 ? P.crimsonHi : P.crimson, 0.6, 2);
   if (e.kind === 'ringer' && e.state === 'charge') {
+    // растущее кольцо и яркий разрыв в сторону героя — туда уйдёт звон
     const k = 1 - e.st / 1.3;
-    ring(ctx, e.x, e.y - 4, 4 + k * 16, `rgba(200,40,74,${0.3 + k * 0.5})`, 0.6, 2);
+    const rr = 4 + k * 16;
+    ring(ctx, e.x, e.y - 4, rr, `rgba(200,40,74,${0.3 + k * 0.5})`, 0.6, 2);
+    const hp = g.player;
+    if (hp) {
+      const a = Math.atan2((hp.y - (e.y - 4)) / 0.6, hp.x - e.x);
+      arc(ctx, e.x, e.y - 4, rr, a - 0.35, a + 0.35, blink, 0.6);
+    }
   }
   if (e.kind === 'ringer' && e.state === 'aim') px(ctx, e.x - 1, e.y - 32, 2, 4, P.crimsonHi);
   if (e.kind === 'shadow') {
@@ -724,8 +783,7 @@ function drawGaze(g, ctx, p, cx, cy) {
     if (canUse(g, o)) lightUpProp(g, ctx, o, isTalk(o) ? '#ece4cf' : WARM, 0.85 * k);
     else if (canShift(o)) {
       lightUpProp(g, ctx, o, PHASE_COLOR[nextPhaseOf(o.tl)], 0.7 * k);
-      const [ox, oy] = o.def.flat ? propCenter(o) : [o.x, o.y];
-      ring(ctx, ox, oy, 7 + (o.def.foot?.w ?? 8) / 2, PHASE_COLOR[nextPhaseOf(o.tl)], 0.4);
+      targetBrackets(g, ctx, { obj: o, type: 'prop' });
     }
   }
   for (const e of g.enemies) if (!e.dead && e.spawn <= 0 && visible(e.x, e.y, 40)) lightUpEnemy(g, ctx, e, P.crimson);
@@ -874,6 +932,7 @@ function drawHighlights(g, ctx, p) {
   else if (!it && g.interactNear && g.interactNear !== t?.obj) lightUpProp(g, ctx, g.interactNear, WARM, 0.35, false);
   let lit = null;
   if (it && it !== t?.obj) lit = it;
+  if (t && t.type !== 'projectile') targetBrackets(g, ctx, t);
   if (t) {
     const c = PHASE_COLOR[nextPhaseOf(t.obj.tl)];
     if (t.type === 'enemy') lightUpEnemy(g, ctx, t.obj, c);
@@ -912,7 +971,8 @@ function plates(g, p, cx, cy) {
   };
   // во взгляде подписи уже висят над всем — табличка взаимодействия не нужна
   // «подойди ближе» больше не пишем: объект рядом отмечен значком над ним (drawActionIcons)
-  const it = g.gazeK > 0.5 ? null : g.interactTarget;
+  // в бою табличка одна — цель сдвига; взаимодействие ждёт конца боя (аудит: приоритет UI)
+  const it = g.gazeK > 0.5 || g.inCombat ? null : g.interactTarget;
   if (it) {
     const [mx] = propCenter(it);
     const pl = at(it, mx, propTop(it));
@@ -1316,7 +1376,7 @@ export function renderWorld(g, ctx) {
   const p = g.player;
   // как в Diablo: на земле под объектом маркеров нет — светится сам объект,
   // а имя и действие пишутся табличкой над ним (HTML-слой, src/ui/overlay.js)
-  if (p && !p.dead && !g.cinematic) drawActionIcons(g, ctx, p);
+  if (p && !p.dead && !g.cinematic && !g.inCombat) drawActionIcons(g, ctx, p);
   if (p && !p.dead && !g.cinematic && g.gazeK > 0) drawGaze(g, ctx, p, cx, cy);
   if (p && !p.dead && !g.cinematic) drawThreads(g, ctx, p);
   if (p?.echoRec) drawEchoRec(g, ctx, p);
@@ -1324,7 +1384,9 @@ export function renderWorld(g, ctx) {
   drawNodeRunes(g, ctx);
   if (p && !p.dead && !g.cinematic) drawHighlights(g, ctx, p);
   g.ui.setPlates?.(p && !p.dead && !g.cinematic && !g.ui.mode ? plates(g, p, cx, cy) : []);
-  g.ui.setTags?.(p && !p.dead && !g.cinematic && !g.ui.mode ? (g.gazeK > 0.5 ? gazeTags(g, p, cx, cy) : nameTags(g, p, cx, cy)) : []);
+  g.ui.setTags?.(p && !p.dead && !g.cinematic && !g.ui.mode ? (g.gazeK > 0.5 ? gazeTags(g, p, cx, cy) : g.inCombat ? [] : nameTags(g, p, cx, cy)) : []);
+  // раскладка подписей: друг на друга, на героя и HUD не налезают
+  if (p && !p.dead) g.ui.layout?.({ hero: [(p.x - 9 - cx) / W, (p.y - 30 - cy) / H, (p.x + 9 - cx) / W, (p.y + 2 - cy) / H] });
   // реплики призраков в сценах прошлого
   g.ui.setBarks?.(!g.ui.mode ? (g.barkList || []).map((b) => ({ x: (b.x - cx) / W, y: (b.y - cy) / H, who: b.who, text: b.text })) : []);
   for (const t of g.texts) {

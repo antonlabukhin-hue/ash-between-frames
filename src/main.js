@@ -439,7 +439,8 @@ function frame(now) {
     drawTitle(renderer.ctx, game.time);
   } else {
     // мирные сцены — камера ближе (def.zoom комнаты), бой — обычный кадр
-    renderer.setZoom(game.room?.def.zoom ?? 1);
+    // мирные сцены — своё приближение (def.zoom), остальные — боевое ×1,15: бойцы крупнее
+    renderer.setZoom(game.room?.def.zoom ?? 1.15);
     // подсказка прячется на время диалога, выбора, меню и сцены — и возвращается после
     ui.hideHintFor?.(!!ui.mode || game.cinematic || game.paused);
     // строка клавиш (на телефоне подписи под кнопками)

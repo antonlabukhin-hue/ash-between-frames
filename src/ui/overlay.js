@@ -2,6 +2,7 @@
 // Текст рисуется пиксельным шрифтом с кириллицей в разрешении экрана — читаемо на телефоне.
 import { drawHero, drawTik, drawMara, drawGhost, drawBrassBoy, drawMel, drawDog, drawHollow } from '../art/sprites.js';
 import { P } from '../art/palette.js';
+import { resolveLabels } from './layout.js';
 
 const PORTRAITS = {
   ren: (c) => drawHero(c, 16, 38, { dir: 'down', charges: 3, t: 0 }),
@@ -204,6 +205,44 @@ export function createUI(root, { audio }) {
     keysKey = k;
     keystrip.classList.toggle('hidden', !list.length);
     keystrip.innerHTML = list.map(([key, text]) => `<span><b>${esc(key)}</b>${esc(text)}</span>`).join('');
+  };
+
+  // Раскладка подписей без наложений (src/ui/layout.js): таблички важнее реплик, реплики важнее
+  // подписей; не налезают друг на друга, на героя, HUD, подсказку и строку клавиш.
+  ui.layout = (o = {}) => {
+    const box = root.getBoundingClientRect();
+    if (!box.width) return;
+    const groups = [[plateEls, 3, 'p'], [barkEls, 2, 'b'], [tagEls, 1, 't']];
+    const items = [];
+    const els = new Map();
+    for (const [list, priority, pre] of groups) {
+      list.forEach((elx, i) => {
+        if (elx.classList.contains('hidden')) return;
+        elx.style.marginTop = '0px';
+        elx.classList.remove('lhide');
+        const r = elx.getBoundingClientRect();
+        if (!r.width) return;
+        const id = pre + i;
+        els.set(id, elx);
+        items.push({ id, x0: r.left - box.left, y0: r.top - box.top, x1: r.right - box.left, y1: r.bottom - box.top, priority });
+      });
+    }
+    if (items.length < 1) return;
+    const W0 = box.width;
+    const H0 = box.height;
+    const blockers = [{ x0: 0, y0: 0, x1: W0 * 0.26, y1: H0 * 0.12 }]; // HUD: здоровье и браслет
+    if (o.hero) blockers.push({ x0: o.hero[0] * W0, y0: o.hero[1] * H0, x1: o.hero[2] * W0, y1: o.hero[3] * H0 });
+    for (const elx of [hint, keystrip]) {
+      if (elx.classList.contains('off') || elx.classList.contains('away') || elx.classList.contains('hidden')) continue;
+      const r = elx.getBoundingClientRect();
+      if (r.width) blockers.push({ x0: r.left - box.left, y0: r.top - box.top, x1: r.right - box.left, y1: r.bottom - box.top });
+    }
+    const res = resolveLabels(items, blockers, { y0: 0, y1: H0 });
+    for (const [id, v] of res) {
+      const elx = els.get(id);
+      elx.style.marginTop = `${v.dy}px`;
+      elx.classList.toggle('lhide', v.hidden);
+    }
   };
 
   // Подписи «Взгляда Смотрителя»: над каждым интерактивным объектом — что с ним можно сделать.
